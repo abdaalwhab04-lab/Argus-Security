@@ -496,46 +496,83 @@ func TestNormalInput{function_name.title()}(t *testing.T) {{
         logger.info(f"Saved regression test to {test_file}")
 
     def _load_existing_tests(self):
-        """Load existing regression tests"""
+        """Load existing regression tests from test metadata files only."""
         if not self.test_dir.exists():
             return
 
-        for metadata_file in self.test_dir.glob("**/*.json"):
+        # Only files named test_<id>.json are regression-test metadata.
+        # Ignore aggregate/configuration JSON files such as:
+        # cve_test_cases.json, latest_results.json, validation_results.json.
+        for metadata_file in self.test_dir.glob("**/test_*.json"):
             try:
-                with open(metadata_file) as f:
+                with open(metadata_file, encoding="utf-8") as f:
                     metadata = json.load(f)
 
-                # Find corresponding test file
+                required = {
+                    "test_id",
+                    "vulnerability_type",
+                    "cwe_id",
+                    "file_path",
+                    "function_name",
+                    "date_fixed",
+                }
+
+                missing = required - metadata.keys()
+                if missing:
+                    logger.warning(
+                        f"Skipping invalid regression metadata {metadata_file}: "
+                        f"missing {sorted(missing)}"
+                    )
+                    continue
+
                 test_id = metadata["test_id"]
                 language = metadata.get("language", "python")
 
-                ext_map = {"python": ".py", "javascript": ".js", "typescript": ".ts", "go": "_test.go"}
+                ext_map = {
+                    "python": ".py",
+                    "javascript": ".js",
+                    "typescript": ".ts",
+                    "go": "_test.go",
+                }
                 ext = ext_map.get(language, ".py")
+
                 test_file = metadata_file.parent / f"test_{test_id}{ext}"
 
-                if test_file.exists():
-                    with open(test_file) as f:
-                        test_code = f.read()
-
-                    test = RegressionTest(
-                        test_id=metadata["test_id"],
-                        vulnerability_type=metadata["vulnerability_type"],
-                        cve_id=metadata.get("cve_id"),
-                        cwe_id=metadata["cwe_id"],
-                        file_path=metadata["file_path"],
-                        function_name=metadata["function_name"],
-                        date_fixed=metadata["date_fixed"],
-                        test_code=test_code,
-                        language=language,
-                        description=metadata.get("description", ""),
-                        severity=metadata.get("severity", "medium"),
-                        exploit_payload=metadata.get("exploit_payload"),
-                        expected_behavior=metadata.get("expected_behavior", "should_sanitize"),
+                if not test_file.exists():
+                    logger.warning(
+                        f"Regression test source not found for {metadata_file}: "
+                        f"{test_file}"
                     )
+                    continue
 
-                    self.tests.append(test)
-            except Exception as e:
-                logger.warning(f"Failed to load test {metadata_file}: {e}")
+                with open(test_file, encoding="utf-8") as f:
+                    test_code = f.read()
+
+                test = RegressionTest(
+                    test_id=test_id,
+                    vulnerability_type=metadata["vulnerability_type"],
+                    cve_id=metadata.get("cve_id"),
+                    cwe_id=metadata["cwe_id"],
+                    file_path=metadata["file_path"],
+                    function_name=metadata["function_name"],
+                    date_fixed=metadata["date_fixed"],
+                    test_code=test_code,
+                    language=language,
+                    description=metadata.get("description", ""),
+                    severity=metadata.get("severity", "medium"),
+                    exploit_payload=metadata.get("exploit_payload"),
+                    expected_behavior=metadata.get(
+                        "expected_behavior",
+                        "should_sanitize",
+                    ),
+                )
+
+                self.tests.append(test)
+
+            except (json.JSONDecodeError, OSError, TypeError, KeyError) as e:
+                logger.warning(
+                    f"Failed to load regression test {metadata_file}: {e}"
+                )
 
         logger.info(f"Loaded {len(self.tests)} existing regression tests")
 
@@ -601,8 +638,12 @@ func TestNormalInput{function_name.title()}(t *testing.T) {{
         return results
 
     def _run_pytest(self, test: RegressionTest) -> tuple[bool, str]:
-        """Run Python pytest"""
-        test_file = self.test_dir / test.vulnerability_type.lower().replace("-", "_") / f"test_{test.test_id}.py"
+        """Run Python pytest and distinguish passed, failed, and skipped tests."""
+        test_file = (
+            self.test_dir
+            / test.vulnerability_type.lower().replace("-", "_")
+            / f"test_{test.test_id}.py"
+        )
 
         if not test_file.exists():
             logger.error(f"Test file not found: {test_file}")
@@ -610,18 +651,31 @@ func TestNormalInput{function_name.title()}(t *testing.T) {{
 
         try:
             result = subprocess.run(
-                ["pytest", str(test_file), "-v", "--tb=short"],
+                [sys.executable, "-m", "pytest", str(test_file), "-v", "--tb=short"],
                 capture_output=True,
                 text=True,
                 timeout=60,
             )
+
             output = result.stdout + result.stderr
+
+            # pytest exit code 5 means no tests were collected.
+            if result.returncode == 5:
+                return True, output
+
+            # Tests skipped by pytest.importorskip() are not regressions.
+            if result.returncode == 0 and " skipped" in output:
+                return True, output
+
             return result.returncode == 0, output
+
         except subprocess.TimeoutExpired:
             return False, "Test timed out after 60 seconds"
+
         except FileNotFoundError:
-            logger.warning("pytest not found - skipping Python tests")
+            logger.warning("Python interpreter/pytest not found")
             return False, "pytest not installed"
+
         except Exception as e:
             logger.error(f"pytest failed: {e}")
             return False, str(e)

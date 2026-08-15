@@ -919,7 +919,7 @@ class HybridSecurityAnalyzer:
                 logger.warning("Heuristic scanning failed (non-fatal): %s", e)
 
         # -- PHASE 2.8: Whole-Repo LLM Review (finds what scanners miss) --
-        if self.config.get("enable_whole_repo_review", True) and self.ai_client:
+        if self.config.get("enable_whole_repo_review", True) and getattr(self, "ai_client", None):
             try:
                 from whole_repo_reviewer import WholeRepoReviewer
 
@@ -1027,7 +1027,7 @@ class HybridSecurityAnalyzer:
             all_findings=all_findings,
             target_path=target_path,
             analyzer=self,
-            skills_knowledge=self.skills_knowledge,
+            skills_knowledge=getattr(self, "skills_knowledge", None),
         )
         if p4_duration is not None:
             phase_timings["phase4_sandbox_validation"] = p4_duration
