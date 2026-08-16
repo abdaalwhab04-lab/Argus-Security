@@ -131,7 +131,7 @@ jobs:
           output: 'trivy-results.sarif'
       
       - name: Upload Trivy results
-        uses: github/codeql-action/upload-sarif@afb54ba388a7dca6ecae48f608c4ff05ff4cc77a  # v3.25.15
+        uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd  # v4.37.7
         with:
           sarif_file: 'trivy-results.sarif'
 

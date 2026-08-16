@@ -850,7 +850,7 @@ runs:
     # Upload SARIF from full pipeline to GitHub Security tab
     - name: Upload SARIF (Full Pipeline)
       if: ${{ inputs.pipeline-mode == 'full' && always() }}
-      uses: github/codeql-action/upload-sarif@b5ebac6f4c00c8ccddb7cdcd45fdb248329f808a  # v3
+      uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd  # v3
       continue-on-error: true
       with:
         sarif_file: ${{ inputs.project-path }}/.argus/hybrid-results/
