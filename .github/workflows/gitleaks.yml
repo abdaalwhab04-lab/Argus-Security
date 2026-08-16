@@ -35,7 +35,7 @@ jobs:
         fetch-depth: 0  # Full history for comprehensive scan
     
     - name: Run Gitleaks
-      uses: gitleaks/gitleaks-action@bf2dc8e55639c1e091e9b45970152e4313705814  # v2.12.1
+      uses: gitleaks/gitleaks-action@bcfb9cce635345aac9996cedc19b2de8e01b894f  # v2.12.1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}  # Optional: for Gitleaks Pro features
