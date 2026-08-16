@@ -33,7 +33,7 @@ jobs:
 
       - name: Argus Aardvark Security Review
         id: review
-        uses: devatsecure/Argus-Security@v2.2.0  # TODO: Pin to SHA once v2.2.0 tag exists
+        uses: devatsecure/Argus-Security@a9aec10286c4ecf5b7049f804ffefdc6f3e6b026  # TODO: Pin to SHA once v2.2.0 tag exists
         with:
           # AI Provider Configuration
           ai-provider: anthropic

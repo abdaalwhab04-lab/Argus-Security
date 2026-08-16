@@ -40,7 +40,7 @@ jobs:
           fetch-depth: 0
 
       - name: Run Semantic Analysis
-        uses: devatsecure/Argus-Security@main  # TODO: Pin to SHA when a release tag is available
+        uses: devatsecure/Argus-Security@7a6b42c8ab79016743c5115c0f360720ebaeb05b  # TODO: Pin to SHA when a release tag is available
         with:
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           review-type: security
@@ -64,7 +64,7 @@ jobs:
           fetch-depth: 0
 
       - name: Run Conservative Analysis
-        uses: devatsecure/Argus-Security@main  # TODO: Pin to SHA when a release tag is available
+        uses: devatsecure/Argus-Security@7a6b42c8ab79016743c5115c0f360720ebaeb05b  # TODO: Pin to SHA when a release tag is available
         with:
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           review-type: security
@@ -95,7 +95,7 @@ jobs:
           fetch-depth: 0
 
       - name: Run Full Deep Analysis
-        uses: devatsecure/Argus-Security@main  # TODO: Pin to SHA when a release tag is available
+        uses: devatsecure/Argus-Security@7a6b42c8ab79016743c5115c0f360720ebaeb05b  # TODO: Pin to SHA when a release tag is available
         with:
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           review-type: security
@@ -156,7 +156,7 @@ jobs:
           fetch-depth: 0
 
       - name: Run Manual Analysis
-        uses: devatsecure/Argus-Security@main  # TODO: Pin to SHA when a release tag is available
+        uses: devatsecure/Argus-Security@7a6b42c8ab79016743c5115c0f360720ebaeb05b  # TODO: Pin to SHA when a release tag is available
         with:
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           review-type: security
@@ -187,7 +187,7 @@ jobs:
           fetch-depth: 0
 
       - name: Run with Phase 2.7 OFF (Baseline)
-        uses: devatsecure/Argus-Security@main  # TODO: Pin to SHA when a release tag is available
+        uses: devatsecure/Argus-Security@7a6b42c8ab79016743c5115c0f360720ebaeb05b  # TODO: Pin to SHA when a release tag is available
         with:
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           review-type: security
@@ -200,7 +200,7 @@ jobs:
           cp -r .argus/reviews/* benchmarks/baseline/
 
       - name: Run with Phase 2.7 Conservative
-        uses: devatsecure/Argus-Security@main  # TODO: Pin to SHA when a release tag is available
+        uses: devatsecure/Argus-Security@7a6b42c8ab79016743c5115c0f360720ebaeb05b  # TODO: Pin to SHA when a release tag is available
         with:
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           review-type: security

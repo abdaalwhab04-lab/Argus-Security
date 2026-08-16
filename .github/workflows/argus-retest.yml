@@ -3,6 +3,10 @@ on:
   pull_request:
     types: [closed]
 
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   retest:
     # Only run when an argus/fix- PR is merged
@@ -10,17 +14,13 @@ jobs:
       github.event.pull_request.merged == true &&
       startsWith(github.event.pull_request.head.ref, 'argus/fix-')
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: '3.11'
 
@@ -29,18 +29,27 @@ jobs:
 
       - name: Extract fix metadata
         id: meta
-        run: |
-          BRANCH="${{ github.event.pull_request.head.ref }}"
-          # Extract vuln type and finding ID from branch name: argus/fix-{type}-{id}
-          VULN_TYPE=$(echo "$BRANCH" | sed 's|argus/fix-||' | sed 's|-[a-f0-9]*$||')
-          FINDING_ID=$(echo "$BRANCH" | grep -oP '[a-f0-9]{8}$' || echo "unknown")
-          echo "vuln_type=$VULN_TYPE" >> $GITHUB_OUTPUT
-          echo "finding_id=$FINDING_ID" >> $GITHUB_OUTPUT
-          # Get changed files from the PR
-          CHANGED_FILES=$(gh pr view ${{ github.event.pull_request.number }} --json files -q '.files[].path' || echo "")
-          echo "changed_files=$CHANGED_FILES" >> $GITHUB_OUTPUT
         env:
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Extract vuln type and finding ID from branch name:
+          # argus/fix-{type}-{id}
+          VULN_TYPE=$(printf '%s\n' "$BRANCH" | sed 's|^argus/fix-||' | sed 's|-[a-f0-9]*$||')
+          FINDING_ID=$(printf '%s\n' "$BRANCH" | grep -oE '[a-f0-9]{8}$' || printf '%s\n' 'unknown')
+
+          echo "vuln_type=$VULN_TYPE" >> "$GITHUB_OUTPUT"
+          echo "finding_id=$FINDING_ID" >> "$GITHUB_OUTPUT"
+
+          # Get changed files from the PR
+          CHANGED_FILES=$(gh pr view "$PR_NUMBER" --json files -q '.files[].path' || true)
+
+          {
+            echo 'changed_files<<EOF'
+            printf '%s\n' "$CHANGED_FILES"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
 
       - name: Run regression tests
         id: regression
@@ -95,7 +104,7 @@ jobs:
 
       - name: Post retest results
         if: always()
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
         with:
           script: |
             const regression = '${{ steps.regression.outcome }}';
