@@ -1,0 +1,30 @@
+name: Argus Runner Test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  runner-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check GitHub Runner
+        run: |
+          echo "===== RUNNER ====="
+          uname -a
+          echo "===== CPU ====="
+          nproc
+          echo "===== MEMORY ====="
+          free -h
+          echo "===== DISK ====="
+          df -h
+          echo "===== ARCHITECTURE ====="
+          uname -m
+
+      - name: Check Python
+        run: |
+          python3 --version
+          pip3 --version
