@@ -1,0 +1,209 @@
+name: Argus Runner Intelligence
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  argus-runner-intelligence:
+    name: Collect Runner Intelligence
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Collect Runner and system information
+        shell: bash
+        run: |
+          mkdir -p argus-reports
+
+          python3 - <<'PY'
+          import json
+          import os
+          import platform
+          import shutil
+          import socket
+          import subprocess
+          import sys
+          from datetime import datetime, timezone
+
+          def command(cmd):
+              try:
+                  result = subprocess.run(
+                      cmd,
+                      shell=True,
+                      text=True,
+                      stdout=subprocess.PIPE,
+                      stderr=subprocess.STDOUT,
+                      timeout=20
+                  )
+                  return {
+                      "status": "success" if result.returncode == 0 else "failed",
+                      "exit_code": result.returncode,
+                      "output": result.stdout.strip()
+                  }
+              except Exception as e:
+                  return {
+                      "status": "failed",
+                      "error": str(e)
+                  }
+
+          def tool_version(command_line):
+              result = command(command_line)
+              return result
+
+          report = {
+              "generated_at": datetime.now(timezone.utc).isoformat(),
+
+              "github_actions": {
+                  "runner_os": os.getenv("RUNNER_OS"),
+                  "runner_arch": os.getenv("RUNNER_ARCH"),
+                  "runner_environment": os.getenv("RUNNER_ENVIRONMENT"),
+                  "runner_name": os.getenv("RUNNER_NAME"),
+                  "runner_temp": os.getenv("RUNNER_TEMP"),
+                  "runner_tool_cache": os.getenv("RUNNER_TOOL_CACHE"),
+                  "repository": os.getenv("GITHUB_REPOSITORY"),
+                  "repository_owner": os.getenv("GITHUB_REPOSITORY_OWNER"),
+                  "workflow": os.getenv("GITHUB_WORKFLOW"),
+                  "workflow_ref": os.getenv("GITHUB_WORKFLOW_REF"),
+                  "workflow_sha": os.getenv("GITHUB_WORKFLOW_SHA"),
+                  "run_id": os.getenv("GITHUB_RUN_ID"),
+                  "run_number": os.getenv("GITHUB_RUN_NUMBER"),
+                  "job": os.getenv("GITHUB_JOB"),
+                  "event_name": os.getenv("GITHUB_EVENT_NAME"),
+                  "ref": os.getenv("GITHUB_REF"),
+                  "ref_name": os.getenv("GITHUB_REF_NAME"),
+                  "sha": os.getenv("GITHUB_SHA"),
+                  "actor": os.getenv("GITHUB_ACTOR")
+              },
+
+              "system": {
+                  "hostname": socket.gethostname(),
+                  "os": platform.system(),
+                  "os_release": platform.release(),
+                  "os_version": platform.version(),
+                  "machine": platform.machine(),
+                  "processor": platform.processor(),
+                  "python_implementation": platform.python_implementation()
+              },
+
+              "cpu": {
+                  "logical_cpus": os.cpu_count(),
+                  "cpu_info": command("lscpu")
+              },
+
+              "memory": command(
+                  "free -h"
+              ),
+
+              "storage": {
+                  "filesystem": command("df -hT"),
+                  "block_devices": command("lsblk -o NAME,MODEL,SIZE,TYPE,FSTYPE,MOUNTPOINT,ROTA")
+              },
+
+              "internet": {
+                  "dns_github": command("getent hosts github.com"),
+                  "https_github": command("curl -I -L --max-time 10 https://github.com")
+              },
+
+              "gpu": {
+                  "nvidia_smi": command("nvidia-smi"),
+                  "pci_devices": command("lspci | grep -Ei 'vga|3d|display|nvidia|amd|intel' || true")
+              },
+
+              "python": {
+                  "version": sys.version,
+                  "executable": sys.executable,
+                  "pip": tool_version("python3 -m pip --version")
+              },
+
+              "docker": {
+                  "version": tool_version("docker --version"),
+                  "info": command("docker info")
+              },
+
+              "pytest": {
+                  "version": tool_version("python3 -m pytest --version"),
+                  "xdist": tool_version(
+                      "python3 -m pytest --version"
+                  )
+              },
+
+              "checkov": {
+                  "version": tool_version("checkov --version")
+              },
+
+              "git": {
+                  "commit": os.getenv("GITHUB_SHA"),
+                  "branch": os.getenv("GITHUB_REF_NAME"),
+                  "status": command("git status --short"),
+                  "log": command("git log -1 --oneline")
+              }
+          }
+
+          with open("argus-reports/runner-intelligence.json", "w") as f:
+              json.dump(report, f, indent=2)
+
+          print(json.dumps(report, indent=2))
+          PY
+
+      - name: Run pytest
+        shell: bash
+        run: |
+          mkdir -p argus-reports
+
+          if python3 -m pytest --version >/dev/null 2>&1; then
+            python3 -m pytest \
+              --junitxml=argus-reports/pytest-results.xml \
+              2>&1 | tee argus-reports/pytest-output.txt || true
+          else
+            echo "pytest is not installed" | tee argus-reports/pytest-output.txt
+          fi
+
+      - name: Run pytest-xdist
+        shell: bash
+        run: |
+          if python3 -c "import xdist" >/dev/null 2>&1; then
+            python3 -m pytest -n auto \
+              2>&1 | tee argus-reports/pytest-xdist-output.txt || true
+          else
+            echo "pytest-xdist is not installed" \
+              | tee argus-reports/pytest-xdist-output.txt
+          fi
+
+      - name: Run Checkov
+        shell: bash
+        run: |
+          if command -v checkov >/dev/null 2>&1; then
+            checkov \
+              -d . \
+              --output json \
+              --output-file-path argus-reports/checkov-results.json \
+              || true
+          else
+            echo '{"status":"missing","tool":"checkov"}' \
+              > argus-reports/checkov-results.json
+          fi
+
+      - name: Collect project JSON files
+        shell: bash
+        run: |
+          find . \
+            -type f \
+            -name "*.json" \
+            -not -path "./.git/*" \
+            -not -path "./argus-reports/*" \
+            > argus-reports/project-json-files.txt || true
+
+      - name: Upload Argus Runner Intelligence
+        uses: actions/upload-artifact@v4
+        with:
+          name: argus-runner-intelligence
+          path: argus-reports/
+          if-no-files-found: warn
