@@ -6,6 +6,9 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
 jobs:
   runner-intelligence:
     name: Argus Runner Intelligence
@@ -15,30 +18,428 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Show GitHub Runner
+      - name: Install intelligence tools
         run: |
-          echo "RUNNER_OS=$RUNNER_OS"
-          echo "RUNNER_ARCH=$RUNNER_ARCH"
-          echo "RUNNER_ENVIRONMENT=$RUNNER_ENVIRONMENT"
-          echo "RUNNER_NAME=$RUNNER_NAME"
+          python3 -m pip install --upgrade pip
+          python3 -m pip install psutil pytest pytest-xdist checkov
 
-      - name: Check Python
+      - name: Collect Runner Intelligence
+        shell: bash
         run: |
-          python3 --version
-          python3 -m pip --version
+          set +e
 
-      - name: Check Docker
-        run: |
-          docker --version || true
+          mkdir -p argus-intelligence
 
-      - name: Check pytest
-        run: |
-          pytest --version || true
+          python3 <<'PY'
+          import json
+          import os
+          import platform
+          import shutil
+          import socket
+          import subprocess
+          import time
+          from pathlib import Path
 
-      - name: Check pytest-xdist
-        run: |
-          python3 -m pip show pytest-xdist || true
+          try:
+              import psutil
+          except Exception:
+              psutil = None
 
-      - name: Check Checkov
+          start_time = time.time()
+
+          def command(cmd):
+              try:
+                  result = subprocess.run(
+                      cmd,
+                      shell=True,
+                      text=True,
+                      stdout=subprocess.PIPE,
+                      stderr=subprocess.STDOUT,
+                      timeout=30
+                  )
+                  return {
+                      "success": result.returncode == 0,
+                      "returncode": result.returncode,
+                      "output": result.stdout.strip()
+                  }
+              except Exception as e:
+                  return {
+                      "success": False,
+                      "returncode": -1,
+                      "output": str(e)
+                  }
+
+          def version(command_line):
+              result = command(command_line)
+              return result["output"] if result["success"] else None
+
+          # ---------------------------------------------------------
+          # Runner information
+          # ---------------------------------------------------------
+
+          runner = {
+              "os": os.environ.get("RUNNER_OS"),
+              "architecture": os.environ.get("RUNNER_ARCH"),
+              "environment": os.environ.get("RUNNER_ENVIRONMENT"),
+              "name": os.environ.get("RUNNER_NAME"),
+              "temp": os.environ.get("RUNNER_TEMP"),
+              "tool_cache": os.environ.get("RUNNER_TOOL_CACHE"),
+              "workspace": os.environ.get("GITHUB_WORKSPACE")
+          }
+
+          # ---------------------------------------------------------
+          # CPU
+          # ---------------------------------------------------------
+
+          cpu = {
+              "processor": platform.processor(),
+              "machine": platform.machine(),
+              "logical_cpus": os.cpu_count(),
+              "physical_cores": None,
+              "threads": os.cpu_count(),
+              "architecture": platform.architecture()[0]
+          }
+
+          if psutil:
+              try:
+                  cpu["physical_cores"] = psutil.cpu_count(logical=False)
+                  cpu["logical_cpus"] = psutil.cpu_count(logical=True)
+                  cpu["threads"] = psutil.cpu_count(logical=True)
+              except Exception:
+                  pass
+
+          cpu["model"] = version("lscpu | grep -m1 'Model name:' | sed 's/^[^:]*:[[:space:]]*//'")
+
+          # ---------------------------------------------------------
+          # RAM
+          # ---------------------------------------------------------
+
+          memory = {
+              "total_bytes": None,
+              "available_bytes": None,
+              "used_bytes": None,
+              "total_gb": None,
+              "available_gb": None
+          }
+
+          if psutil:
+              try:
+                  vm = psutil.virtual_memory()
+                  memory["total_bytes"] = vm.total
+                  memory["available_bytes"] = vm.available
+                  memory["used_bytes"] = vm.used
+                  memory["total_gb"] = round(vm.total / 1024**3, 2)
+                  memory["available_gb"] = round(vm.available / 1024**3, 2)
+              except Exception:
+                  pass
+
+          # ---------------------------------------------------------
+          # Storage
+          # ---------------------------------------------------------
+
+          storage = {
+              "df": command("df -h /")["output"],
+              "filesystem": command("df -T /")["output"],
+              "block_devices": command("lsblk -o NAME,MODEL,SIZE,TYPE,FSTYPE,MOUNTPOINT -e 7")["output"],
+              "mounts": command("findmnt -T \"$GITHUB_WORKSPACE\"")["output"]
+          }
+
+          # Try to identify NVMe devices.
+          storage["nvme_detected"] = bool(
+              command("ls /dev/nvme* >/dev/null 2>&1").get("success")
+          )
+
+          # ---------------------------------------------------------
+          # GPU
+          # ---------------------------------------------------------
+
+          gpu = {
+              "available": False,
+              "details": None
+          }
+
+          gpu_commands = [
+              "nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader",
+              "lspci | grep -Ei 'vga|3d|display'"
+          ]
+
+          for gpu_command in gpu_commands:
+              result = command(gpu_command)
+              if result["success"] and result["output"]:
+                  gpu["available"] = True
+                  gpu["details"] = result["output"]
+                  break
+
+          # ---------------------------------------------------------
+          # Internet connectivity
+          # ---------------------------------------------------------
+
+          internet_tests = {}
+
+          for host in [
+              "https://github.com",
+              "https://pypi.org",
+              "https://api.github.com"
+          ]:
+              internet_tests[host] = command(
+                  f"curl -LIs --max-time 10 {host} | head -n 1"
+              )
+
+          internet = {
+              "connected": any(
+                  item["success"] for item in internet_tests.values()
+              ),
+              "tests": internet_tests,
+              "dns_github": command("getent hosts github.com")
+          }
+
+          # ---------------------------------------------------------
+          # Python
+          # ---------------------------------------------------------
+
+          python_info = {
+              "version": version("python3 --version"),
+              "pip": version("python3 -m pip --version"),
+              "executable": shutil.which("python3"),
+              "implementation": platform.python_implementation()
+          }
+
+          # ---------------------------------------------------------
+          # Docker
+          # ---------------------------------------------------------
+
+          docker_info = {
+              "installed": shutil.which("docker") is not None,
+              "version": version("docker --version"),
+              "server": version("docker version --format '{{.Server.Version}}'")
+          }
+
+          # ---------------------------------------------------------
+          # Testing tools
+          # ---------------------------------------------------------
+
+          tools = {}
+
+          checks = {
+              "pytest": "python3 -m pytest --version",
+              "pytest-xdist": "python3 -m pip show pytest-xdist",
+              "checkov": "checkov --version",
+              "semgrep": "semgrep --version",
+              "ruff": "ruff --version",
+              "git": "git --version",
+              "curl": "curl --version | head -n 1"
+          }
+
+          for name, cmd in checks.items():
+              result = command(cmd)
+
+              if result["success"]:
+                  status = "installed"
+              elif shutil.which(name.split("-")[0]):
+                  status = "failed"
+              else:
+                  status = "missing"
+
+              tools[name] = {
+                  "status": status,
+                  "version": result["output"]
+              }
+
+          # ---------------------------------------------------------
+          # GitHub information
+          # ---------------------------------------------------------
+
+          github = {
+              "repository": os.environ.get("GITHUB_REPOSITORY"),
+              "repository_owner": os.environ.get("GITHUB_REPOSITORY_OWNER"),
+              "workflow": os.environ.get("GITHUB_WORKFLOW"),
+              "workflow_ref": os.environ.get("GITHUB_WORKFLOW_REF"),
+              "workflow_sha": os.environ.get("GITHUB_WORKFLOW_SHA"),
+              "run_id": os.environ.get("GITHUB_RUN_ID"),
+              "run_number": os.environ.get("GITHUB_RUN_NUMBER"),
+              "job": os.environ.get("GITHUB_JOB"),
+              "event_name": os.environ.get("GITHUB_EVENT_NAME"),
+              "ref": os.environ.get("GITHUB_REF"),
+              "ref_name": os.environ.get("GITHUB_REF_NAME"),
+              "sha": os.environ.get("GITHUB_SHA"),
+              "actor": os.environ.get("GITHUB_ACTOR"),
+              "server_url": os.environ.get("GITHUB_SERVER_URL")
+          }
+
+          git = {
+              "commit": command("git rev-parse HEAD")["output"],
+              "branch": command("git branch --show-current")["output"],
+              "commit_message": command("git log -1 --pretty=%B")["output"],
+              "commit_author": command("git log -1 --pretty='%an <%ae>'")["output"]
+          }
+
+          # ---------------------------------------------------------
+          # Project JSON files
+          # ---------------------------------------------------------
+
+          json_files = []
+
+          for path in Path(".").rglob("*.json"):
+              if ".git" in path.parts:
+                  continue
+
+              try:
+                  size = path.stat().st_size
+              except Exception:
+                  size = None
+
+              json_files.append({
+                  "path": str(path),
+                  "size_bytes": size
+              })
+
+          # ---------------------------------------------------------
+          # Existing security/test reports
+          # ---------------------------------------------------------
+
+          report_patterns = [
+              "*report*.json",
+              "*security*.json",
+              "*checkov*.json",
+              "*semgrep*.json",
+              "*gitleaks*.json",
+              "*codeql*.json",
+              "*pytest*.json",
+              "*junit*.xml"
+          ]
+
+          reports = []
+
+          for pattern in report_patterns:
+              for path in Path(".").rglob(pattern):
+                  if ".git" in path.parts:
+                      continue
+
+                  reports.append({
+                      "path": str(path),
+                      "pattern": pattern,
+                      "size_bytes": path.stat().st_size
+                  })
+
+          # Remove duplicates.
+          unique_reports = {}
+          for item in reports:
+              unique_reports[item["path"]] = item
+
+          reports = list(unique_reports.values())
+
+          # ---------------------------------------------------------
+          # System information
+          # ---------------------------------------------------------
+
+          system = {
+              "platform": platform.platform(),
+              "system": platform.system(),
+              "release": platform.release(),
+              "version": platform.version(),
+              "hostname": socket.gethostname(),
+              "python": platform.python_version()
+          }
+
+          # ---------------------------------------------------------
+          # Timing
+          # ---------------------------------------------------------
+
+          duration_seconds = round(time.time() - start_time, 3)
+
+          # ---------------------------------------------------------
+          # Final JSON
+          # ---------------------------------------------------------
+
+          intelligence = {
+              "schema_version": "1.0",
+              "generated_at_utc": time.strftime(
+                  "%Y-%m-%dT%H:%M:%SZ",
+                  time.gmtime()
+              ),
+
+              "runner": runner,
+              "system": system,
+              "cpu": cpu,
+              "memory": memory,
+              "storage": storage,
+              "gpu": gpu,
+              "internet": internet,
+
+              "python": python_info,
+              "docker": docker_info,
+              "tools": tools,
+
+              "github": github,
+              "git": git,
+
+              "project": {
+                  "workspace": os.environ.get("GITHUB_WORKSPACE"),
+                  "json_files": json_files,
+                  "security_and_test_reports": reports
+              },
+
+              "execution": {
+                  "collection_duration_seconds": duration_seconds
+              }
+          }
+
+          output = Path("argus-intelligence/argus-runner-intelligence.json")
+          output.write_text(
+              json.dumps(
+                  intelligence,
+                  indent=2,
+                  ensure_ascii=False
+              ),
+              encoding="utf-8"
+          )
+
+          print(json.dumps(intelligence, indent=2, ensure_ascii=False))
+          print()
+          print(f"ARGUS_INTELLIGENCE_FILE={output}")
+
+          PY
+
+      - name: Run pytest
+        shell: bash
         run: |
-          checkov --version || true
+          set +e
+          python3 -m pytest -q --disable-warnings \
+            --junitxml=argus-intelligence/pytest-results.xml \
+            2>&1 | tee argus-intelligence/pytest-output.txt
+          echo "pytest_exit_code=${PIPESTATUS[0]}" \
+            > argus-intelligence/pytest-status.txt
+
+      - name: Run Checkov
+        shell: bash
+        run: |
+          set +e
+          checkov \
+            -d . \
+            --output json \
+            --output-file-path argus-intelligence \
+            2>&1 | tee argus-intelligence/checkov-output.txt
+
+          echo "checkov_exit_code=${PIPESTATUS[0]}" \
+            > argus-intelligence/checkov-status.txt
+
+      - name: Show intelligence files
+        if: always()
+        run: |
+          echo "===== ARGUS INTELLIGENCE ====="
+          find argus-intelligence -maxdepth 2 -type f -print
+
+          echo
+          echo "===== RUNNER INTELLIGENCE JSON ====="
+          if [ -f argus-intelligence/argus-runner-intelligence.json ]; then
+            cat argus-intelligence/argus-runner-intelligence.json
+          fi
+
+      - name: Upload Argus Runner Intelligence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: argus-runner-intelligence
+          path: argus-intelligence/
+          if-no-files-found: warn
+          retention-days: 30
