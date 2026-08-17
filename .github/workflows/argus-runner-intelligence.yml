@@ -1,0 +1,44 @@
+name: Argus Runner Intelligence
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  runner-intelligence:
+    name: Argus Runner Intelligence
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Show GitHub Runner
+        run: |
+          echo "RUNNER_OS=$RUNNER_OS"
+          echo "RUNNER_ARCH=$RUNNER_ARCH"
+          echo "RUNNER_ENVIRONMENT=$RUNNER_ENVIRONMENT"
+          echo "RUNNER_NAME=$RUNNER_NAME"
+
+      - name: Check Python
+        run: |
+          python3 --version
+          python3 -m pip --version
+
+      - name: Check Docker
+        run: |
+          docker --version || true
+
+      - name: Check pytest
+        run: |
+          pytest --version || true
+
+      - name: Check pytest-xdist
+        run: |
+          python3 -m pip show pytest-xdist || true
+
+      - name: Check Checkov
+        run: |
+          checkov --version || true
