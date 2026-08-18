@@ -21,7 +21,7 @@ jobs:
       - name: Install intelligence tools
         run: |
           python3 -m pip install --upgrade pip
-          python3 -m pip install psutil pytest pytest-xdist checkov
+          python3 -m pip install psutil pytest pytest-xdist pytest-cov checkov
 
       - name: Collect Runner Intelligence
         shell: bash
@@ -73,10 +73,6 @@ jobs:
               result = command(command_line)
               return result["output"] if result["success"] else None
 
-          # ---------------------------------------------------------
-          # Runner information
-          # ---------------------------------------------------------
-
           runner = {
               "os": os.environ.get("RUNNER_OS"),
               "architecture": os.environ.get("RUNNER_ARCH"),
@@ -86,10 +82,6 @@ jobs:
               "tool_cache": os.environ.get("RUNNER_TOOL_CACHE"),
               "workspace": os.environ.get("GITHUB_WORKSPACE")
           }
-
-          # ---------------------------------------------------------
-          # CPU
-          # ---------------------------------------------------------
 
           cpu = {
               "processor": platform.processor(),
@@ -108,11 +100,9 @@ jobs:
               except Exception:
                   pass
 
-          cpu["model"] = version("lscpu | grep -m1 'Model name:' | sed 's/^[^:]*:[[:space:]]*//'")
-
-          # ---------------------------------------------------------
-          # RAM
-          # ---------------------------------------------------------
+          cpu["model"] = version(
+              "lscpu | grep -m1 'Model name:' | sed 's/^[^:]*:[[:space:]]*//'"
+          )
 
           memory = {
               "total_bytes": None,
@@ -133,25 +123,20 @@ jobs:
               except Exception:
                   pass
 
-          # ---------------------------------------------------------
-          # Storage
-          # ---------------------------------------------------------
-
           storage = {
               "df": command("df -h /")["output"],
               "filesystem": command("df -T /")["output"],
-              "block_devices": command("lsblk -o NAME,MODEL,SIZE,TYPE,FSTYPE,MOUNTPOINT -e 7")["output"],
-              "mounts": command("findmnt -T \"$GITHUB_WORKSPACE\"")["output"]
+              "block_devices": command(
+                  "lsblk -o NAME,MODEL,SIZE,TYPE,FSTYPE,MOUNTPOINT -e 7"
+              )["output"],
+              "mounts": command(
+                  "findmnt -T \"$GITHUB_WORKSPACE\""
+              )["output"]
           }
 
-          # Try to identify NVMe devices.
           storage["nvme_detected"] = bool(
               command("ls /dev/nvme* >/dev/null 2>&1").get("success")
           )
-
-          # ---------------------------------------------------------
-          # GPU
-          # ---------------------------------------------------------
 
           gpu = {
               "available": False,
@@ -169,10 +154,6 @@ jobs:
                   gpu["available"] = True
                   gpu["details"] = result["output"]
                   break
-
-          # ---------------------------------------------------------
-          # Internet connectivity
-          # ---------------------------------------------------------
 
           internet_tests = {}
 
@@ -193,10 +174,6 @@ jobs:
               "dns_github": command("getent hosts github.com")
           }
 
-          # ---------------------------------------------------------
-          # Python
-          # ---------------------------------------------------------
-
           python_info = {
               "version": version("python3 --version"),
               "pip": version("python3 -m pip --version"),
@@ -204,25 +181,20 @@ jobs:
               "implementation": platform.python_implementation()
           }
 
-          # ---------------------------------------------------------
-          # Docker
-          # ---------------------------------------------------------
-
           docker_info = {
               "installed": shutil.which("docker") is not None,
               "version": version("docker --version"),
-              "server": version("docker version --format '{{.Server.Version}}'")
+              "server": version(
+                  "docker version --format '{{.Server.Version}}'"
+              )
           }
-
-          # ---------------------------------------------------------
-          # Testing tools
-          # ---------------------------------------------------------
 
           tools = {}
 
           checks = {
               "pytest": "python3 -m pytest --version",
               "pytest-xdist": "python3 -m pip show pytest-xdist",
+              "pytest-cov": "python3 -m pip show pytest-cov",
               "checkov": "checkov --version",
               "semgrep": "semgrep --version",
               "ruff": "ruff --version",
@@ -245,10 +217,6 @@ jobs:
                   "version": result["output"]
               }
 
-          # ---------------------------------------------------------
-          # GitHub information
-          # ---------------------------------------------------------
-
           github = {
               "repository": os.environ.get("GITHUB_REPOSITORY"),
               "repository_owner": os.environ.get("GITHUB_REPOSITORY_OWNER"),
@@ -270,12 +238,10 @@ jobs:
               "commit": command("git rev-parse HEAD")["output"],
               "branch": command("git branch --show-current")["output"],
               "commit_message": command("git log -1 --pretty=%B")["output"],
-              "commit_author": command("git log -1 --pretty='%an <%ae>'")["output"]
+              "commit_author": command(
+                  "git log -1 --pretty='%an <%ae>'"
+              )["output"]
           }
-
-          # ---------------------------------------------------------
-          # Project JSON files
-          # ---------------------------------------------------------
 
           json_files = []
 
@@ -292,10 +258,6 @@ jobs:
                   "path": str(path),
                   "size_bytes": size
               })
-
-          # ---------------------------------------------------------
-          # Existing security/test reports
-          # ---------------------------------------------------------
 
           report_patterns = [
               "*report*.json",
@@ -321,16 +283,12 @@ jobs:
                       "size_bytes": path.stat().st_size
                   })
 
-          # Remove duplicates.
           unique_reports = {}
+
           for item in reports:
               unique_reports[item["path"]] = item
 
           reports = list(unique_reports.values())
-
-          # ---------------------------------------------------------
-          # System information
-          # ---------------------------------------------------------
 
           system = {
               "platform": platform.platform(),
@@ -341,15 +299,7 @@ jobs:
               "python": platform.python_version()
           }
 
-          # ---------------------------------------------------------
-          # Timing
-          # ---------------------------------------------------------
-
           duration_seconds = round(time.time() - start_time, 3)
-
-          # ---------------------------------------------------------
-          # Final JSON
-          # ---------------------------------------------------------
 
           intelligence = {
               "schema_version": "1.0",
@@ -357,7 +307,6 @@ jobs:
                   "%Y-%m-%dT%H:%M:%SZ",
                   time.gmtime()
               ),
-
               "runner": runner,
               "system": system,
               "cpu": cpu,
@@ -365,26 +314,25 @@ jobs:
               "storage": storage,
               "gpu": gpu,
               "internet": internet,
-
               "python": python_info,
               "docker": docker_info,
               "tools": tools,
-
               "github": github,
               "git": git,
-
               "project": {
                   "workspace": os.environ.get("GITHUB_WORKSPACE"),
                   "json_files": json_files,
                   "security_and_test_reports": reports
               },
-
               "execution": {
                   "collection_duration_seconds": duration_seconds
               }
           }
 
-          output = Path("argus-intelligence/argus-runner-intelligence.json")
+          output = Path(
+              "argus-intelligence/argus-runner-intelligence.json"
+          )
+
           output.write_text(
               json.dumps(
                   intelligence,
@@ -394,7 +342,14 @@ jobs:
               encoding="utf-8"
           )
 
-          print(json.dumps(intelligence, indent=2, ensure_ascii=False))
+          print(
+              json.dumps(
+                  intelligence,
+                  indent=2,
+                  ensure_ascii=False
+              )
+          )
+
           print()
           print(f"ARGUS_INTELLIGENCE_FILE={output}")
 
@@ -404,9 +359,11 @@ jobs:
         shell: bash
         run: |
           set +e
+
           python3 -m pytest -q --disable-warnings \
             --junitxml=argus-intelligence/pytest-results.xml \
             2>&1 | tee argus-intelligence/pytest-output.txt
+
           echo "pytest_exit_code=${PIPESTATUS[0]}" \
             > argus-intelligence/pytest-status.txt
 
@@ -414,6 +371,7 @@ jobs:
         shell: bash
         run: |
           set +e
+
           checkov \
             -d . \
             --output json \
@@ -431,6 +389,7 @@ jobs:
 
           echo
           echo "===== RUNNER INTELLIGENCE JSON ====="
+
           if [ -f argus-intelligence/argus-runner-intelligence.json ]; then
             cat argus-intelligence/argus-runner-intelligence.json
           fi
