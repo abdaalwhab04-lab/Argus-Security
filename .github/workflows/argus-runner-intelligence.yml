@@ -1,384 +1,417 @@
+name: Argus Runner Intelligence
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
 jobs:
-    runner-intelligence:
-        name: Argus Runner Intelligence
-        runs-on: self-hosted
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v6
+  runner-intelligence:
+    name: Argus Runner Intelligence
+    runs-on: ubuntu-latest
 
-            - name: Install intelligence tools
-              run: |
-                  /usr/bin/python3 -m pip install --break-system-packages --disable-pip-version-check pytest pytest-xdist pytest-cov psutil tenacity pydantic numpy || true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-            - name: Collect Runner Intelligence
-              shell: bash
-              run: |
-                  set +e
+      - name: Install intelligence tools
+        shell: bash
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install \
+            pytest \
+            pytest-xdist \
+            pytest-cov \
+            psutil
 
-                  mkdir -p argus-intelligence
+      - name: Collect Hardware Intelligence
+        shell: bash
+        run: |
+          set +e
 
-                  python3 <<'PY'
-                  import json
-                  import os
-                  import platform
-                  import shutil
-                  import socket
-                  import subprocess
-                  import time
-                  from pathlib import Path
+          mkdir -p argus-intelligence
 
-                  try:
-                      import psutil
-                  except Exception:
-                      psutil = None
+          python3 <<'PY'
+          import json
+          import os
+          import platform
+          import shutil
+          import socket
+          import subprocess
+          import time
+          from pathlib import Path
 
-                  start_time = time.time()
-
-                  def command(cmd):
-                      try:
-                          result = subprocess.run(
-                              cmd,
-                              shell=True,
-                              text=True,
-                              stdout=subprocess.PIPE,
-                              stderr=subprocess.STDOUT,
-                              timeout=30
-                          )
-                          return {
-                              "success": result.returncode == 0,
-                              "returncode": result.returncode,
-                              "output": result.stdout.strip()
-                          }
-                      except Exception as e:
-                          return {
-                              "success": False,
-                              "returncode": -1,
-                              "output": str(e)
-                          }
-
-                  def version(command_line):
-                      result = command(command_line)
-                      return result["output"] if result["success"] else None
-
-                  runner = {
-                      "os": os.environ.get("RUNNER_OS"),
-                      "architecture": os.environ.get("RUNNER_ARCH"),
-                      "environment": os.environ.get("RUNNER_ENVIRONMENT"),
-                      "name": os.environ.get("RUNNER_NAME"),
-                      "temp": os.environ.get("RUNNER_TEMP"),
-                      "tool_cache": os.environ.get("RUNNER_TOOL_CACHE"),
-                      "workspace": os.environ.get("GITHUB_WORKSPACE")
-                  }
-
-                  cpu = {
-                      "processor": platform.processor(),
-                      "machine": platform.machine(),
-                      "logical_cpus": os.cpu_count(),
-                      "physical_cores": None,
-                      "threads": os.cpu_count(),
-                      "architecture": platform.architecture()[0]
-                  }
-
-                  if psutil:
-                      try:
-                          cpu["physical_cores"] = psutil.cpu_count(logical=False)
-                          cpu["logical_cpus"] = psutil.cpu_count(logical=True)
-                          cpu["threads"] = psutil.cpu_count(logical=True)
-                      except Exception:
-                          pass
-
-                  cpu["model"] = version(
-                      "lscpu | grep -m1 'Model name:' | sed 's/^[^:]*:[[:space:]]*//'"
+          def command(cmd, timeout=30):
+              try:
+                  result = subprocess.run(
+                      cmd,
+                      shell=True,
+                      text=True,
+                      stdout=subprocess.PIPE,
+                      stderr=subprocess.STDOUT,
+                      timeout=timeout
                   )
 
-                  memory = {
-                      "total_bytes": None,
-                      "available_bytes": None,
-                      "used_bytes": None,
-                      "total_gb": None,
-                      "available_gb": None
+                  return {
+                      "status": "success" if result.returncode == 0 else "failed",
+                      "exit_code": result.returncode,
+                      "output": result.stdout.strip()
                   }
 
-                  if psutil:
-                      try:
-                          vm = psutil.virtual_memory()
-                          memory["total_bytes"] = vm.total
-                          memory["available_bytes"] = vm.available
-                          memory["used_bytes"] = vm.used
-                          memory["total_gb"] = round(vm.total / 1024**3, 2)
-                          memory["available_gb"] = round(vm.available / 1024**3, 2)
-                      except Exception:
-                          pass
-
-                  storage = {
-                      "df": command("df -h /")["output"],
-                      "filesystem": command("df -T /")["output"],
-                      "block_devices": command(
-                          "lsblk -o NAME,MODEL,SIZE,TYPE,FSTYPE,MOUNTPOINT -e 7"
-                      )["output"],
-                      "mounts": command(
-                          "findmnt -T \"$GITHUB_WORKSPACE\""
-                      )["output"]
+              except Exception as e:
+                  return {
+                      "status": "failed",
+                      "exit_code": -1,
+                      "output": str(e)
                   }
 
-                  storage["nvme_detected"] = bool(
-                      command("ls /dev/nvme* >/dev/null 2>&1").get("success")
-                  )
+          def clean(value):
+              return value if value else None
 
-                  gpu = {
-                      "available": False,
-                      "details": None
-                  }
+          start = time.time()
 
-                  gpu_commands = [
-                      "nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader",
-                      "lspci | grep -Ei 'vga|3d|display'"
-                  ]
+          # --------------------------------------------------
+          # RUNNER
+          # --------------------------------------------------
 
-                  for gpu_command in gpu_commands:
-                      result = command(gpu_command)
-                      if result["success"] and result["output"]:
-                          gpu["available"] = True
-                          gpu["details"] = result["output"]
-                          break
+          runner = {
+              "os": os.environ.get("RUNNER_OS"),
+              "architecture": os.environ.get("RUNNER_ARCH"),
+              "environment": os.environ.get("RUNNER_ENVIRONMENT"),
+              "name": os.environ.get("RUNNER_NAME"),
+              "temp": os.environ.get("RUNNER_TEMP"),
+              "tool_cache": os.environ.get("RUNNER_TOOL_CACHE"),
+              "workspace": os.environ.get("GITHUB_WORKSPACE")
+          }
 
-                  internet_tests = {}
+          # --------------------------------------------------
+          # CPU
+          # --------------------------------------------------
 
-                  for host in [
-                      "https://github.com",
-                      "https://pypi.org",
-                      "https://api.github.com"
-                  ]:
-                      internet_tests[host] = command(
-                          f"curl -LIs --max-time 10 {host} | head -n 1"
-                      )
+          cpu = {
+              "logical_cpus": os.cpu_count(),
+              "physical_cores": None,
+              "model": None,
+              "architecture": platform.machine(),
+              "cpu_info": command("lscpu")
+          }
 
-                  internet = {
-                      "connected": any(
-                          item["success"] for item in internet_tests.values()
-                      ),
-                      "tests": internet_tests,
-                      "dns_github": command("getent hosts github.com")
-                  }
+          try:
+              import psutil
 
-                  python_info = {
-                      "version": version("python3 --version"),
-                      "pip": version("python3 -m pip --version"),
-                      "executable": shutil.which("python3"),
-                      "implementation": platform.python_implementation()
-                  }
+              cpu["physical_cores"] = psutil.cpu_count(logical=False)
+              cpu["logical_cpus"] = psutil.cpu_count(logical=True)
 
-                  docker_info = {
-                      "installed": shutil.which("docker") is not None,
-                      "version": version("docker --version"),
-                      "server": version(
-                          "docker version --format '{{.Server.Version}}'"
-                      )
-                  }
+          except Exception:
+              pass
 
-                  tools = {}
+          cpu_model = command(
+              "lscpu | grep -m1 'Model name:' | sed 's/^[^:]*:[[:space:]]*//'"
+          )
 
-                  checks = {
-                      "pytest": "python3 -m pytest --version",
-                      "pytest-xdist": "python3 -m pip show pytest-xdist",
-                      "pytest-cov": "python3 -m pip show pytest-cov",
-                      "checkov": "checkov --version",
-                      "semgrep": "semgrep --version",
-                      "ruff": "ruff --version",
-                      "git": "git --version",
-                      "curl": "curl --version | head -n 1"
-                  }
+          if cpu_model["status"] == "success":
+              cpu["model"] = cpu_model["output"]
 
-                  for name, cmd in checks.items():
-                      result = command(cmd)
+          # --------------------------------------------------
+          # RAM
+          # --------------------------------------------------
 
-                      if result["success"]:
-                          status = "installed"
-                      elif shutil.which(name.split("-")[0]):
-                          status = "failed"
-                      else:
-                          status = "missing"
+          memory = {
+              "total_gb": None,
+              "available_gb": None,
+              "used_gb": None,
+              "swap": command("free -h")
+          }
 
-                      tools[name] = {
-                          "status": status,
-                          "version": result["output"]
-                      }
+          try:
+              import psutil
 
-                  github = {
-                      "repository": os.environ.get("GITHUB_REPOSITORY"),
-                      "repository_owner": os.environ.get("GITHUB_REPOSITORY_OWNER"),
-                      "workflow": os.environ.get("GITHUB_WORKFLOW"),
-                      "workflow_ref": os.environ.get("GITHUB_WORKFLOW_REF"),
-                      "workflow_sha": os.environ.get("GITHUB_WORKFLOW_SHA"),
-                      "run_id": os.environ.get("GITHUB_RUN_ID"),
-                      "run_number": os.environ.get("GITHUB_RUN_NUMBER"),
-                      "job": os.environ.get("GITHUB_JOB"),
-                      "event_name": os.environ.get("GITHUB_EVENT_NAME"),
-                      "ref": os.environ.get("GITHUB_REF"),
-                      "ref_name": os.environ.get("GITHUB_REF_NAME"),
-                      "sha": os.environ.get("GITHUB_SHA"),
-                      "actor": os.environ.get("GITHUB_ACTOR"),
-                      "server_url": os.environ.get("GITHUB_SERVER_URL")
-                  }
+              vm = psutil.virtual_memory()
 
-                  git = {
-                      "commit": command("git rev-parse HEAD")["output"],
-                      "branch": command("git branch --show-current")["output"],
-                      "commit_message": command("git log -1 --pretty=%B")["output"],
-                      "commit_author": command(
-                          "git log -1 --pretty='%an <%ae>'"
-                      )["output"]
-                  }
+              memory["total_gb"] = round(vm.total / 1024**3, 2)
+              memory["available_gb"] = round(vm.available / 1024**3, 2)
+              memory["used_gb"] = round(vm.used / 1024**3, 2)
 
-                  json_files = []
+          except Exception:
+              pass
 
-                  for path in Path(".").rglob("*.json"):
-                      if ".git" in path.parts:
-                          continue
+          # --------------------------------------------------
+          # STORAGE / NVMe
+          # --------------------------------------------------
 
-                      try:
-                          size = path.stat().st_size
-                      except Exception:
-                          size = None
+          storage = {
+              "filesystem": command("df -h"),
+              "root_filesystem": command("df -h /"),
+              "block_devices": command(
+                  "lsblk -o NAME,MODEL,SIZE,TYPE,FSTYPE,MOUNTPOINT,ROTA"
+              ),
+              "nvme_devices": command(
+                  "lsblk -d -o NAME,MODEL,SIZE,ROTA,TRAN | grep -i nvme"
+              ),
+              "mounts": command("findmnt")
+          }
 
-                      json_files.append({
-                          "path": str(path),
-                          "size_bytes": size
-                      })
+          nvme_check = command(
+              "ls /dev/nvme* >/dev/null 2>&1"
+          )
 
-                  report_patterns = [
-                      "*report*.json",
-                      "*security*.json",
-                      "*checkov*.json",
-                      "*semgrep*.json",
-                      "*gitleaks*.json",
-                      "*codeql*.json",
-                      "*pytest*.json",
-                      "*junit*.xml"
-                  ]
+          storage["nvme_detected"] = nvme_check["status"] == "success"
 
-                  reports = []
+          # --------------------------------------------------
+          # INTERNET
+          # --------------------------------------------------
 
-                  for pattern in report_patterns:
-                      for path in Path(".").rglob(pattern):
-                          if ".git" in path.parts:
-                              continue
+          internet = {
+              "dns_github": command("getent hosts github.com"),
+              "github": command(
+                  "curl -LIs --max-time 10 https://github.com | head -n 1"
+              ),
+              "pypi": command(
+                  "curl -LIs --max-time 10 https://pypi.org | head -n 1"
+              ),
+              "github_api": command(
+                  "curl -LIs --max-time 10 https://api.github.com | head -n 1"
+              )
+          }
 
-                          reports.append({
-                              "path": str(path),
-                              "pattern": pattern,
-                              "size_bytes": path.stat().st_size
-                          })
+          internet["connected"] = any(
+              item["status"] == "success"
+              for item in internet.values()
+              if isinstance(item, dict)
+          )
 
-                  unique_reports = {}
+          # --------------------------------------------------
+          # GPU
+          # --------------------------------------------------
 
-                  for item in reports:
-                      unique_reports[item["path"]] = item
+          gpu = {
+              "nvidia_smi": command(
+                  "nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader"
+              ),
+              "pci_devices": command(
+                  "lspci | grep -Ei 'vga|3d|display'"
+              )
+          }
 
-                  reports = list(unique_reports.values())
+          gpu["available"] = (
+              gpu["nvidia_smi"]["status"] == "success"
+              or gpu["pci_devices"]["status"] == "success"
+              and bool(gpu["pci_devices"]["output"])
+          )
 
-                  system = {
-                      "platform": platform.platform(),
-                      "system": platform.system(),
-                      "release": platform.release(),
-                      "version": platform.version(),
-                      "hostname": socket.gethostname(),
-                      "python": platform.python_version()
-                  }
+          # --------------------------------------------------
+          # PYTHON
+          # --------------------------------------------------
 
-                  duration_seconds = round(time.time() - start_time, 3)
+          python_info = {
+              "version": command("python3 --version"),
+              "pip": command("python3 -m pip --version"),
+              "executable": shutil.which("python3"),
+              "implementation": platform.python_implementation()
+          }
 
-                  intelligence = {
-                      "schema_version": "1.0",
-                      "generated_at_utc": time.strftime(
-                          "%Y-%m-%dT%H:%M:%SZ",
-                          time.gmtime()
-                      ),
-                      "runner": runner,
-                      "system": system,
-                      "cpu": cpu,
-                      "memory": memory,
-                      "storage": storage,
-                      "gpu": gpu,
-                      "internet": internet,
-                      "python": python_info,
-                      "docker": docker_info,
-                      "tools": tools,
-                      "github": github,
-                      "git": git,
-                      "project": {
-                          "workspace": os.environ.get("GITHUB_WORKSPACE"),
-                          "json_files": json_files,
-                          "security_and_test_reports": reports
-                      },
-                      "execution": {
-                          "collection_duration_seconds": duration_seconds
-                      }
-                  }
+          # --------------------------------------------------
+          # DOCKER
+          # --------------------------------------------------
 
-                  output = Path(
-                      "argus-intelligence/argus-runner-intelligence.json"
-                  )
+          docker = {
+              "installed": shutil.which("docker") is not None,
+              "version": command("docker --version"),
+              "info": command("docker info")
+          }
 
-                  output.write_text(
-                      json.dumps(
-                          intelligence,
-                          indent=2,
-                          ensure_ascii=False
-                      ),
-                      encoding="utf-8"
-                  )
+          # --------------------------------------------------
+          # TOOLS
+          # --------------------------------------------------
 
-                  print(
-                      json.dumps(
-                          intelligence,
-                          indent=2,
-                          ensure_ascii=False
-                      )
-                  )
+          tools = {}
 
-                  print()
-                  print(f"ARGUS_INTELLIGENCE_FILE={output}")
+          checks = {
+              "pytest": "python3 -m pytest --version",
+              "pytest-xdist": "python3 -m pip show pytest-xdist",
+              "pytest-cov": "python3 -m pip show pytest-cov",
+              "psutil": "python3 -m pip show psutil",
+              "git": "git --version",
+              "curl": "curl --version | head -n 1"
+          }
 
-                  PY
+          for name, cmd in checks.items():
+              result = command(cmd)
 
-            - name: Run pytest
-              shell: bash
-              run: |
-                  set +e
+              tools[name] = {
+                  "status": result["status"],
+                  "output": result["output"]
+              }
 
-                  python3 -m pytest -q --disable-warnings \
-                      --junitxml=argus-intelligence/pytest-results.xml \
-                      2>&1 | tee argus-intelligence/pytest-output.txt
+          # --------------------------------------------------
+          # GITHUB
+          # --------------------------------------------------
 
-                  echo "pytest_exit_code=${PIPESTATUS[0]}" \
-                      > argus-intelligence/pytest-status.txt
+          github = {
+              "repository": os.environ.get("GITHUB_REPOSITORY"),
+              "workflow": os.environ.get("GITHUB_WORKFLOW"),
+              "run_id": os.environ.get("GITHUB_RUN_ID"),
+              "run_number": os.environ.get("GITHUB_RUN_NUMBER"),
+              "event_name": os.environ.get("GITHUB_EVENT_NAME"),
+              "ref": os.environ.get("GITHUB_REF"),
+              "ref_name": os.environ.get("GITHUB_REF_NAME"),
+              "sha": os.environ.get("GITHUB_SHA"),
+              "actor": os.environ.get("GITHUB_ACTOR")
+          }
 
-            - name: Skip Checkov
-              shell: bash
-              run: |
-                  echo "Checkov skipped on this ARM64 Android/Termux self-hosted runner."
-                  echo "Checkov requires rustworkx, which cannot currently be built for this runner."
-                  echo "checkov_exit_code=0" > argus-intelligence/checkov-status.txt
+          # --------------------------------------------------
+          # SYSTEM
+          # --------------------------------------------------
 
-            - name: Show intelligence files
-              if: always()
-              run: |
-                  echo "===== ARGUS INTELLIGENCE ====="
-                  find argus-intelligence -maxdepth 2 -type f -print
+          system = {
+              "platform": platform.platform(),
+              "system": platform.system(),
+              "release": platform.release(),
+              "version": platform.version(),
+              "hostname": socket.gethostname(),
+              "python": platform.python_version()
+          }
 
-                  echo
-                  echo "===== RUNNER INTELLIGENCE JSON ====="
+          # --------------------------------------------------
+          # RESOURCE EVALUATION
+          # --------------------------------------------------
 
-                  if [ -f argus-intelligence/argus-runner-intelligence.json ]; then
-                      cat argus-intelligence/argus-runner-intelligence.json
-                  fi
+          total_ram = memory.get("total_gb") or 0
+          logical_cpu = cpu.get("logical_cpus") or 0
 
-            - name: Upload Argus Runner Intelligence
-              if: always()
-              uses: actions/upload-artifact@v4
-              with:
-                  name: argus-runner-intelligence
-                  path: argus-intelligence/
-                  if-no-files-found: warn
-                  retention-days: 30
+          if total_ram >= 32:
+              ram_rating = "excellent"
+          elif total_ram >= 16:
+              ram_rating = "good"
+          elif total_ram >= 8:
+              ram_rating = "acceptable"
+          else:
+              ram_rating = "limited"
+
+          if logical_cpu >= 8:
+              cpu_rating = "excellent"
+          elif logical_cpu >= 4:
+              cpu_rating = "good"
+          elif logical_cpu >= 2:
+              cpu_rating = "acceptable"
+          else:
+              cpu_rating = "limited"
+
+          resource_evaluation = {
+              "cpu_rating": cpu_rating,
+              "ram_rating": ram_rating,
+              "nvme_detected": storage["nvme_detected"],
+              "internet_connected": internet["connected"],
+              "docker_available": docker["installed"],
+              "recommended_pytest_workers": max(1, logical_cpu - 1)
+          }
+
+          # --------------------------------------------------
+          # FINAL REPORT
+          # --------------------------------------------------
+
+          intelligence = {
+              "schema_version": "2.0",
+              "generated_at_utc": time.strftime(
+                  "%Y-%m-%dT%H:%M:%SZ",
+                  time.gmtime()
+              ),
+              "runner": runner,
+              "system": system,
+              "cpu": cpu,
+              "memory": memory,
+              "storage": storage,
+              "gpu": gpu,
+              "internet": internet,
+              "python": python_info,
+              "docker": docker,
+              "tools": tools,
+              "github": github,
+              "resource_evaluation": resource_evaluation,
+              "execution": {
+                  "duration_seconds": round(time.time() - start, 3)
+              }
+          }
+
+          output = Path(
+              "argus-intelligence/runner-intelligence.json"
+          )
+
+          output.write_text(
+              json.dumps(
+                  intelligence,
+                  indent=2,
+                  ensure_ascii=False
+              ),
+              encoding="utf-8"
+          )
+
+          print(json.dumps(
+              intelligence,
+              indent=2,
+              ensure_ascii=False
+          ))
+
+          PY
+
+      - name: Run pytest
+        shell: bash
+        run: |
+          set +e
+
+          python3 -m pytest -q \
+            --disable-warnings \
+            --junitxml=argus-intelligence/pytest-results.xml \
+            2>&1 | tee argus-intelligence/pytest-output.txt
+
+          echo "pytest_exit_code=${PIPESTATUS[0]}" \
+            > argus-intelligence/pytest-status.txt
+
+      - name: Test pytest-xdist
+        shell: bash
+        run: |
+          set +e
+
+          python3 -m pytest \
+            -n auto \
+            -q \
+            --disable-warnings \
+            2>&1 | tee argus-intelligence/pytest-xdist-output.txt
+
+          echo "pytest_xdist_exit_code=${PIPESTATUS[0]}" \
+            > argus-intelligence/pytest-xdist-status.txt
+
+      - name: Show Argus Intelligence
+        if: always()
+        shell: bash
+        run: |
+          echo "========================================"
+          echo "ARGUS RUNNER INTELLIGENCE"
+          echo "========================================"
+
+          find argus-intelligence \
+            -maxdepth 2 \
+            -type f \
+            -print
+
+          echo
+          echo "========================================"
+          echo "RUNNER REPORT"
+          echo "========================================"
+
+          if [ -f argus-intelligence/runner-intelligence.json ]; then
+            cat argus-intelligence/runner-intelligence.json
+          fi
+
+      - name: Upload Argus Runner Intelligence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: argus-runner-intelligence
+          path: argus-intelligence/
+          if-no-files-found: warn
+          retention-days: 30
