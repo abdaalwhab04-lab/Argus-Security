@@ -12,7 +12,7 @@ permissions:
 jobs:
   runner-intelligence:
     name: Argus Runner Intelligence
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
@@ -20,7 +20,7 @@ jobs:
 
       - name: Install intelligence tools
         run: |
-          python3 -m pip install --break-system-packages pytest pytest-xdist pytest-cov
+          python3 -m pip install --break-system-packages pytest pytest-xdist pytest-cov psutil
 
       - name: Collect Runner Intelligence
         shell: bash
