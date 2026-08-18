@@ -20,7 +20,7 @@ jobs:
 
       - name: Install intelligence tools
         run: |
-          python3 -m pip install --break-system-packages psutil pytest pytest-xdist pytest-cov checkov
+          python3 -m pip install --break-system-packages pytest pytest-xdist pytest-cov checkov
 
       - name: Collect Runner Intelligence
         shell: bash
