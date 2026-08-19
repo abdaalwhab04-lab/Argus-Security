@@ -54,7 +54,7 @@ jobs:
 
       - name: Verify tenacity
         run: |
-          python3 -c "import tenacity; print('tenacity:', tenacity.__version__)"
+          python3 -c "import tenacity; print('tenacity: healthy')"
 
       - name: Verify Argus import
         run: |
