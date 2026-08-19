@@ -32,3 +32,4 @@ rich>=13.0.0  # Beautiful progress bars and terminal UI
 # Vulnerability chaining (Phase 5.5)
 networkx>=3.0  # Graph algorithms for attack chain detection
 numpy>=2.0.0
+scipy>=1.13.0
