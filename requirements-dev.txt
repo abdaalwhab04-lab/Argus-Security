@@ -17,7 +17,7 @@ pytest-xdist>=3.3.0,<4.0.0        # Parallel test execution
 ruff>=0.8.0,<1.0.0                # Fast linter/formatter (replaces black, pylint, isort, flake8)
 mypy>=1.0.0,<2.0.0                # Static type checking
 types-requests>=2.31.0            # Type stubs for requests
-types-PyYAML>=6.0.0               # Type stubs for PyYAML
+types-PyYAML>=6.0.12.20260724               # Type stubs for PyYAML
 types-setuptools>=65.0.0          # Type stubs for setuptools
 
 # Security scanning (for testing)
