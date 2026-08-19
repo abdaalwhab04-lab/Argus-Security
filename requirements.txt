@@ -23,7 +23,7 @@ pyyaml>=6.0.2  # CVE-2020-14343 fixed in 5.4+
 requests>=2.32.0  # Multiple CVEs fixed
 urllib3>=2.0.0  # Security updates
 certifi>=2024.8.30  # Certificate validation
-cryptography>=44.0.0  # Multiple CVEs fixed
+cryptography>=50.0.0  # Multiple CVEs fixed
 defusedxml>=0.7.1  # Prevent XML bomb attacks (billion laughs, entity expansion)
 
 # Progress tracking and UI
