@@ -24,7 +24,7 @@ classifiers = [
 ]
 dependencies = [
     "anthropic>=0.18.0",
-    "openai>=1.0.0",
+    "openai>=3.0.0",
     "tenacity>=8.0.0",
 ]
 

@@ -1,6 +1,6 @@
 # Core AI providers
 anthropic>=0.40.0
-openai>=1.56.0
+openai>=3.0.0
 tenacity>=9.0.0
 
 # Data validation
