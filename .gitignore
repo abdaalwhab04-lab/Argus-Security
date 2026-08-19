@@ -107,3 +107,7 @@ copilot-cli-scan-results/
 *.docx
 *.xlsx
 *.pptx
+
+# Argus Runner Intelligence - vendor runtime library
+!tools/argus-runner-intelligence/lib/
+!tools/argus-runner-intelligence/lib/**
