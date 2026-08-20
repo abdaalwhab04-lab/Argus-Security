@@ -1,0 +1,36 @@
+name: Workflow Telemetry Test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  telemetry-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Start Workflow Telemetry
+        uses: ./workflow-telemetry-action
+        with:
+          metric_frequency: "1"
+          proc_trace_min_duration: "-1"
+          proc_trace_sys_enable: "false"
+          proc_trace_chart_show: "true"
+          proc_trace_chart_max_count: "100"
+          proc_trace_table_show: "true"
+          comment_on_pr: "false"
+          job_summary: "true"
+          theme: "light"
+
+      - name: Test workload
+        run: |
+          echo "Starting resource collection test..."
+          for i in {1..20}; do
+            echo "Working $i"
+            sleep 1
+          done
+
+      - name: Finish
+        run: echo "Telemetry test completed"
