@@ -1,4 +1,4 @@
-name: Workflow Telemetry Test
+name: Workflow Telemetry Resource Test
 
 on:
   workflow_dispatch:
@@ -28,13 +28,207 @@ jobs:
           job_summary: "true"
           theme: "light"
 
-      - name: Test workload
+      - name: Collect Runner Information
+        shell: bash
         run: |
-          echo "Starting resource collection test..."
-          for i in {1..20}; do
-            echo "Working $i"
-            sleep 1
-          done
+          set +e
+
+          echo "## 🖥️ GitHub Actions Runner Resources" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          echo "### 🔥 CPU" >> "$GITHUB_STEP_SUMMARY"
+          echo '```text' >> "$GITHUB_STEP_SUMMARY"
+          echo "Logical CPUs:"
+          nproc 2>/dev/null
+          echo ""
+          echo "CPU information:"
+          lscpu 2>/dev/null | head -25
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+          echo "### 🧠 RAM" >> "$GITHUB_STEP_SUMMARY"
+          echo '```text' >> "$GITHUB_STEP_SUMMARY"
+          free -h 2>/dev/null
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+          echo "### 💾 Storage" >> "$GITHUB_STEP_SUMMARY"
+          echo '```text' >> "$GITHUB_STEP_SUMMARY"
+          echo "Disk space:"
+          df -h /
+          echo ""
+          echo "Block devices:"
+          lsblk -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT,ROTA,MODEL 2>/dev/null
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+          echo "### ⚡ Disk Type / NVMe Detection" >> "$GITHUB_STEP_SUMMARY"
+          echo '```text' >> "$GITHUB_STEP_SUMMARY"
+          if command -v nvme >/dev/null 2>&1; then
+            echo "nvme command: available"
+            nvme list 2>/dev/null
+          else
+            echo "nvme command: not installed"
+          fi
+
+          echo ""
+          echo "Detected disks:"
+          lsblk -d -o NAME,ROTA,MODEL,TRAN 2>/dev/null
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+          echo "### 🌐 Network" >> "$GITHUB_STEP_SUMMARY"
+          echo '```text' >> "$GITHUB_STEP_SUMMARY"
+          echo "Network interfaces:"
+          ip -brief address 2>/dev/null
+
+          echo ""
+          echo "Connectivity:"
+          if curl -Is --max-time 10 https://github.com >/dev/null 2>&1; then
+            echo "GitHub: OK"
+          else
+            echo "GitHub: FAILED"
+          fi
+
+          if curl -Is --max-time 10 https://registry.npmjs.org >/dev/null 2>&1; then
+            echo "npm registry: OK"
+          else
+            echo "npm registry: FAILED"
+          fi
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+          echo "### 🐳 Docker" >> "$GITHUB_STEP_SUMMARY"
+          echo '```text' >> "$GITHUB_STEP_SUMMARY"
+          if command -v docker >/dev/null 2>&1; then
+            echo "Docker: available"
+            docker --version
+            docker info 2>/dev/null | head -25
+          else
+            echo "Docker: not available"
+          fi
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+          echo "### 🐍 Python" >> "$GITHUB_STEP_SUMMARY"
+          echo '```text' >> "$GITHUB_STEP_SUMMARY"
+          if command -v python3 >/dev/null 2>&1; then
+            python3 --version
+            which python3
+          else
+            echo "Python 3: not available"
+          fi
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+          echo "### 🧪 pytest / pytest-xdist" >> "$GITHUB_STEP_SUMMARY"
+          echo '```text' >> "$GITHUB_STEP_SUMMARY"
+          python3 -m pip --version 2>/dev/null
+
+          python3 -m pip install --user pytest pytest-xdist
+
+          echo ""
+          echo "pytest:"
+          python3 -m pytest --version 2>/dev/null
+
+          echo ""
+          echo "pytest-xdist:"
+          python3 -m pip show pytest-xdist 2>/dev/null | grep -E 'Name|Version' || true
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+          echo "### 🎮 GPU" >> "$GITHUB_STEP_SUMMARY"
+          echo '```text' >> "$GITHUB_STEP_SUMMARY"
+
+          if command -v nvidia-smi >/dev/null 2>&1; then
+            echo "NVIDIA GPU detected:"
+            nvidia-smi 2>/dev/null
+          elif command -v lspci >/dev/null 2>&1 && \
+               lspci 2>/dev/null | grep -Ei 'vga|3d|display' | grep -Ei 'nvidia|amd|intel' >/dev/null 2>&1; then
+            echo "Display/GPU device detected:"
+            lspci 2>/dev/null | grep -Ei 'vga|3d|display'
+          else
+            echo "No supported GPU detected on this runner."
+          fi
+
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Disk Performance Test
+        shell: bash
+        run: |
+          set +e
+
+          echo "## 📊 Disk Performance Test" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          TEST_DIR="${RUNNER_TEMP}/disk-test"
+          mkdir -p "$TEST_DIR"
+
+          echo '```text' >> "$GITHUB_STEP_SUMMARY"
+
+          echo "Writing 512 MB test file..."
+
+          START=$(date +%s%N)
+
+          dd if=/dev/zero \
+             of="$TEST_DIR/test.bin" \
+             bs=1M \
+             count=512 \
+             conv=fdatasync \
+             status=none
+
+          END=$(date +%s%N)
+
+          WRITE_SECONDS=$(awk "BEGIN {print ($END-$START)/1000000000}")
+          WRITE_MBPS=$(awk "BEGIN {print 512/$WRITE_SECONDS}")
+
+          echo "Write time: ${WRITE_SECONDS}s"
+          echo "Approximate write speed: ${WRITE_MBPS} MB/s"
+
+          sync
+
+          START=$(date +%s%N)
+
+          dd if="$TEST_DIR/test.bin" \
+             of=/dev/null \
+             bs=1M \
+             status=none
+
+          END=$(date +%s%N)
+
+          READ_SECONDS=$(awk "BEGIN {print ($END-$START)/1000000000}")
+          READ_MBPS=$(awk "BEGIN {print 512/$READ_SECONDS}")
+
+          echo "Read time: ${READ_SECONDS}s"
+          echo "Approximate read speed: ${READ_MBPS} MB/s"
+
+          rm -rf "$TEST_DIR"
+
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Test Workload
+        shell: bash
+        run: |
+          echo "## 🧪 Test Workload" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Running CPU and memory workload..." >> "$GITHUB_STEP_SUMMARY"
+
+          python3 - <<'PY'
+          import hashlib
+          import os
+          import time
+
+          print("Starting workload...")
+
+          data = b"Argus Security Workflow Telemetry Test" * 100000
+
+          start = time.time()
+
+          for _ in range(100):
+              hashlib.sha256(data).hexdigest()
+
+          elapsed = time.time() - start
+
+          print(f"SHA-256 workload completed in {elapsed:.3f} seconds")
+          print(f"CPU count: {os.cpu_count()}")
+
+          print("Workload completed successfully.")
+          PY
 
       - name: Finish
-        run: echo "Telemetry test completed"
+        run: |
+          echo "## ✅ Resource Test Completed" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "The GitHub Actions runner resource test completed successfully." >> "$GITHUB_STEP_SUMMARY"
