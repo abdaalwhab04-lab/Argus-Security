@@ -1,0 +1,27 @@
+name: tag
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Sha or tag to be tagged as v3'
+        required: true
+
+env:
+  TARGET_TAG: v3
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag }}
+      - name: Configure Git User
+        run: |
+          git config --global user.email "action@github.com"
+          git config --global user.name "GitHub Action"
+      - name: Tag ${{ github.event.inputs.tag }} as ${{ env.TARGET_TAG }}
+        run: |
+          git tag ${{ env.TARGET_TAG }} -f
+          git push origin --tags -f
