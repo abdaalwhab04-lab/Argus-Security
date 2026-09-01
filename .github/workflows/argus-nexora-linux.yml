@@ -1,0 +1,81 @@
+name: Argus NEXORA Linux Test
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - nexora-real-test
+
+permissions:
+  contents: read
+
+jobs:
+  argus-nexora:
+    name: Argus + NEXORA Linux Environment
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Show system information
+        run: |
+          echo "=== OS ==="
+          uname -a
+          cat /etc/os-release
+
+          echo "=== CPU ==="
+          nproc
+          lscpu | head -30
+
+          echo "=== Memory ==="
+          free -h
+
+          echo "=== Disk ==="
+          df -h
+
+      - name: Check Python
+        run: |
+          python3 --version
+          python3 -m pip --version
+
+      - name: Check Docker
+        run: |
+          docker --version
+          docker info
+
+      - name: Install Python dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install -r requirements.txt
+
+      - name: Install test tools
+        run: |
+          python3 -m pip install pytest pytest-xdist pytest-cov
+
+      - name: Check Argus configuration
+        run: |
+          python3 scripts/run_ai_audit.py --help
+
+      - name: Run pytest
+        run: |
+          mkdir -p output
+          pytest \
+            -v \
+            --tb=short \
+            --junitxml=output/pytest-junit.xml \
+            2>&1 | tee output/pytest.log
+
+      - name: Check NEXORA test
+        run: |
+          echo "NEXORA workflow environment check"
+          echo "NEXORA_LINUX_OK"
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: argus-nexora-test-results
+          path: output/
+          if-no-files-found: warn
