@@ -111,3 +111,6 @@ copilot-cli-scan-results/
 # Argus Runner Intelligence - vendor runtime library
 !tools/argus-runner-intelligence/lib/
 !tools/argus-runner-intelligence/lib/**
+
+# Local Ventoy package - uploaded separately as a GitHub Release Asset
+ventoy_package/

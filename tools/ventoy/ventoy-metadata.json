@@ -1,0 +1,12 @@
+{
+  "project": "Ventoy",
+  "version": "1.1.17",
+  "tag": "v1.1.17",
+  "filename": "ventoy-1.1.17-linux.tar.gz",
+  "source": "https://github.com/ventoy/Ventoy",
+  "release_url": "https://github.com/ventoy/Ventoy/releases/tag/v1.1.17",
+  "download_url": "https://github.com/ventoy/Ventoy/releases/download/v1.1.17/ventoy-1.1.17-linux.tar.gz",
+  "sha256": "7fb4ed08cef6a6b4d39dd19260d8c80291a78dfdf9af7d461571e23cbbc43805",
+  "sha256_verified": true,
+  "size_bytes": 20291141
+}
