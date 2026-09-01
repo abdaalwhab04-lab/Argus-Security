@@ -67,7 +67,7 @@ class LLMManager:
     # Default models for each provider
     DEFAULT_MODELS = {
         "anthropic": "claude-sonnet-4-5-20250929",
-        "openai": "gpt-4-turbo-preview",
+        "openai": "gpt-5.6-luna",
         "openrouter": "deepseek/deepseek-v3.2",
         "ollama": "llama3.2:3b",
         "claude-cli": "opus",
@@ -86,7 +86,7 @@ class LLMManager:
     # Pricing information per provider
     PRICING = {
         "anthropic": {"input": 3.0, "output": 15.0},  # Claude Sonnet 4.5: $3/1M input, $15/1M output
-        "openai": {"input": 10.0, "output": 30.0},  # GPT-4: $10/1M input, $30/1M output
+        "openai": {"input": 0.20, "output": 1.20},  # GPT-5.6 Luna: $0.20/1M input, $1.20/1M output
         "openrouter": {"input": 0.14, "output": 0.28},  # DeepSeek V3.2: ~$0.14/1M input, $0.28/1M output
         "ollama": {"input": 0.0, "output": 0.0},  # Local inference: free
         "claude-cli": {"input": 0.0, "output": 0.0},  # Claude Code subscription: included
@@ -628,7 +628,27 @@ class LLMManager:
                     max_tokens=max_tokens,
                     timeout=300.0,  # 5 minute timeout
                 )
-                response_text = response.choices[0].message.content
+
+                # Thinking/reasoning models may return content=None while
+                # consuming the requested output budget for reasoning tokens.
+                # Keep reasoning separate and never allow None to propagate
+                # as the public response text.
+                message = response.choices[0].message
+                response_text = message.content
+
+                if response_text is None:
+                    response_text = ""
+
+                response_text = str(response_text).strip()
+
+                reasoning = getattr(message, "reasoning", None)
+                if reasoning:
+                    logger.debug(
+                        "LLM reasoning received (%d chars) for model %s",
+                        len(str(reasoning)),
+                        active_model,
+                    )
+
                 input_tokens = response.usage.prompt_tokens
                 output_tokens = response.usage.completion_tokens
 

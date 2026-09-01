@@ -1,0 +1,16 @@
+{
+  "id": "abdulwahhab03/docker-kaggle-test",
+  "title": "docker-kaggle-test",
+  "code_file": "docker-kaggle-test.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_tpu": false,
+  "enable_internet": true,
+  "keywords": [
+    "docker",
+    "container",
+    "gpu"
+  ]
+}

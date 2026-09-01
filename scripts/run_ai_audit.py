@@ -256,7 +256,7 @@ def get_model_name(provider, config):
     # Default models for each provider
     defaults = {
         "anthropic": "claude-sonnet-4-5-20250929",
-        "openai": "gpt-4-turbo-preview",
+        "openai": "gpt-5.6-luna",
         "openrouter": config.get("openrouter_model", "deepseek/deepseek-v3.2"),
         "ollama": "llama3.2:3b",
     }
@@ -658,7 +658,7 @@ def estimate_call_cost(prompt_length: int, max_output_tokens: int, provider: str
         input_cost = (estimated_input_tokens / 1_000_000) * 3.0
         output_cost = (estimated_output_tokens / 1_000_000) * 15.0
     elif provider == "openai":
-        # GPT-4: $10/1M input, $30/1M output
+        # GPT-5.6 Luna: $0.20/1M input, $1.20/1M output
         input_cost = (estimated_input_tokens / 1_000_000) * 10.0
         output_cost = (estimated_output_tokens / 1_000_000) * 30.0
     elif provider == "openrouter":

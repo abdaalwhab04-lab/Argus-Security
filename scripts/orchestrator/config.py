@@ -32,6 +32,11 @@ def load_config_from_env():
     return {
         "ai_provider": os.environ.get("AI_PROVIDER", os.environ.get("INPUT_AI_PROVIDER", "auto")),
         "anthropic_api_key": os.environ.get("ANTHROPIC_API_KEY", ""),
+        "openrouter_api_key": os.environ.get("OPENROUTER_API_KEY", ""),
+        "openrouter_model": os.environ.get(
+            "OPENROUTER_MODEL",
+            "deepseek/deepseek-v3.2",
+        ),
         "openai_api_key": os.environ.get("OPENAI_API_KEY", ""),
         "ollama_endpoint": os.environ.get("OLLAMA_ENDPOINT", ""),
         "foundation_sec_enabled": os.environ.get("FOUNDATION_SEC_ENABLED", "false").lower() == "true",
