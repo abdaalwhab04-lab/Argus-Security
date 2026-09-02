@@ -38,7 +38,15 @@ jobs:
             grub-efi-amd64 \
             mtools \
             rsync \
-            busybox
+            busybox \
+            qemu-system-x86
+
+      - name: Check QEMU
+        run: |
+          echo "=== QEMU ==="
+          qemu-system-x86_64 --version
+          command -v qemu-system-x86_64
+          echo "NEXORA_QEMU_OK"
 
       - name: Show system information
         run: |
@@ -136,6 +144,38 @@ jobs:
           ls -lh "${ISO_IMAGE}"
           file "${ISO_IMAGE}"
           echo "NEXORA_ISO_OK"
+
+      - name: Boot NEXORA ISO with QEMU
+        run: |
+          echo "=== NEXORA QEMU BOOT TEST ==="
+
+          ISO_IMAGE="nexora/build/output/nexora.iso"
+          BOOT_LOG="output/nexora-qemu-boot.log"
+
+          mkdir -p output
+
+          timeout 30s qemu-system-x86_64 \
+            -m 1024 \
+            -machine q35 \
+            -display none \
+            -serial stdio \
+            -cdrom "${ISO_IMAGE}" \
+            2>&1 | tee "${BOOT_LOG}" &
+
+          QEMU_PID=$!
+
+          wait "${QEMU_PID}" || true
+
+          echo "=== Check NEXORA boot marker ==="
+
+          if grep -q "NEXORA_BOOT_OK" "${BOOT_LOG}"; then
+            echo "NEXORA_QEMU_BOOT_OK"
+          else
+            echo "ERROR: NEXORA_BOOT_OK was not found."
+            echo "=== QEMU BOOT LOG ==="
+            cat "${BOOT_LOG}"
+            exit 1
+          fi
 
       - name: Upload NEXORA ISO
         if: always()

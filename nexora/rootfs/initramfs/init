@@ -9,5 +9,6 @@ echo "================================"
 echo "       NEXORA Linux"
 echo "================================"
 echo "NEXORA initramfs started."
+echo "NEXORA_BOOT_OK"
 
 exec /bin/sh

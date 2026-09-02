@@ -82,8 +82,12 @@ cat > "${ISO_DIR}/boot/grub/grub.cfg" <<'GRUBCFG'
 set timeout=5
 set default=0
 
+serial --unit=0 --speed=115200
+terminal_input console serial
+terminal_output console serial
+
 menuentry "NEXORA Linux" {
-    linux /boot/vmlinuz
+    linux /boot/vmlinuz root=/dev/ram0 rw console=ttyS0,115200
     initrd /boot/initramfs.img
 }
 GRUBCFG
