@@ -95,6 +95,27 @@ jobs:
           file "${KERNEL_IMAGE}"
           echo "NEXORA_KERNEL_OK"
 
+      - name: Build NEXORA Initramfs
+        run: |
+          echo "=== Build NEXORA Initramfs ==="
+          bash nexora/scripts/build-initramfs.sh
+
+      - name: Verify NEXORA Initramfs
+        run: |
+          INITRAMFS_IMAGE="nexora/build/nexora-initramfs.cpio.gz"
+
+          echo "=== Verify Initramfs Image ==="
+
+          if [ ! -f "${INITRAMFS_IMAGE}" ]; then
+            echo "ERROR: NEXORA initramfs image not found:"
+            echo "${INITRAMFS_IMAGE}"
+            exit 1
+          fi
+
+          ls -lh "${INITRAMFS_IMAGE}"
+          file "${INITRAMFS_IMAGE}"
+          echo "NEXORA_INITRAMFS_OK"
+
       - name: Check Python
         run: |
           python3 --version
