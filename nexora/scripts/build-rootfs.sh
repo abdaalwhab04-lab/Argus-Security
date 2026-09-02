@@ -53,6 +53,8 @@ rm -f "${TEMP_INIT}"
 
 echo "=== Configure RootFS ==="
 
+sudo chown -R "$(id -u):$(id -g)" "${ROOTFS_DIR}"
+
 cat > "${ROOTFS_DIR}/etc/hostname" <<'HOSTNAME'
 nexora
 HOSTNAME
