@@ -145,6 +145,34 @@ jobs:
           file "${ISO_IMAGE}"
           echo "NEXORA_ISO_OK"
 
+      - name: Inspect NEXORA Initramfs
+        run: |
+          echo "=== NEXORA INITRAMFS INSPECTION ==="
+
+          INITRAMFS_IMAGE="nexora/build/nexora-initramfs.cpio.gz"
+
+          ls -lh "${INITRAMFS_IMAGE}"
+
+          echo "=== INITRAMFS CONTENT: init ==="
+          gzip -cd "${INITRAMFS_IMAGE}" | cpio -itv 2>/dev/null | grep -E '(^|/)init$'
+
+          echo "=== INITRAMFS CONTENT: busybox ==="
+          gzip -cd "${INITRAMFS_IMAGE}" | cpio -itv 2>/dev/null | grep -E '(^|/)bin/busybox$'
+
+          echo "=== INITRAMFS /init DETAILS ==="
+          rm -rf /tmp/nexora-initramfs-inspect
+          mkdir -p /tmp/nexora-initramfs-inspect
+          gzip -cd "${INITRAMFS_IMAGE}" | cpio -idmu -D /tmp/nexora-initramfs-inspect
+
+          ls -l /tmp/nexora-initramfs-inspect/init
+          file /tmp/nexora-initramfs-inspect/init
+          file /tmp/nexora-initramfs-inspect/bin/busybox
+
+          echo "=== BUSYBOX LINK CHECK ==="
+          ldd /tmp/nexora-initramfs-inspect/bin/busybox || true
+
+          echo "NEXORA_INITRAMFS_INSPECT_OK"
+
       - name: Boot NEXORA ISO with QEMU
         run: |
           echo "=== NEXORA QEMU BOOT TEST ==="
