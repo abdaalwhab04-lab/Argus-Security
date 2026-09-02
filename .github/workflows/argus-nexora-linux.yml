@@ -38,7 +38,7 @@ jobs:
             grub-efi-amd64 \
             mtools \
             rsync \
-            busybox \
+            busybox-static \
             qemu-system-x86
 
       - name: Check QEMU
