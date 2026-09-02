@@ -114,3 +114,6 @@ copilot-cli-scan-results/
 
 # Local Ventoy package - uploaded separately as a GitHub Release Asset
 ventoy_package/
+
+# Local NEXORA downloaded artifacts
+nexora/downloaded-iso/
