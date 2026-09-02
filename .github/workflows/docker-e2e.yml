@@ -82,7 +82,69 @@ jobs:
               "python -c \"import hybrid_analyzer; print(\\\"import ok\\\")\"" \
             ; do
               TOOL_NAME=$(echo "$cmd_check" | awk "{print \$1}")
-              if eval "$cmd_check" > /dev/null 2>&1; then
+              case "$TOOL_NAME" in
+                semgrep)
+                  if semgrep --version > /dev/null 2>&1; then
+                    OK=1
+                  else
+                    OK=0
+                  fi
+                  ;;
+                trivy)
+                  if trivy --version > /dev/null 2>&1; then
+                    OK=1
+                  else
+                    OK=0
+                  fi
+                  ;;
+                trufflehog)
+                  if trufflehog --version > /dev/null 2>&1; then
+                    OK=1
+                  else
+                    OK=0
+                  fi
+                  ;;
+                gitleaks)
+                  if gitleaks version > /dev/null 2>&1; then
+                    OK=1
+                  else
+                    OK=0
+                  fi
+                  ;;
+                nuclei)
+                  if nuclei -version > /dev/null 2>&1; then
+                    OK=1
+                  else
+                    OK=0
+                  fi
+                  ;;
+                opa)
+                  if opa version > /dev/null 2>&1; then
+                    OK=1
+                  else
+                    OK=0
+                  fi
+                  ;;
+                checkov)
+                  if checkov --version > /dev/null 2>&1; then
+                    OK=1
+                  else
+                    OK=0
+                  fi
+                  ;;
+                python)
+                  if python -c "import hybrid_analyzer; print('import ok')" > /dev/null 2>&1; then
+                    OK=1
+                  else
+                    OK=0
+                  fi
+                  ;;
+                *)
+                  OK=0
+                  ;;
+              esac
+
+              if [ "$OK" -eq 1 ]; then
                 echo "PASS: $cmd_check"
               else
                 echo "FAIL: $cmd_check"
