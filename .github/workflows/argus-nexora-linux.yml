@@ -93,6 +93,7 @@ jobs:
           KERNEL_IMAGE="nexora/build/linux-${KERNEL_VERSION}/arch/x86/boot/bzImage"
 
           echo "=== Verify Kernel Image ==="
+
           if [ ! -f "${KERNEL_IMAGE}" ]; then
             echo "ERROR: NEXORA kernel image not found:"
             echo "${KERNEL_IMAGE}"
@@ -151,27 +152,74 @@ jobs:
 
           INITRAMFS_IMAGE="nexora/build/nexora-initramfs.cpio.gz"
 
+          echo "=== IMAGE ==="
           ls -lh "${INITRAMFS_IMAGE}"
+          file "${INITRAMFS_IMAGE}"
 
-          echo "=== INITRAMFS CONTENT: init ==="
-          gzip -cd "${INITRAMFS_IMAGE}" | cpio -itv 2>/dev/null | grep -E '(^|/)init$'
+          echo "=== INITRAMFS GZIP TEST ==="
+          gzip -t "${INITRAMFS_IMAGE}"
+          echo "GZIP_OK"
 
-          echo "=== INITRAMFS CONTENT: busybox ==="
-          gzip -cd "${INITRAMFS_IMAGE}" | cpio -itv 2>/dev/null | grep -E '(^|/)bin/busybox$'
+          echo "=== COMPLETE INITRAMFS CONTENT ==="
+          gzip -cd "${INITRAMFS_IMAGE}" | cpio -itv
 
-          echo "=== INITRAMFS /init DETAILS ==="
+          echo "=== INITRAMFS IMPORTANT FILES ==="
+          gzip -cd "${INITRAMFS_IMAGE}" | \
+            cpio -itv | \
+            grep -E '(^|/)(init|bin/busybox|bin/sh)$' || true
+
+          echo "=== EXTRACT INITRAMFS ==="
+
           rm -rf /tmp/nexora-initramfs-inspect
           mkdir -p /tmp/nexora-initramfs-inspect
-          gzip -cd "${INITRAMFS_IMAGE}" | cpio -idmu -D /tmp/nexora-initramfs-inspect
 
-          ls -l /tmp/nexora-initramfs-inspect/init
-          file /tmp/nexora-initramfs-inspect/init
-          file /tmp/nexora-initramfs-inspect/bin/busybox
+          gzip -cd "${INITRAMFS_IMAGE}" | \
+            cpio -idmu -D /tmp/nexora-initramfs-inspect
 
-          echo "=== BUSYBOX LINK CHECK ==="
-          ldd /tmp/nexora-initramfs-inspect/bin/busybox || true
+          echo "=== EXTRACTED ROOT ==="
+          ls -la /tmp/nexora-initramfs-inspect
 
-          echo "NEXORA_INITRAMFS_INSPECT_OK"
+          echo "=== EXTRACTED BIN ==="
+          ls -la /tmp/nexora-initramfs-inspect/bin || true
+
+          echo "=== INIT DETAILS ==="
+
+          if [ -e /tmp/nexora-initramfs-inspect/init ]; then
+            echo "INIT_EXISTS=YES"
+            ls -l /tmp/nexora-initramfs-inspect/init
+            file /tmp/nexora-initramfs-inspect/init
+
+            echo "=== INIT CONTENT ==="
+            head -n 20 /tmp/nexora-initramfs-inspect/init
+          else
+            echo "INIT_EXISTS=NO"
+            echo "ERROR: /init DOES NOT EXIST"
+          fi
+
+          echo "=== BUSYBOX DETAILS ==="
+
+          if [ -e /tmp/nexora-initramfs-inspect/bin/busybox ]; then
+            echo "BUSYBOX_EXISTS=YES"
+            ls -l /tmp/nexora-initramfs-inspect/bin/busybox
+            file /tmp/nexora-initramfs-inspect/bin/busybox
+
+            echo "=== BUSYBOX LINK CHECK ==="
+            ldd /tmp/nexora-initramfs-inspect/bin/busybox || true
+          else
+            echo "BUSYBOX_EXISTS=NO"
+            echo "ERROR: /bin/busybox DOES NOT EXIST"
+          fi
+
+          echo "=== SHELL CHECK ==="
+
+          if [ -e /tmp/nexora-initramfs-inspect/bin/sh ]; then
+            ls -l /tmp/nexora-initramfs-inspect/bin/sh
+            file /tmp/nexora-initramfs-inspect/bin/sh
+          else
+            echo "WARNING: /bin/sh DOES NOT EXIST"
+          fi
+
+          echo "NEXORA_INITRAMFS_INSPECT_DONE"
 
       - name: Boot NEXORA ISO with QEMU
         run: |
