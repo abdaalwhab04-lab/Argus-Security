@@ -39,7 +39,13 @@ jobs:
             mtools \
             rsync \
             busybox-static \
-            qemu-system-x86
+            qemu-system-x86 \
+            debootstrap
+
+      - name: Build NEXORA RootFS
+        run: |
+          echo "=== Build NEXORA RootFS ==="
+          bash nexora/scripts/build-rootfs.sh
 
       - name: Check QEMU
         run: |
