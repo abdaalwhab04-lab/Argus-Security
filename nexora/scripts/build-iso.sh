@@ -3,7 +3,6 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NEXORA_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-REPO_ROOT="$(cd "${NEXORA_DIR}/.." && pwd)"
 
 BUILD_DIR="${NEXORA_DIR}/build"
 ROOTFS_DIR="${NEXORA_DIR}/rootfs"
@@ -11,48 +10,103 @@ ISO_DIR="${BUILD_DIR}/iso"
 OUTPUT_DIR="${BUILD_DIR}/output"
 
 KERNEL_VERSION="${KERNEL_VERSION:-6.12.50}"
-KERNEL_BUILD_DIR="${BUILD_DIR}/linux-${KERNEL_VERSION}"
-
 ISO_NAME="${ISO_NAME:-nexora.iso}"
 
-echo "=== NEXORA ISO BUILD ==="
+KERNEL_IMAGE="${BUILD_DIR}/linux-${KERNEL_VERSION}/arch/x86/boot/bzImage"
+INITRAMFS_IMAGE="${BUILD_DIR}/nexora-initramfs.cpio.gz"
 
-rm -rf "${ISO_DIR}"
-mkdir -p "${ISO_DIR}/boot"
-mkdir -p "${OUTPUT_DIR}"
+echo "=== NEXORA BOOTABLE ISO BUILD ==="
+echo "Kernel version: ${KERNEL_VERSION}"
+echo "ISO: ${ISO_NAME}"
 
-echo "=== Prepare RootFS ==="
-bash "${SCRIPT_DIR}/integrate-argus.sh"
+echo "=== Check required tools ==="
+
+for tool in xorriso grub-mkrescue rsync; do
+    if ! command -v "${tool}" >/dev/null 2>&1; then
+        echo "ERROR: Required tool not found: ${tool}"
+        exit 1
+    fi
+done
 
 echo "=== Check Kernel ==="
-
-KERNEL_IMAGE="${KERNEL_BUILD_DIR}/arch/x86/boot/bzImage"
 
 if [ ! -f "${KERNEL_IMAGE}" ]; then
     echo "ERROR: Kernel image not found:"
     echo "${KERNEL_IMAGE}"
-    echo "Run build-kernel.sh before building the ISO."
     exit 1
 fi
 
-cp "${KERNEL_IMAGE}" "${ISO_DIR}/boot/vmlinuz"
+echo "Kernel:"
+ls -lh "${KERNEL_IMAGE}"
 
-echo "=== Prepare ISO contents ==="
+echo "=== Check Initramfs ==="
+
+if [ ! -f "${INITRAMFS_IMAGE}" ]; then
+    echo "ERROR: Initramfs image not found:"
+    echo "${INITRAMFS_IMAGE}"
+    exit 1
+fi
+
+echo "Initramfs:"
+ls -lh "${INITRAMFS_IMAGE}"
+
+echo "=== Prepare RootFS ==="
+
+bash "${SCRIPT_DIR}/integrate-argus.sh"
+
+echo "=== Prepare ISO tree ==="
+
+rm -rf "${ISO_DIR}"
+
+echo "=== Copy RootFS ==="
 
 cp -a "${ROOTFS_DIR}/." "${ISO_DIR}/"
 
-echo "=== Create ISO ==="
+mkdir -p \
+    "${ISO_DIR}/boot/grub" \
+    "${ISO_DIR}/EFI/BOOT"
 
-if ! command -v xorriso >/dev/null 2>&1; then
-    echo "ERROR: xorriso is required to build the ISO."
+echo "=== Copy Kernel ==="
+
+cp "${KERNEL_IMAGE}" \
+   "${ISO_DIR}/boot/vmlinuz"
+
+echo "=== Copy Initramfs ==="
+
+cp "${INITRAMFS_IMAGE}" \
+   "${ISO_DIR}/boot/initramfs.img"
+
+echo "=== Install GRUB configuration ==="
+
+cat > "${ISO_DIR}/boot/grub/grub.cfg" <<'GRUBCFG'
+set timeout=5
+set default=0
+
+menuentry "NEXORA Linux" {
+    linux /boot/vmlinuz
+    initrd /boot/initramfs.img
+}
+GRUBCFG
+
+echo "=== Build BIOS + UEFI bootable ISO ==="
+
+rm -rf "${OUTPUT_DIR}"
+mkdir -p "${OUTPUT_DIR}"
+
+grub-mkrescue \
+    -o "${OUTPUT_DIR}/${ISO_NAME}" \
+    "${ISO_DIR}"
+
+echo "=== Verify ISO ==="
+
+if [ ! -f "${OUTPUT_DIR}/${ISO_NAME}" ]; then
+    echo "ERROR: ISO was not created."
     exit 1
 fi
 
-xorriso \
-    -as mkisofs \
-    -o "${OUTPUT_DIR}/${ISO_NAME}" \
-    -V "NEXORA_LINUX" \
-    "${ISO_DIR}"
+ls -lh "${OUTPUT_DIR}/${ISO_NAME}"
+file "${OUTPUT_DIR}/${ISO_NAME}"
 
-echo "=== ISO CREATED ==="
+echo "=== NEXORA ISO CREATED ==="
 echo "Output: ${OUTPUT_DIR}/${ISO_NAME}"
+echo "NEXORA_ISO_OK"

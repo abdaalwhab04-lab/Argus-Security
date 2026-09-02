@@ -116,6 +116,35 @@ jobs:
           file "${INITRAMFS_IMAGE}"
           echo "NEXORA_INITRAMFS_OK"
 
+      - name: Build NEXORA ISO
+        run: |
+          echo "=== Build NEXORA ISO ==="
+          bash nexora/scripts/build-iso.sh
+
+      - name: Verify NEXORA ISO
+        run: |
+          ISO_IMAGE="nexora/build/output/nexora.iso"
+
+          echo "=== Verify NEXORA ISO ==="
+
+          if [ ! -f "${ISO_IMAGE}" ]; then
+            echo "ERROR: NEXORA ISO image not found:"
+            echo "${ISO_IMAGE}"
+            exit 1
+          fi
+
+          ls -lh "${ISO_IMAGE}"
+          file "${ISO_IMAGE}"
+          echo "NEXORA_ISO_OK"
+
+      - name: Upload NEXORA ISO
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: nexora-iso
+          path: nexora/build/output/nexora.iso
+          if-no-files-found: warn
+
       - name: Check Python
         run: |
           python3 --version
