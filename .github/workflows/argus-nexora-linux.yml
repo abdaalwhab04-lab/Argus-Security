@@ -1,259 +1,307 @@
 name: Argus NEXORA Linux Test
 
 on:
-  workflow_dispatch:
-  push:
-    branches:
-      - nexora-real-test
+workflow_dispatch:
+push:
+branches:
+- nexora-real-test
 
 permissions:
-  contents: read
+contents: read
 
 jobs:
-  argus-nexora:
-    name: Argus + NEXORA Linux Environment
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
+argus-nexora:
+name: Argus + NEXORA Linux Environment
+runs-on: ubuntu-latest
+timeout-minutes: 60
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+steps:
+  - name: Checkout repository
+    uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
-      - name: Install NEXORA build tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            bc \
-            bison \
-            flex \
-            libssl-dev \
-            libelf-dev \
-            libdw-dev \
-            cpio \
-            gzip \
-            xorriso \
-            grub-pc-bin \
-            grub-efi-amd64-bin \
-            grub-efi-amd64 \
-            mtools \
-            rsync \
-            busybox \
-            qemu-system-x86
+  - name: Install NEXORA build tools
+    run: |
+      sudo apt-get update
+      sudo apt-get install -y \
+        build-essential \
+        bc \
+        bison \
+        flex \
+        libssl-dev \
+        libelf-dev \
+        libdw-dev \
+        cpio \
+        gzip \
+        xorriso \
+        grub-pc-bin \
+        grub-efi-amd64-bin \
+        grub-efi-amd64 \
+        mtools \
+        rsync \
+        busybox \
+        qemu-system-x86
 
-      - name: Check QEMU
-        run: |
-          echo "=== QEMU ==="
-          qemu-system-x86_64 --version
-          command -v qemu-system-x86_64
-          echo "NEXORA_QEMU_OK"
+  - name: Check QEMU
+    run: |
+      echo "=== QEMU ==="
+      qemu-system-x86_64 --version
+      command -v qemu-system-x86_64
+      echo "NEXORA_QEMU_OK"
 
-      - name: Show system information
-        run: |
-          echo "=== OS ==="
-          uname -a
-          cat /etc/os-release
+  - name: Show system information
+    run: |
+      echo "=== OS ==="
+      uname -a
+      cat /etc/os-release
 
-          echo "=== CPU ==="
-          nproc
-          lscpu | head -30
+      echo "=== CPU ==="
+      nproc
+      lscpu | head -30
 
-          echo "=== Memory ==="
-          free -h
+      echo "=== Memory ==="
+      free -h
 
-          echo "=== Disk ==="
-          df -h
+      echo "=== Disk ==="
+      df -h
 
-      - name: Check NEXORA build tools
-        run: |
-          echo "=== Required tools ==="
-          command -v gcc
-          command -v make
-          command -v bc
-          command -v bison
-          command -v flex
-          command -v cpio
-          command -v gzip
-          command -v xorriso
-          command -v grub-mkrescue
-          command -v rsync
-          command -v busybox
+  - name: Check NEXORA build tools
+    run: |
+      echo "=== Required tools ==="
+      command -v gcc
+      command -v make
+      command -v bc
+      command -v bison
+      command -v flex
+      command -v cpio
+      command -v gzip
+      command -v xorriso
+      command -v grub-mkrescue
+      command -v rsync
+      command -v busybox
 
-          echo "=== Tool check complete ==="
-          echo "NEXORA_BUILD_TOOLS_OK"
+      echo "=== Tool check complete ==="
+      echo "NEXORA_BUILD_TOOLS_OK"
 
-      - name: Build NEXORA Kernel
-        run: |
-          echo "=== Build NEXORA Kernel ==="
-          bash nexora/scripts/build-kernel.sh
+  - name: Build NEXORA Kernel
+    run: |
+      echo "=== Build NEXORA Kernel ==="
+      bash nexora/scripts/build-kernel.sh
 
-      - name: Verify NEXORA Kernel
-        run: |
-          KERNEL_VERSION="${KERNEL_VERSION:-6.12.50}"
-          KERNEL_IMAGE="nexora/build/linux-${KERNEL_VERSION}/arch/x86/boot/bzImage"
+  - name: Verify NEXORA Kernel
+    run: |
+      KERNEL_VERSION="${KERNEL_VERSION:-6.12.50}"
+      KERNEL_IMAGE="nexora/build/linux-${KERNEL_VERSION}/arch/x86/boot/bzImage"
 
-          echo "=== Verify Kernel Image ==="
-          if [ ! -f "${KERNEL_IMAGE}" ]; then
-            echo "ERROR: NEXORA kernel image not found:"
-            echo "${KERNEL_IMAGE}"
-            exit 1
-          fi
+      echo "=== Verify Kernel Image ==="
 
-          ls -lh "${KERNEL_IMAGE}"
-          file "${KERNEL_IMAGE}"
-          echo "NEXORA_KERNEL_OK"
+      if [ ! -f "${KERNEL_IMAGE}" ]; then
+        echo "ERROR: NEXORA kernel image not found:"
+        echo "${KERNEL_IMAGE}"
+        exit 1
+      fi
 
-      - name: Build NEXORA Initramfs
-        run: |
-          echo "=== Build NEXORA Initramfs ==="
-          bash nexora/scripts/build-initramfs.sh
+      ls -lh "${KERNEL_IMAGE}"
+      file "${KERNEL_IMAGE}"
+      echo "NEXORA_KERNEL_OK"
 
-      - name: Verify NEXORA Initramfs
-        run: |
-          INITRAMFS_IMAGE="nexora/build/nexora-initramfs.cpio.gz"
+  - name: Build NEXORA Initramfs
+    run: |
+      echo "=== Build NEXORA Initramfs ==="
+      bash nexora/scripts/build-initramfs.sh
 
-          echo "=== Verify Initramfs Image ==="
+  - name: Verify NEXORA Initramfs
+    run: |
+      INITRAMFS_IMAGE="nexora/build/nexora-initramfs.cpio.gz"
 
-          if [ ! -f "${INITRAMFS_IMAGE}" ]; then
-            echo "ERROR: NEXORA initramfs image not found:"
-            echo "${INITRAMFS_IMAGE}"
-            exit 1
-          fi
+      echo "=== Verify Initramfs Image ==="
 
-          ls -lh "${INITRAMFS_IMAGE}"
-          file "${INITRAMFS_IMAGE}"
-          echo "NEXORA_INITRAMFS_OK"
+      if [ ! -f "${INITRAMFS_IMAGE}" ]; then
+        echo "ERROR: NEXORA initramfs image not found:"
+        echo "${INITRAMFS_IMAGE}"
+        exit 1
+      fi
 
-      - name: Build NEXORA ISO
-        run: |
-          echo "=== Build NEXORA ISO ==="
-          bash nexora/scripts/build-iso.sh
+      ls -lh "${INITRAMFS_IMAGE}"
+      file "${INITRAMFS_IMAGE}"
+      echo "NEXORA_INITRAMFS_OK"
 
-      - name: Verify NEXORA ISO
-        run: |
-          ISO_IMAGE="nexora/build/output/nexora.iso"
+  - name: Build NEXORA ISO
+    run: |
+      echo "=== Build NEXORA ISO ==="
+      bash nexora/scripts/build-iso.sh
 
-          echo "=== Verify NEXORA ISO ==="
+  - name: Verify NEXORA ISO
+    run: |
+      ISO_IMAGE="nexora/build/output/nexora.iso"
 
-          if [ ! -f "${ISO_IMAGE}" ]; then
-            echo "ERROR: NEXORA ISO image not found:"
-            echo "${ISO_IMAGE}"
-            exit 1
-          fi
+      echo "=== Verify NEXORA ISO ==="
 
-          ls -lh "${ISO_IMAGE}"
-          file "${ISO_IMAGE}"
-          echo "NEXORA_ISO_OK"
+      if [ ! -f "${ISO_IMAGE}" ]; then
+        echo "ERROR: NEXORA ISO image not found:"
+        echo "${ISO_IMAGE}"
+        exit 1
+      fi
 
-      - name: Inspect NEXORA Initramfs
-        run: |
-          echo "=== NEXORA INITRAMFS INSPECTION ==="
+      ls -lh "${ISO_IMAGE}"
+      file "${ISO_IMAGE}"
+      echo "NEXORA_ISO_OK"
 
-          INITRAMFS_IMAGE="nexora/build/nexora-initramfs.cpio.gz"
+  - name: Inspect NEXORA Initramfs
+    run: |
+      echo "=== NEXORA INITRAMFS INSPECTION ==="
 
-          ls -lh "${INITRAMFS_IMAGE}"
+      INITRAMFS_IMAGE="nexora/build/nexora-initramfs.cpio.gz"
 
-          echo "=== INITRAMFS CONTENT: init ==="
-          gzip -cd "${INITRAMFS_IMAGE}" | cpio -itv 2>/dev/null | grep -E '(^|/)init$'
+      echo "=== IMAGE ==="
+      ls -lh "${INITRAMFS_IMAGE}"
+      file "${INITRAMFS_IMAGE}"
 
-          echo "=== INITRAMFS CONTENT: busybox ==="
-          gzip -cd "${INITRAMFS_IMAGE}" | cpio -itv 2>/dev/null | grep -E '(^|/)bin/busybox$'
+      echo "=== INITRAMFS GZIP TEST ==="
+      gzip -t "${INITRAMFS_IMAGE}"
+      echo "GZIP_OK"
 
-          echo "=== INITRAMFS /init DETAILS ==="
-          rm -rf /tmp/nexora-initramfs-inspect
-          mkdir -p /tmp/nexora-initramfs-inspect
-          gzip -cd "${INITRAMFS_IMAGE}" | cpio -idmu -D /tmp/nexora-initramfs-inspect
+      echo "=== COMPLETE INITRAMFS CONTENT ==="
+      gzip -cd "${INITRAMFS_IMAGE}" | cpio -itv
 
-          ls -l /tmp/nexora-initramfs-inspect/init
-          file /tmp/nexora-initramfs-inspect/init
-          file /tmp/nexora-initramfs-inspect/bin/busybox
+      echo "=== INITRAMFS IMPORTANT FILES ==="
+      gzip -cd "${INITRAMFS_IMAGE}" | \
+        cpio -itv | \
+        grep -E '(^|/)(init|bin/busybox|bin/sh)$' || true
 
-          echo "=== BUSYBOX LINK CHECK ==="
-          ldd /tmp/nexora-initramfs-inspect/bin/busybox || true
+      echo "=== EXTRACT INITRAMFS ==="
 
-          echo "NEXORA_INITRAMFS_INSPECT_OK"
+      rm -rf /tmp/nexora-initramfs-inspect
+      mkdir -p /tmp/nexora-initramfs-inspect
 
-      - name: Boot NEXORA ISO with QEMU
-        run: |
-          echo "=== NEXORA QEMU BOOT TEST ==="
+      gzip -cd "${INITRAMFS_IMAGE}" | \
+        cpio -idmu -D /tmp/nexora-initramfs-inspect
 
-          ISO_IMAGE="nexora/build/output/nexora.iso"
-          BOOT_LOG="output/nexora-qemu-boot.log"
+      echo "=== EXTRACTED ROOT ==="
+      ls -la /tmp/nexora-initramfs-inspect
 
-          mkdir -p output
+      echo "=== EXTRACTED BIN ==="
+      ls -la /tmp/nexora-initramfs-inspect/bin || true
 
-          timeout 30s qemu-system-x86_64 \
-            -m 1024 \
-            -machine q35 \
-            -display none \
-            -serial stdio \
-            -cdrom "${ISO_IMAGE}" \
-            2>&1 | tee "${BOOT_LOG}" &
+      echo "=== INIT DETAILS ==="
 
-          QEMU_PID=$!
+      if [ -e /tmp/nexora-initramfs-inspect/init ]; then
+        echo "INIT_EXISTS=YES"
+        ls -l /tmp/nexora-initramfs-inspect/init
+        file /tmp/nexora-initramfs-inspect/init
 
-          wait "${QEMU_PID}" || true
+        echo "=== INIT CONTENT ==="
+        head -n 20 /tmp/nexora-initramfs-inspect/init
+      else
+        echo "INIT_EXISTS=NO"
+        echo "ERROR: /init DOES NOT EXIST"
+      fi
 
-          echo "=== Check NEXORA boot marker ==="
+      echo "=== BUSYBOX DETAILS ==="
 
-          if grep -q "NEXORA_BOOT_OK" "${BOOT_LOG}"; then
-            echo "NEXORA_QEMU_BOOT_OK"
-          else
-            echo "ERROR: NEXORA_BOOT_OK was not found."
-            echo "=== QEMU BOOT LOG ==="
-            cat "${BOOT_LOG}"
-            exit 1
-          fi
+      if [ -e /tmp/nexora-initramfs-inspect/bin/busybox ]; then
+        echo "BUSYBOX_EXISTS=YES"
+        ls -l /tmp/nexora-initramfs-inspect/bin/busybox
+        file /tmp/nexora-initramfs-inspect/bin/busybox
 
-      - name: Upload NEXORA ISO
-        if: always()
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
-        with:
-          name: nexora-iso
-          path: nexora/build/output/nexora.iso
-          if-no-files-found: warn
+        echo "=== BUSYBOX LINK CHECK ==="
+        ldd /tmp/nexora-initramfs-inspect/bin/busybox || true
+      else
+        echo "BUSYBOX_EXISTS=NO"
+        echo "ERROR: /bin/busybox DOES NOT EXIST"
+      fi
 
-      - name: Check Python
-        run: |
-          python3 --version
-          python3 -m pip --version
+      echo "=== SHELL CHECK ==="
 
-      - name: Check Docker
-        run: |
-          docker --version
-          docker info
+      if [ -e /tmp/nexora-initramfs-inspect/bin/sh ]; then
+        ls -l /tmp/nexora-initramfs-inspect/bin/sh
+        file /tmp/nexora-initramfs-inspect/bin/sh
+      else
+        echo "WARNING: /bin/sh DOES NOT EXIST"
+      fi
 
-      - name: Install Python dependencies
-        run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install -r requirements.txt
+      echo "NEXORA_INITRAMFS_INSPECT_DONE"
 
-      - name: Install test tools
-        run: |
-          python3 -m pip install pytest pytest-xdist pytest-cov
+  - name: Boot NEXORA ISO with QEMU
+    run: |
+      echo "=== NEXORA QEMU BOOT TEST ==="
 
-      - name: Check Argus configuration
-        run: |
-          python3 scripts/run_ai_audit.py --help
+      ISO_IMAGE="nexora/build/output/nexora.iso"
+      BOOT_LOG="output/nexora-qemu-boot.log"
 
-      - name: Run pytest
-        run: |
-          mkdir -p output
-          pytest \
-            -v \
-            --tb=short \
-            --junitxml=output/pytest-junit.xml \
-            2>&1 | tee output/pytest.log
+      mkdir -p output
 
-      - name: Check NEXORA test
-        run: |
-          echo "NEXORA workflow environment check"
-          echo "NEXORA_LINUX_OK"
+      timeout 30s qemu-system-x86_64 \
+        -m 1024 \
+        -machine q35 \
+        -display none \
+        -serial stdio \
+        -cdrom "${ISO_IMAGE}" \
+        2>&1 | tee "${BOOT_LOG}" &
 
-      - name: Upload test reports
-        if: always()
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
-        with:
-          name: argus-nexora-test-results
-          path: output/
-          if-no-files-found: warn
+      QEMU_PID=$!
+
+      wait "${QEMU_PID}" || true
+
+      echo "=== Check NEXORA boot marker ==="
+
+      if grep -q "NEXORA_BOOT_OK" "${BOOT_LOG}"; then
+        echo "NEXORA_QEMU_BOOT_OK"
+      else
+        echo "ERROR: NEXORA_BOOT_OK was not found."
+        echo "=== QEMU BOOT LOG ==="
+        cat "${BOOT_LOG}"
+        exit 1
+      fi
+
+  - name: Upload NEXORA ISO
+    if: always()
+    uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+    with:
+      name: nexora-iso
+      path: nexora/build/output/nexora.iso
+      if-no-files-found: warn
+
+  - name: Check Python
+    run: |
+      python3 --version
+      python3 -m pip --version
+
+  - name: Check Docker
+    run: |
+      docker --version
+      docker info
+
+  - name: Install Python dependencies
+    run: |
+      python3 -m pip install --upgrade pip
+      python3 -m pip install -r requirements.txt
+
+  - name: Install test tools
+    run: |
+      python3 -m pip install pytest pytest-xdist pytest-cov
+
+  - name: Check Argus configuration
+    run: |
+      python3 scripts/run_ai_audit.py --help
+
+  - name: Run pytest
+    run: |
+      mkdir -p output
+      pytest \
+        -v \
+        --tb=short \
+        --junitxml=output/pytest-junit.xml \
+        2>&1 | tee output/pytest.log
+
+  - name: Check NEXORA test
+    run: |
+      echo "NEXORA workflow environment check"
+      echo "NEXORA_LINUX_OK"
+
+  - name: Upload test reports
+    if: always()
+    uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+    with:
+      name: argus-nexora-test-results
+      path: output/
+      if-no-files-found: warn
