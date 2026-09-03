@@ -88,7 +88,7 @@ terminal_input console serial
 terminal_output console serial
 
 menuentry "NEXORA Linux" {
-    linux /boot/vmlinuz root=/dev/ram0 rw console=ttyS0,115200
+    linux /boot/vmlinuz root=/dev/ram0 rw console=ttyS0,115200 systemd.mask=serial-getty@ttyS0.service
     initrd /boot/initramfs.img
 }
 GRUBCFG
