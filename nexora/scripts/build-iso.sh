@@ -60,7 +60,7 @@ rm -rf "${ISO_DIR}"
 
 echo "=== Copy RootFS ==="
 
-cp -a "${ROOTFS_DIR}/." "${ISO_DIR}/"
+rsync -a --exclude="dev/" "${ROOTFS_DIR}/" "${ISO_DIR}/"
 
 mkdir -p \
     "${ISO_DIR}/boot/grub" \
