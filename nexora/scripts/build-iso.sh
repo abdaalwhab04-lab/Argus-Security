@@ -64,7 +64,7 @@ rsync -a --exclude="dev/" "${ROOTFS_DIR}/" "${ISO_DIR}/"
 
 mkdir -p \
     "${ISO_DIR}/boot/grub" \
-    "${ISO_DIR}/EFI/BOOT"
+    "${ISO_DIR}/EFI/BOOT" \
     "${ISO_DIR}/dev"
 
 echo "=== Copy Kernel ==="
