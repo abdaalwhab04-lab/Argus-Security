@@ -86,5 +86,27 @@ cat > "${ROOTFS_DIR}/etc/hostname" <<'HOSTNAME'
 nexora
 HOSTNAME
 
+echo "=== Configure Debian boot marker ==="
+
+mkdir -p "${ROOTFS_DIR}/etc/systemd/system"
+
+cat > "${ROOTFS_DIR}/etc/systemd/system/nexora-userspace.service" <<'SERVICE'
+[Unit]
+Description=NEXORA Debian Userspace Boot Marker
+After=basic.target
+Before=getty.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'echo NEXORA_DEBIAN_USERSPACE_OK'
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+
+ln -sf ../nexora-userspace.service \
+    "${ROOTFS_DIR}/etc/systemd/system/multi-user.target.wants/nexora-userspace.service"
+
 echo "=== Debian RootFS Created ==="
 echo "NEXORA_ROOTFS_OK"

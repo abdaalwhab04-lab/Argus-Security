@@ -250,7 +250,7 @@ jobs:
 
           echo "=== Check NEXORA boot marker ==="
 
-          if grep -q "NEXORA_BOOT_OK" "${BOOT_LOG}" && grep -q "NEXORA_DEBIAN_ROOTFS_FOUND" "${BOOT_LOG}" && grep -q "NEXORA_ROOTFS_SWITCH" "${BOOT_LOG}"; then
+          if grep -q "NEXORA_BOOT_OK" "${BOOT_LOG}" && grep -q "NEXORA_DEBIAN_ROOTFS_FOUND" "${BOOT_LOG}" && grep -q "NEXORA_ROOTFS_SWITCH" "${BOOT_LOG}" && grep -q "NEXORA_DEBIAN_USERSPACE_OK" "${BOOT_LOG}"; then
             echo "NEXORA_QEMU_BOOT_OK"
           else
             echo "ERROR: NEXORA_BOOT_OK or NEXORA_DEBIAN_ROOTFS_FOUND was not found."
