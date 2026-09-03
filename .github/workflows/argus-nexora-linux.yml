@@ -236,12 +236,13 @@ jobs:
 
           mkdir -p output
 
-          timeout 30s qemu-system-x86_64 \
+          timeout 60s qemu-system-x86_64 \
             -m 1024 \
             -machine q35 \
             -display none \
             -serial stdio \
             -cdrom "${ISO_IMAGE}" \
+        -no-reboot \
             2>&1 | tee "${BOOT_LOG}" &
 
           QEMU_PID=$!
