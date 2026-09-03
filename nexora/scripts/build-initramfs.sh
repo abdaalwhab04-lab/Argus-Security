@@ -71,6 +71,15 @@ for applet in *; do
     fi
 done
 
+echo "=== Verify switch_root ==="
+
+if [ ! -e "${INITRAMFS_DIR}/bin/switch_root" ]; then
+    echo "ERROR: BusyBox switch_root applet was not installed."
+    exit 1
+fi
+
+echo "NEXORA_SWITCH_ROOT_OK"
+
 echo "=== Install NEXORA init ==="
 
 cp "${NEXORA_DIR}/rootfs/initramfs/init" \

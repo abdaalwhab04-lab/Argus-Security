@@ -40,9 +40,36 @@ echo "=== Bootstrap Debian ==="
 sudo debootstrap \
     --arch=amd64 \
     --variant=minbase \
+    --include=systemd,systemd-sysv \
     "${DEBIAN_SUITE}" \
     "${ROOTFS_DIR}" \
     "${DEBIAN_MIRROR}"
+
+echo "=== Verify Debian init ==="
+
+if [ -x "${ROOTFS_DIR}/sbin/init" ]; then
+    echo "NEXORA_DEBIAN_INIT_OK"
+else
+    echo "ERROR: Debian /sbin/init was not created."
+    ls -lah "${ROOTFS_DIR}/sbin" || true
+    exit 1
+fi
+
+echo "=== Verify systemd ==="
+
+if [ -x "${ROOTFS_DIR}/lib/systemd/systemd" ]; then
+    echo "NEXORA_SYSTEMD_OK"
+else
+    echo "ERROR: Debian systemd was not created."
+    exit 1
+fi
+
+if [ "$(readlink "${ROOTFS_DIR}/sbin/init" 2>/dev/null || true)" = "/lib/systemd/systemd" ]; then
+    echo "NEXORA_INIT_SYSTEMD_OK"
+else
+    echo "WARNING: /sbin/init is not linked directly to /lib/systemd/systemd"
+    readlink "${ROOTFS_DIR}/sbin/init" || true
+fi
 
 echo "=== Restore NEXORA init template ==="
 

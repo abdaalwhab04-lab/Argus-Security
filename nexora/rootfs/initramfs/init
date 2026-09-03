@@ -11,4 +11,38 @@ echo "================================"
 echo "NEXORA initramfs started."
 echo "NEXORA_BOOT_OK"
 
-exec /bin/sh
+echo "=== Waiting for NEXORA ISO ==="
+
+i=0
+while [ ! -b /dev/sr0 ] && [ "$i" -lt 10 ]; do
+    sleep 1
+    i=$((i + 1))
+done
+
+if [ ! -b /dev/sr0 ]; then
+    echo "ERROR: /dev/sr0 not found"
+    echo "NEXORA_ROOTFS_NOT_FOUND"
+    exec /bin/sh
+fi
+
+mkdir -p /mnt
+
+echo "=== Mounting Debian RootFS ==="
+
+mount -t iso9660 -o ro /dev/sr0 /mnt
+
+if [ ! -f /mnt/etc/debian_version ]; then
+    echo "ERROR: Debian RootFS not found on ISO"
+    echo "NEXORA_ROOTFS_NOT_FOUND"
+    exec /bin/sh
+fi
+
+echo "NEXORA_DEBIAN_ROOTFS_FOUND"
+
+echo "=== Switching to Debian RootFS ==="
+
+mkdir -p /mnt/run
+
+echo "NEXORA_ROOTFS_SWITCH"
+
+exec switch_root /mnt /sbin/init
