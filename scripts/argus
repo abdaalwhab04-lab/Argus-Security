@@ -441,41 +441,33 @@ def cmd_runtime_security(args):
 
 def cmd_regression_test(args):
     """Generate and run security regression tests"""
-    from regression_tester import SecurityRegressionTester
+    from regression_tester import RegressionTester
 
-    tester = SecurityRegressionTester()
+    tester = RegressionTester()
 
     if args.action == "generate":
         if not args.fixed_findings:
             print("❌ Error: --fixed-findings required")
             sys.exit(1)
-
         import json
-        with open(args.fixed_findings) as f:
+        with open(args.fixed_findings, encoding="utf-8") as f:
             fixed_findings = json.load(f)
-
-        # Generate regression test suite
-        test_cases = tester.generate_regression_tests(fixed_findings.get("findings", []))
-
-        print(f"\n🧪 Regression Test Generation:")
-        print(f"   Fixed findings: {len(fixed_findings.get('findings', []))}")
+        test_cases = []
+        for finding in fixed_findings.get("findings", []):
+            test_cases.append(tester.generate_regression_test(finding))
+        print("\\n🧪 Regression Test Generation:")
+        print(f"   Fixed findings: {len(fixed_findings.get("findings", []))}")
         print(f"   Test cases generated: {len(test_cases)}")
 
     elif args.action == "run":
-        # Run regression tests
-        regressions = tester.detect_regression(
-            current_findings=[],
-            target_path=args.path or "."
-        )
-
-        print(f"\n🧪 Regression Test Results:")
-        print(f"   Regressions detected: {len(regressions)}")
-
-        if regressions:
-            print("\n   Regressions:")
-            for regression in regressions:
-                print(f"   - {regression.get('title', 'Unknown regression')}")
-
+        results = tester.run_all_tests()
+        print("\\n🧪 Regression Test Results:")
+        print(f"   Total: {results["total"]}")
+        print(f"   Passed: {results["passed"]}")
+        print(f"   Failed: {results["failed"]}")
+        print(f"   Errors: {results["errors"]}")
+        if results["failed"] or results["errors"]:
+            sys.exit(1)
 
 def main():
     parser = argparse.ArgumentParser(
