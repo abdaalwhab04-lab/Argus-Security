@@ -98,7 +98,7 @@ Before=getty.target
 
 [Service]
 Type=oneshot
-ExecStart=/bin/sh -c 'mkdir -p /var/lib/docker /var/lib/containerd; mountpoint -q /var/lib/docker || mount -t tmpfs -o size=2G tmpfs /var/lib/docker; mountpoint -q /var/lib/containerd || mount -t tmpfs -o size=1G tmpfs /var/lib/containerd; systemctl enable docker >/dev/null 2>&1 || true; systemctl start docker >/dev/null 2>&1 || true; if systemctl is-active --quiet docker && docker info >/dev/null 2>&1; then echo NEXORA_DOCKER_OK > /dev/console; else echo NEXORA_DOCKER_FAILED > /dev/console; fi; echo NEXORA_DEBIAN_USERSPACE_OK > /dev/console'
+ExecStart=/bin/sh -c 'mkdir -p /var/lib/docker /var/lib/containerd; mountpoint -q /var/lib/docker || mount -t tmpfs -o size=2G tmpfs /var/lib/docker; mountpoint -q /var/lib/containerd || mount -t tmpfs -o size=1G tmpfs /var/lib/containerd; systemctl enable docker >/dev/null 2>&1 || true; systemctl start containerd || true; echo === CONTAINERD STATUS === > /dev/console; systemctl status containerd --no-pager -l > /dev/console 2>&1 || true; echo === CONTAINERD JOURNAL === > /dev/console; journalctl -u containerd -n 50 --no-pager > /dev/console 2>&1 || true; systemctl start docker || true; echo === DOCKER STATUS === > /dev/console; systemctl status docker --no-pager -l > /dev/console 2>&1 || true; echo === DOCKER JOURNAL === > /dev/console; journalctl -u docker -n 50 --no-pager > /dev/console 2>&1 || true; if systemctl is-active --quiet docker && docker info >/dev/null 2>&1; then echo NEXORA_DOCKER_OK > /dev/console; else echo NEXORA_DOCKER_FAILED > /dev/console; fi; echo NEXORA_DEBIAN_USERSPACE_OK > /dev/console'
 RemainAfterExit=yes
 
 [Install]
