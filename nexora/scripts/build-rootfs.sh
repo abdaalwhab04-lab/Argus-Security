@@ -98,7 +98,7 @@ Before=getty.target
 
 [Service]
 Type=oneshot
-ExecStart=/bin/sh -c 'echo NEXORA_DEBIAN_USERSPACE_OK > /dev/console'
+ExecStart=/bin/sh -c 'systemctl enable docker >/dev/null 2>&1 || true; systemctl start docker >/dev/null 2>&1 || true; if systemctl is-active --quiet docker && docker info >/dev/null 2>&1; then echo NEXORA_DOCKER_OK > /dev/console; else echo NEXORA_DOCKER_FAILED > /dev/console; fi; echo NEXORA_DEBIAN_USERSPACE_OK > /dev/console'
 RemainAfterExit=yes
 
 [Install]
