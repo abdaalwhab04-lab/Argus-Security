@@ -37,7 +37,7 @@ mkdir -p "${ROOTFS_DIR}"
 
 echo "=== Bootstrap Debian ==="
 
-debootstrap \
+sudo debootstrap \
     --arch=amd64 \
     --variant=minbase \
     --include=systemd,systemd-sysv,docker.io,containerd,runc \
