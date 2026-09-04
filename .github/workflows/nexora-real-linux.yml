@@ -242,7 +242,7 @@ jobs:
             -display none \
             -serial stdio \
             -cdrom "${ISO_IMAGE}" \
-        -no-reboot \
+            -no-reboot \
             2>&1 | tee "${BOOT_LOG}" &
 
           QEMU_PID=$!
