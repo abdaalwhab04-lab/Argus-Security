@@ -98,7 +98,7 @@ Before=getty.target
 
 [Service]
 Type=oneshot
-ExecStart=/bin/sh -c 'echo NEXORA_DEBIAN_USERSPACE_OK'
+ExecStart=/bin/sh -c 'echo NEXORA_DEBIAN_USERSPACE_OK > /dev/console'
 RemainAfterExit=yes
 
 [Install]
