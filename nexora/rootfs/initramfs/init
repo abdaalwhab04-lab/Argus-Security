@@ -44,5 +44,9 @@ echo "=== Switching to Debian RootFS ==="
 mkdir -p /mnt/run
 
 echo "NEXORA_ROOTFS_SWITCH"
+mkdir -p /mnt/var/lib/docker /mnt/var/lib/containerd
+mount -t tmpfs -o size=2G tmpfs /mnt/var/lib/docker
+mount -t tmpfs -o size=1G tmpfs /mnt/var/lib/containerd
+echo "NEXORA_DOCKER_STORAGE_OK"
 
 exec switch_root /mnt /sbin/init
