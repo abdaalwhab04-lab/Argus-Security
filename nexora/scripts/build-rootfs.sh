@@ -86,6 +86,33 @@ cat > "${ROOTFS_DIR}/etc/hostname" <<'HOSTNAME'
 nexora
 HOSTNAME
 
+echo "=== Configure NEXORA Docker container test ==="
+mkdir -p "${ROOTFS_DIR}/usr/local/bin"
+
+cat > "${ROOTFS_DIR}/usr/local/bin/nexora-docker-container-test.sh" <<'DOCKERTEST'
+#!/bin/sh
+set -eu
+
+IMAGE_TAR="/opt/nexora-test/busybox-1.36.tar"
+
+echo "=== NEXORA DOCKER CONTAINER TEST ===" > /dev/console
+
+if [ ! -f "${IMAGE_TAR}" ]; then
+    echo "NEXORA_DOCKER_CONTAINER_FAILED: image tar missing" > /dev/console
+    exit 1
+fi
+
+echo "Loading Docker test image..." > /dev/console
+docker load -i "${IMAGE_TAR}" > /dev/console 2>&1
+
+echo "Running real Docker container..." > /dev/console
+docker run --rm busybox:1.36 sh -c 'echo NEXORA_DOCKER_CONTAINER_OK' > /dev/console 2>&1
+
+echo "NEXORA_DOCKER_CONTAINER_TEST_DONE" > /dev/console
+DOCKERTEST
+
+chmod +x "${ROOTFS_DIR}/usr/local/bin/nexora-docker-container-test.sh"
+
 echo "=== Configure Debian boot marker ==="
 
 mkdir -p "${ROOTFS_DIR}/etc/systemd/system"
@@ -98,7 +125,7 @@ Before=getty.target
 
 [Service]
 Type=oneshot
-ExecStart=/bin/sh -c 'mkdir -p /var/lib/docker /var/lib/containerd; mountpoint -q /var/lib/docker || mount -t tmpfs -o size=2G tmpfs /var/lib/docker; mountpoint -q /var/lib/containerd || mount -t tmpfs -o size=1G tmpfs /var/lib/containerd; systemctl enable docker >/dev/null 2>&1 || true; systemctl start containerd || true; echo === CONTAINERD STATUS === > /dev/console; systemctl status containerd --no-pager -l > /dev/console 2>&1 || true; echo === CONTAINERD JOURNAL === > /dev/console; journalctl -u containerd -n 50 --no-pager > /dev/console 2>&1 || true; systemctl start docker || true; echo === DOCKER STATUS === > /dev/console; systemctl status docker --no-pager -l > /dev/console 2>&1 || true; echo === DOCKER JOURNAL === > /dev/console; journalctl -u docker -n 50 --no-pager > /dev/console 2>&1 || true; if systemctl is-active --quiet docker && docker info >/dev/null 2>&1; then echo NEXORA_DOCKER_OK > /dev/console; else echo NEXORA_DOCKER_FAILED > /dev/console; fi; echo NEXORA_DEBIAN_USERSPACE_OK > /dev/console'
+ExecStart=/bin/sh -c 'mkdir -p /var/lib/docker /var/lib/containerd; mountpoint -q /var/lib/docker || mount -t tmpfs -o size=2G tmpfs /var/lib/docker; mountpoint -q /var/lib/containerd || mount -t tmpfs -o size=1G tmpfs /var/lib/containerd; systemctl enable docker >/dev/null 2>&1 || true; systemctl start containerd || true; echo === CONTAINERD STATUS === > /dev/console; systemctl status containerd --no-pager -l > /dev/console 2>&1 || true; echo === CONTAINERD JOURNAL === > /dev/console; journalctl -u containerd -n 50 --no-pager > /dev/console 2>&1 || true; systemctl start docker || true; echo === DOCKER STATUS === > /dev/console; systemctl status docker --no-pager -l > /dev/console 2>&1 || true; echo === DOCKER JOURNAL === > /dev/console; journalctl -u docker -n 50 --no-pager > /dev/console 2>&1 || true; if systemctl is-active --quiet docker && docker info >/dev/null 2>&1; then echo NEXORA_DOCKER_OK > /dev/console; /usr/local/bin/nexora-docker-container-test.sh; else echo NEXORA_DOCKER_FAILED > /dev/console; fi; echo NEXORA_DEBIAN_USERSPACE_OK > /dev/console'
 RemainAfterExit=yes
 
 [Install]
