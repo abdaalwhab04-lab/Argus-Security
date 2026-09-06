@@ -260,13 +260,7 @@ jobs:
             exit 1
           fi
 
-      - name: Upload NEXORA ISO
-        if: always()
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
-        with:
-          name: nexora-iso
-          path: nexora/build/output/nexora.iso
-          if-no-files-found: warn
+      # NEXORA ISO upload disabled to avoid GitHub Actions artifact quota.
 
       - name: Check Python
         run: |
