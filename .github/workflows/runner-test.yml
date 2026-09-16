@@ -10,8 +10,17 @@ jobs:
   runner-test:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Test GitHub Runner
         run: |
           echo "GITHUB_RUNNER_OK"
           uname -a
           date
+
+      - name: Test free LLM Router
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          python3 TERMUX-SETUP/free-llm-api-stack/router.py "Reply with exactly: NEXORA_ROUTER_OK"
