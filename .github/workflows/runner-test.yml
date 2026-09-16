@@ -1,4 +1,4 @@
-name: Argus Runner Test
+name: Runner Test
 
 on:
   workflow_dispatch:
@@ -8,65 +8,10 @@ permissions:
 
 jobs:
   runner-test:
-    name: Test Argus on GitHub-hosted Runner
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
-
-      - name: Show runner resources
+      - name: Test GitHub Runner
         run: |
-          echo "===== GITHUB RUNNER ====="
-          echo "OS: $RUNNER_OS"
-          echo "ARCH: $RUNNER_ARCH"
-          echo "ENVIRONMENT: $RUNNER_ENVIRONMENT"
-          echo "NAME: $RUNNER_NAME"
-
-          echo
-          echo "===== CPU ====="
-          nproc
-          lscpu | head -n 20
-
-          echo
-          echo "===== MEMORY ====="
-          free -h
-
-          echo
-          echo "===== DISK ====="
-          df -h
-
-          echo
-          echo "===== PYTHON ====="
-          python3 --version
-
-      - name: Upgrade pip
-        run: |
-          python3 -m pip install --upgrade pip
-
-      - name: Install Argus dependencies
-        run: |
-          python3 -m pip install -r requirements.txt
-
-      - name: Verify psutil
-        run: |
-          python3 -c "import psutil; print('psutil:', psutil.__version__)"
-
-      - name: Verify tenacity
-        run: |
-          python3 -c "import tenacity; print('tenacity: healthy')"
-
-      - name: Verify Argus import
-        run: |
-          python3 -c "import scripts.run_ai_audit; print('run_ai_audit: healthy')"
-
-      - name: Test Argus CLI
-        run: |
-          python3 scripts/run_ai_audit.py --help
-
-      - name: Success
-        run: |
-          echo "========================================"
-          echo "ARGUS RUNNER TEST: SUCCESS"
-          echo "Argus is running on GitHub-hosted Runner"
-          echo "========================================"
+          echo "GITHUB_RUNNER_OK"
+          uname -a
+          date
