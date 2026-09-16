@@ -292,6 +292,14 @@ jobs:
         run: |
           python3 -m pip install pytest pytest-xdist pytest-cov
 
+      - name: Test free LLM Router
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          echo "=== Free LLM Router ==="
+          python3 TERMUX-SETUP/free-llm-api-stack/router.py "Reply with exactly: NEXORA_ROUTER_OK"
+          echo "NEXORA_ROUTER_OK"
+
       - name: Check Argus configuration
         run: |
           python3 scripts/run_ai_audit.py --help
