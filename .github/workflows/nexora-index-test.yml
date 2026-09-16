@@ -1,0 +1,11 @@
+name: NEXORA Index Test
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - nexora-real-test
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo NEXORA_INDEX_OK

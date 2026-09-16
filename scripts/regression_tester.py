@@ -651,7 +651,7 @@ func TestNormalInput{function_name.title()}(t *testing.T) {{
 
         try:
             result = subprocess.run(
-                [sys.executable, "-m", "pytest", str(test_file), "-v", "--tb=short"],
+                [sys.executable, "-m", "pytest", str(test_file), "-v", "--tb=short", "-o", "addopts="],
                 capture_output=True,
                 text=True,
                 timeout=60,
