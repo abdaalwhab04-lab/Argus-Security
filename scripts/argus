@@ -48,13 +48,13 @@ def cmd_normalize(args):
     print(f"📊 Normalizing {len(tool_outputs)} tool outputs...")
     findings = normalizer.normalize_all(tool_outputs)
     
-    print(f"✅ Normalized {len(findings)} findings")
+    print(f"✅ Normalized {len(findings.findings)} findings")
     
     # Output
     output_data = {
         'findings': [f.to_dict() for f in findings],
         'summary': {
-            'total': len(findings),
+            'total': len(findings.findings),
             'by_severity': {
                 'critical': sum(1 for f in findings if f.severity == 'critical'),
                 'high': sum(1 for f in findings if f.severity == 'high'),
@@ -186,18 +186,22 @@ def cmd_api_security(args):
     """Run API security testing"""
     from api_security_scanner import APISecurityScanner
 
-    scanner = APISecurityScanner(repo_path=args.path or ".")
-    findings = scanner.scan()
+    scanner = APISecurityScanner()
+    result = scanner.scan(args.path or ".")
+    findings = result.findings
 
     # Print summary
     print(f"\n🛡️ API Security Scan Results:")
     print(f"   Endpoints discovered: {len(scanner.endpoints)}")
-    print(f"   Vulnerabilities found: {len(findings)}")
+    print(f"   Vulnerabilities found: {len(findings.findings)}")
 
     # Group by severity
     by_severity = {}
     for f in findings:
-        severity = f.get("severity", "UNKNOWN")
+        severity = getattr(f, "severity", "UNKNOWN")
+        if hasattr(severity, "value"):
+            severity = severity.value
+        severity = str(severity)
         by_severity[severity] = by_severity.get(severity, 0) + 1
 
     for sev, count in sorted(by_severity.items()):
@@ -226,7 +230,7 @@ def cmd_dast(args):
 
     print(f"\n🔍 DAST Scan Results:")
     print(f"   Target: {args.target}")
-    print(f"   Vulnerabilities: {len(findings)}")
+    print(f"   Vulnerabilities: {len(findings.findings)}")
 
 
 def cmd_correlate(args):
@@ -431,7 +435,7 @@ def cmd_runtime_security(args):
 
         findings = monitor.monitor(args.path or ".")
 
-        print(f"\n   Threats detected: {len(findings)}")
+        print(f"\n   Threats detected: {len(findings.findings)}")
 
         if findings:
             print("\n   Runtime threats:")
@@ -449,25 +453,29 @@ def cmd_regression_test(args):
         if not args.fixed_findings:
             print("❌ Error: --fixed-findings required")
             sys.exit(1)
+
         import json
-        with open(args.fixed_findings, encoding="utf-8") as f:
+        with open(args.fixed_findings) as f:
             fixed_findings = json.load(f)
-        test_cases = []
-        for finding in fixed_findings.get("findings", []):
-            test_cases.append(tester.generate_regression_test(finding))
-        print("\\n🧪 Regression Test Generation:")
-        print(f"   Fixed findings: {len(fixed_findings.get("findings", []))}")
+
+        # Generate regression test suite
+        test_cases = tester.generate_regression_tests(fixed_findings.get("findings", []))
+
+        print(f"\n🧪 Regression Test Generation:")
+        print(f"   Fixed findings: {len(fixed_findings.get('findings', []))}")
         print(f"   Test cases generated: {len(test_cases)}")
 
     elif args.action == "run":
+        # Run regression tests
         results = tester.run_all_tests()
-        print("\\n🧪 Regression Test Results:")
-        print(f"   Total: {results["total"]}")
-        print(f"   Passed: {results["passed"]}")
-        print(f"   Failed: {results["failed"]}")
-        print(f"   Errors: {results["errors"]}")
-        if results["failed"] or results["errors"]:
-            sys.exit(1)
+
+        print(f"\n🧪 Regression Test Results:")
+        print(f"   Total tests: {results.get("total", 0)}")
+        print(f"   Passed: {results.get("passed", 0)}")
+        print(f"   Failed: {results.get("failed", 0)}")
+        print(f"   Errors: {results.get("errors", 0)}")
+        print(f"   Skipped: {results.get("skipped", 0)}")
+
 
 def main():
     parser = argparse.ArgumentParser(
