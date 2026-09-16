@@ -1,0 +1,15 @@
+# Secrets - never commit provider keys
+.env
+.env.*
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/

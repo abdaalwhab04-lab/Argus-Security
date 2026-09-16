@@ -1,0 +1,148 @@
+{
+  "_comment": "Single source of truth. README, router.py and the skill all read from here. Update endpoints/models/limits in THIS file only. All base_url values are OpenAI-compatible /chat/completions bases so one router talks to all of them. Verify values before publishing - free tiers change often.",
+  "_updated": "2026-07-07",
+  "default_order": [
+    "openrouter",
+    "cohere",
+    "groq",
+    "cerebras",
+    "gemini",
+    "nvidia",
+    "mistral",
+    "huggingface"
+  ],
+  "providers": [
+    {
+      "id": "groq",
+      "name": "Groq",
+      "homepage": "https://console.groq.com",
+      "tier": "free",
+      "base_url": "https://api.groq.com/openai/v1",
+      "env": "GROQ_API_KEY",
+      "model": "llama-3.3-70b-versatile",
+      "limits": "~30 req/min, ~14.4k req/day (per model)",
+      "notes": "Fastest inference. Best default first hop."
+    },
+    {
+      "id": "cerebras",
+      "name": "Cerebras",
+      "homepage": "https://cloud.cerebras.ai",
+      "tier": "free",
+      "base_url": "https://api.cerebras.ai/v1",
+      "env": "CEREBRAS_API_KEY",
+      "model": "llama-3.3-70b",
+      "limits": "~30 req/min, ~1M tokens/day",
+      "notes": "Extremely fast. Small daily token budget."
+    },
+    {
+      "id": "gemini",
+      "name": "Google Gemini",
+      "homepage": "https://aistudio.google.com",
+      "tier": "free",
+      "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+      "env": "GEMINI_API_KEY",
+      "model": "gemini-3.6-flash",
+      "limits": "~15 req/min, ~1500 req/day (Flash)",
+      "notes": "Huge context window. Data may be used for training on free tier."
+    },
+    {
+      "id": "openrouter",
+      "name": "OpenRouter (free models)",
+      "homepage": "https://openrouter.ai",
+      "tier": "free",
+      "base_url": "https://openrouter.ai/api/v1",
+      "env": "OPENROUTER_API_KEY",
+      "model": "nvidia/nemotron-3-super-120b-a12b:free",
+      "limits": "~20 req/min, ~50-1000 req/day on :free models",
+      "notes": "Aggregator. Use any model id ending in :free."
+    },
+    {
+      "id": "nvidia",
+      "name": "NVIDIA NIM",
+      "homepage": "https://build.nvidia.com",
+      "tier": "free",
+      "base_url": "https://integrate.api.nvidia.com/v1",
+      "env": "NVIDIA_API_KEY",
+      "model": "meta/llama-3.3-70b-instruct",
+      "limits": "Free with account, generous",
+      "notes": "Wide model catalog."
+    },
+    {
+      "id": "mistral",
+      "name": "Mistral (La Plateforme)",
+      "homepage": "https://console.mistral.ai",
+      "tier": "free",
+      "base_url": "https://api.mistral.ai/v1",
+      "env": "MISTRAL_API_KEY",
+      "model": "mistral-small-latest",
+      "limits": "Free experiment tier, ~1 req/sec",
+      "notes": "Requires phone verification."
+    },
+    {
+      "id": "cohere",
+      "name": "Cohere",
+      "homepage": "https://openrouter.ai",
+      "tier": "free",
+      "base_url": "https://openrouter.ai/api/v1",
+      "env": "OPENROUTER_API_KEY",
+      "model": "cohere/north-mini-code:free",
+      "limits": "Trial keys: ~20 req/min, 1000 req/month",
+      "notes": "Cohere North Mini Code via OpenRouter (free)"
+    },
+    {
+      "id": "huggingface",
+      "name": "Hugging Face Inference",
+      "homepage": "https://huggingface.co/settings/tokens",
+      "tier": "free",
+      "base_url": "https://router.huggingface.co/v1",
+      "env": "HF_TOKEN",
+      "model": "meta-llama/Llama-3.3-70B-Instruct",
+      "limits": "Small monthly credit on free accounts",
+      "notes": "Router picks an available inference provider."
+    },
+    {
+      "id": "openai",
+      "name": "OpenAI",
+      "homepage": "https://platform.openai.com",
+      "tier": "trial",
+      "base_url": "https://api.openai.com/v1",
+      "env": "OPENAI_API_KEY",
+      "model": "gpt-4o-mini",
+      "limits": "Trial credits only, then paid",
+      "notes": "Not in default free order."
+    },
+    {
+      "id": "anthropic",
+      "name": "Anthropic Claude",
+      "homepage": "https://console.anthropic.com",
+      "tier": "trial",
+      "base_url": "https://api.anthropic.com/v1",
+      "env": "ANTHROPIC_API_KEY",
+      "model": "claude-haiku-4-5-20251001",
+      "limits": "Trial credits only, then paid",
+      "notes": "OpenAI-compatible endpoint. Not in default free order."
+    },
+    {
+      "id": "deepseek",
+      "name": "DeepSeek",
+      "homepage": "https://platform.deepseek.com",
+      "tier": "trial",
+      "base_url": "https://api.deepseek.com",
+      "env": "DEEPSEEK_API_KEY",
+      "model": "deepseek-chat",
+      "limits": "Trial credits, cheap paid after",
+      "notes": "Not in default free order."
+    },
+    {
+      "id": "xai",
+      "name": "xAI Grok",
+      "homepage": "https://console.x.ai",
+      "tier": "trial",
+      "base_url": "https://api.x.ai/v1",
+      "env": "XAI_API_KEY",
+      "model": "grok-3-mini",
+      "limits": "Trial credits",
+      "notes": "Not in default free order."
+    }
+  ]
+}
