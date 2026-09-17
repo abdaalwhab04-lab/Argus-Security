@@ -1,7 +1,5 @@
 name: OmniRoute Manual GitHub Runner
 
-# CI trigger refresh: run the current OmniRoute integration branch after build fixes.
-# Build helper restoration pass: keep validation on the GitHub-hosted Ubuntu runner.
 on:
   workflow_dispatch:
   push:
@@ -30,9 +28,9 @@ jobs:
       DATA_DIR: ${{ github.workspace }}/.omniroute-ci-data
       DISABLE_SQLITE_AUTO_BACKUP: 'true'
     steps:
-      - name: Checkout
+      - name: Checkout OmniRoute branch
         uses: actions/checkout@v4
-      - name: Setup Node.js 24
+      - name: Setup Node 24
         uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -42,20 +40,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -f scripts/build/build-next-isolated.mjs
-          test -f scripts/build/assembleStandalone.mjs
-          test -f scripts/build/backendOnlyPages.mjs
-          test -f scripts/build/better-sqlite3-stub-flag.mjs
-          test -f scripts/build/mitm-stub-flag.mjs
-          test -f scripts/build/normalizeBasePath.mjs
-          test -f scripts/build/dashboardEmbed.mjs
-          node --check scripts/build/build-next-isolated.mjs
-          node --check scripts/build/better-sqlite3-stub-flag.mjs
-          node --check scripts/build/mitm-stub-flag.mjs
-          node --check scripts/build/normalizeBasePath.mjs
-          node --check scripts/build/dashboardEmbed.mjs
-          node -e "const p=require('./package.json'); if (!p.scripts?.build) throw new Error('package.json build script missing'); console.log(p.scripts.build)"
-      - name: Install dependencies
+          for f in \
+            scripts/build/build-next-isolated.mjs \
+            scripts/build/assembleStandalone.mjs \
+            scripts/build/backendOnlyPages.mjs \
+            scripts/build/better-sqlite3-stub-flag.mjs \
+            scripts/build/mitm-stub-flag.mjs \
+            scripts/build/normalizeBasePath.mjs \
+            scripts/build/dashboardEmbed.mjs; do
+            test -f "$f"
+            node --check "$f"
+          done
+          node -e "const p=require('./package.json'); if (!p.scripts?.build) throw new Error('package.json build script missing'); console.log('build:', p.scripts.build)"
+      - name: Install OmniRoute dependencies
         run: npm install --ignore-scripts
       - name: Build OmniRoute
         run: npm run build
@@ -86,17 +83,21 @@ jobs:
         run: curl -fsS http://127.0.0.1:20128/api/providers
       - name: Verify models endpoint
         run: curl -fsS http://127.0.0.1:20128/v1/models
-      - name: Create CI API key
+      - name: Generate API key through OmniRoute API
         shell: bash
         run: |
-          response=$(curl -fsS -X POST http://127.0.0.1:20128/api/keys -H 'Content-Type: application/json' --data '{"name":"github-ci-token","scopes":["chat"]}')
-          key=$(printf '%s' "$response" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s); process.stdout.write(j.key || j.apiKey || '')})")
+          set -euo pipefail
+          response=$(curl -fsS -X POST http://127.0.0.1:20128/api/keys \
+            -H 'Content-Type: application/json' \
+            --data '{"name":"github-ci-token","scopes":["chat"]}')
+          key=$(printf '%s' "$response" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);process.stdout.write(j.key||j.apiKey||'')})")
           test -n "$key"
           case "$key" in sk-*) ;; *) echo 'API key format is invalid'; exit 1;; esac
+          echo 'Generated OmniRoute API key successfully (value not printed).'
           echo "OMNIROUTE_CI_API_KEY=$key" >> "$GITHUB_ENV"
-      - name: Verify authenticated API access
+      - name: Validate generated key on /v1/models
         run: curl -fsS http://127.0.0.1:20128/v1/models -H "Authorization: Bearer $OMNIROUTE_CI_API_KEY"
-      - name: Verify invalid token is rejected
+      - name: Confirm invalid token is rejected
         shell: bash
         run: |
           code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:20128/v1/models -H 'Authorization: Bearer sk-ci-invalid-token')
@@ -104,7 +105,7 @@ jobs:
           test "$code" = '401' || test "$code" = '403'
       - name: Verify home page
         run: curl -fsS http://127.0.0.1:20128/home -o /dev/null
-      - name: Show logs on failure
+      - name: Show sanitized server log on failure
         if: failure()
         run: cat "$RUNNER_TEMP/omniroute.log" || true
       - name: Upload logs
