@@ -1,0 +1,179 @@
+name: OmniRoute GitHub Runner
+
+on:
+  push:
+    branches:
+      - omniroute-v3.8.50-integration
+    paths:
+      - 'omniroute/**'
+      - '.github/workflows/omniroute-github-runner.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: omniroute-github-runner-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  omniroute:
+    name: OmniRoute v3.8.50 on GitHub-hosted Ubuntu
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: omniroute
+
+    env:
+      NODE_ENV: test
+      PORT: '20128'
+      HOSTNAME: 127.0.0.1
+      JWT_SECRET: ci-only-jwt-secret
+      API_KEY_SECRET: ci-only-api-key-secret
+      INITIAL_PASSWORD: ci-only-password
+      STORAGE_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      DATA_DIR: ${{ runner.temp }}/omniroute-data
+      DISABLE_SQLITE_AUTO_BACKUP: 'true'
+      NEXT_TELEMETRY_DISABLED: '1'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.21.0'
+          cache: npm
+          cache-dependency-path: omniroute/package-lock.json
+
+      - name: Show runtime
+        run: |
+          node --version
+          npm --version
+          git rev-parse --short HEAD
+
+      - name: Install dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Build OmniRoute
+        run: npm run build
+
+      - name: Start OmniRoute
+        run: |
+          mkdir -p "$DATA_DIR"
+          nohup npm run start > "$RUNNER_TEMP/omniroute-server.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/omniroute.pid"
+
+      - name: Wait for health endpoint
+        shell: bash
+        run: |
+          for i in {1..90}; do
+            if curl -fsS --max-time 3 http://127.0.0.1:20128/api/health > "$RUNNER_TEMP/health.json"; then
+              cat "$RUNNER_TEMP/health.json"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo 'OmniRoute did not become healthy.'
+          cat "$RUNNER_TEMP/omniroute-server.log" || true
+          exit 1
+
+      - name: Test management and OpenAI-compatible endpoints
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo '=== /api/health ==='
+          curl -fsS http://127.0.0.1:20128/api/health
+          echo
+
+          echo '=== /api/providers ==='
+          curl -fsS http://127.0.0.1:20128/api/providers | tee "$RUNNER_TEMP/providers.json"
+          echo
+
+          echo '=== /v1/models ==='
+          curl -fsS http://127.0.0.1:20128/v1/models | tee "$RUNNER_TEMP/models.json"
+          echo
+
+          node - <<'NODE'
+          const fs = require('fs');
+          const models = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + '/models.json', 'utf8'));
+          if (!Array.isArray(models.data)) throw new Error('/v1/models did not return data[]');
+          console.log(`models=${models.data.length}`);
+          NODE
+
+      - name: Create and verify temporary API key
+        shell: bash
+        run: |
+          set -euo pipefail
+          response=$(curl -fsS -X POST http://127.0.0.1:20128/api/keys \
+            -H 'Content-Type: application/json' \
+            --data '{"name":"github-runner-smoke","scopes":["chat"]}')
+          printf '%s' "$response" > "$RUNNER_TEMP/key-response.json"
+          node - <<'NODE'
+          const fs = require('fs');
+          const p = process.env.RUNNER_TEMP + '/key-response.json';
+          const value = JSON.parse(fs.readFileSync(p, 'utf8'));
+          const key = value.key || value.apiKey || value.token;
+          if (!key || !String(key).startsWith('sk-')) throw new Error('API key was not returned as expected');
+          fs.writeFileSync(process.env.RUNNER_TEMP + '/omniroute-api-key', String(key), {mode: 0o600});
+          console.log('temporary API key created');
+          NODE
+
+          API_KEY=$(cat "$RUNNER_TEMP/omniroute-api-key")
+          curl -fsS -H "Authorization: Bearer $API_KEY" \
+            http://127.0.0.1:20128/v1/models > "$RUNNER_TEMP/authenticated-models.json"
+          node - <<'NODE'
+          const fs = require('fs');
+          const value = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + '/authenticated-models.json', 'utf8'));
+          if (!Array.isArray(value.data)) throw new Error('Authenticated /v1/models response is invalid');
+          console.log(`authenticated_models=${value.data.length}`);
+          NODE
+
+      - name: Verify invalid API key is rejected
+        shell: bash
+        run: |
+          status=$(curl -sS -o /dev/null -w '%{http_code}' \
+            -H 'Authorization: Bearer sk-invalid-github-runner-token' \
+            http://127.0.0.1:20128/v1/models)
+          echo "invalid_key_status=$status"
+          case "$status" in
+            401|403) exit 0 ;;
+            *) echo 'Expected HTTP 401 or 403 for an invalid API key'; exit 1 ;;
+          esac
+
+      - name: Verify home page responds
+        shell: bash
+        run: |
+          status=$(curl -sS -o "$RUNNER_TEMP/home.html" -w '%{http_code}' \
+            http://127.0.0.1:20128/home)
+          echo "home_status=$status"
+          test "$status" = 200
+          grep -Eiq 'OmniRoute|Next.js|html' "$RUNNER_TEMP/home.html"
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: omniroute-github-runner-diagnostics-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/omniroute-server.log
+            ${{ runner.temp }}/health.json
+            ${{ runner.temp }}/providers.json
+            ${{ runner.temp }}/models.json
+            ${{ runner.temp }}/authenticated-models.json
+            ${{ runner.temp }}/home.html
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Stop OmniRoute
+        if: always()
+        shell: bash
+        run: |
+          if [ -f "$RUNNER_TEMP/omniroute.pid" ]; then
+            kill "$(cat "$RUNNER_TEMP/omniroute.pid")" 2>/dev/null || true
+          fi
