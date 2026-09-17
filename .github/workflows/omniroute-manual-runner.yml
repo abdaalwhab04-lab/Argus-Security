@@ -53,12 +53,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -d .next
-          if [ ! -d .next/standalone ] && [ ! -d dist ]; then
-            echo 'Expected standalone or dist build output was not produced.'
-            find .next -maxdepth 2 -type d -print | head -80 || true
-            exit 1
-          fi
+          BUILD_DIR="${NEXT_DIST_DIR:-.build/next}"
+          test -d "$BUILD_DIR"
+          test -d "$BUILD_DIR/standalone"
+          echo "Verified standalone build output: $BUILD_DIR/standalone"
       - name: Start OmniRoute
         shell: bash
         run: |
@@ -84,7 +82,7 @@ jobs:
           response=$(curl -fsS -X POST http://127.0.0.1:20128/api/keys -H 'Content-Type: application/json' --data '{"name":"github-ci-token","scopes":["chat"]}')
           key=$(printf '%s' "$response" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s); process.stdout.write(j.key || j.apiKey || '')})")
           test -n "$key"
-          case "$key" in sk-*) ;; *) exit 1;; esac
+          case "$key" in sk-*) ;; *) echo 'API key format is invalid'; exit 1;; esac
           echo "OMNIROUTE_CI_API_KEY=$key" >> "$GITHUB_ENV"
       - name: Verify authenticated API access
         run: curl -fsS http://127.0.0.1:20128/v1/models -H "Authorization: Bearer $OMNIROUTE_CI_API_KEY"
@@ -92,6 +90,7 @@ jobs:
         shell: bash
         run: |
           code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:20128/v1/models -H 'Authorization: Bearer sk-ci-invalid-token')
+          echo "HTTP status: $code"
           test "$code" = '401' || test "$code" = '403'
       - name: Verify home page
         run: curl -fsS http://127.0.0.1:20128/home -o /dev/null
