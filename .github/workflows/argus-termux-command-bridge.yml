@@ -1,0 +1,53 @@
+name: Argus Termux Command Bridge
+
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: "Command to execute on the Argus Termux self-hosted runner"
+        required: true
+        type: string
+        default: "pwd && git status --short --branch"
+
+jobs:
+  termux-command:
+    name: Execute on Termux → Argus-Security
+    runs-on: [self-hosted, termux, ARM64]
+    timeout-minutes: 15
+    steps:
+      - name: Checkout Argus-Security
+        uses: actions/checkout@v4
+
+      - name: Execute command on Termux runner
+        shell: bash
+        env:
+          ARGUS_COMMAND: ${{ inputs.command }}
+          DOTNET_GCRegionRange: "0x200000000"
+          DOTNET_GCHeapHardLimit: "0x40000000"
+        run: |
+          set -euo pipefail
+          echo "=== GitHub Actions → Self-hosted Runner → Termux → Argus-Security ==="
+          echo "Runner: ${RUNNER_NAME:-unknown}"
+          echo "Architecture: ${RUNNER_ARCH:-unknown}"
+          echo "Hostname: $(hostname)"
+          echo "Workspace: $PWD"
+          echo "=== Command ==="
+          printf '%s\n' "$ARGUS_COMMAND"
+          echo "=== Output ==="
+          bash -lc "$ARGUS_COMMAND"
+
+      - name: Runner summary
+        if: always()
+        shell: bash
+        run: |
+          echo "=== Runner ==="
+          echo "RUNNER_NAME=${RUNNER_NAME:-unknown}"
+          echo "RUNNER_OS=${RUNNER_OS:-unknown}"
+          echo "RUNNER_ARCH=${RUNNER_ARCH:-unknown}"
+          echo "=== System ==="
+          uname -a
+          echo "=== Argus workspace ==="
+          printf 'PWD=%s\n' "$PWD"
+          test -f README.md && echo "README.md: OK" || true
+          test -d omniroute && echo "omniroute/: OK" || true
+          test -d autogpt && echo "autogpt/: OK" || true
