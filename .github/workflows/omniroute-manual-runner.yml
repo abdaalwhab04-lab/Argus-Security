@@ -1,5 +1,6 @@
 name: OmniRoute Manual GitHub Runner
 
+# CI trigger refresh: run the current OmniRoute integration branch after build fixes.
 on:
   workflow_dispatch:
   push:
