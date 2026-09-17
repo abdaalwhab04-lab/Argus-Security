@@ -1,0 +1,70 @@
+name: Argus Termux Self-Hosted Runner
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - omniroute-v3.8.50-integration
+    paths:
+      - '.github/workflows/argus-termux-self-hosted.yml'
+      - 'scripts/self-hosted-termux-check.sh'
+      - 'omniroute/**'
+      - 'autogpt/**'
+
+jobs:
+  argus-termux:
+    name: Argus on Termux self-hosted runner
+    runs-on: [self-hosted, termux, ARM64]
+    timeout-minutes: 30
+    steps:
+      - name: Checkout Argus-Security
+        uses: actions/checkout@v4
+
+      - name: Verify Termux runner
+        shell: bash
+        run: bash scripts/self-hosted-termux-check.sh
+
+      - name: Verify Argus workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f README.md
+          test -d omniroute
+          test -d autogpt
+          printf 'Argus-Security workspace: OK\n'
+          printf 'Runner hostname: %s\n' "$(hostname)"
+          printf 'Working directory: %s\n' "$PWD"
+
+      - name: Verify OmniRoute source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f omniroute/package.json
+          node -e "const p=require('./omniroute/package.json'); console.log('OmniRoute version:', p.version); console.log('Build script:', p.scripts?.build || 'missing')"
+
+      - name: Verify AutoGPT source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d autogpt/autogpt_platform/frontend
+          test -f autogpt/autogpt_platform/frontend/package.json
+          node -e "const p=require('./autogpt/autogpt_platform/frontend/package.json'); console.log('AutoGPT frontend:', p.name, p.version || '')"
+
+      - name: Termux runner summary
+        if: always()
+        shell: bash
+        run: |
+          echo '=== GitHub self-hosted runner ==='
+          echo "RUNNER_NAME=${RUNNER_NAME:-unknown}"
+          echo "RUNNER_OS=${RUNNER_OS:-unknown}"
+          echo "RUNNER_ARCH=${RUNNER_ARCH:-unknown}"
+          echo '=== Termux ==='
+          command -v termux-info >/dev/null 2>&1 && termux-info || true
+          echo '=== System ==='
+          uname -a
+          echo '=== Node ==='
+          node --version || true
+          echo '=== Python ==='
+          python --version || true
+          echo '=== Git ==='
+          git --version || true
