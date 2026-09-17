@@ -2,35 +2,15 @@ name: OmniRoute Token Smoke Test
 
 on:
   push:
-    branches:
-      - omniroute-v3.8.50-integration
+    branches: [omniroute-v3.8.50-integration]
   workflow_dispatch:
 
 jobs:
   token-smoke:
-    name: Generate and validate OmniRoute API token
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    defaults:
-      run:
-        working-directory: omniroute
-    env:
-      NODE_ENV: test
-      PORT: 20128
-      HOSTNAME: 127.0.0.1
-      INITIAL_PASSWORD: ci-only-password-change-me
-      JWT_SECRET: ci-only-jwt-secret-not-for-production
-      API_KEY_SECRET: ci-only-api-key-secret-not-for-production
-      STORAGE_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
-      DATA_DIR: ${{ runner.temp }}/omniroute-data
-      DISABLE_SQLITE_AUTO_BACKUP: "true"
-      REQUIRE_LOGIN: "false"
-      REQUIRE_API_KEY: "true"
-      ALLOW_API_KEY_REVEAL: "false"
-      CLOUD_SYNC_ENABLED: "false"
-
     steps:
-      - name: Checkout
+      - name: Checkout OmniRoute branch
         uses: actions/checkout@v4
         with:
           ref: omniroute-v3.8.50-integration
@@ -39,76 +19,79 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 24.21.0
-          cache: npm
-          cache-dependency-path: omniroute/package-lock.json
 
-      - name: Install dependencies
-        run: npm ci --ignore-scripts
+      - name: Install OmniRoute dependencies
+        working-directory: omniroute
+        run: npm install --ignore-scripts
 
       - name: Build OmniRoute
+        working-directory: omniroute
+        env:
+          NODE_ENV: test
+          JWT_SECRET: ci-only-jwt-secret
+          API_KEY_SECRET: ci-only-api-key-secret
+          INITIAL_PASSWORD: ci-only-password
+          STORAGE_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+          DATA_DIR: ${{ runner.temp }}/omniroute-data
+          DISABLE_SQLITE_AUTO_BACKUP: "true"
         run: npm run build
 
       - name: Start OmniRoute
+        working-directory: omniroute
+        env:
+          NODE_ENV: test
+          PORT: 20128
+          HOSTNAME: 127.0.0.1
+          JWT_SECRET: ci-only-jwt-secret
+          API_KEY_SECRET: ci-only-api-key-secret
+          INITIAL_PASSWORD: ci-only-password
+          STORAGE_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+          DATA_DIR: ${{ runner.temp }}/omniroute-data
+          DISABLE_SQLITE_AUTO_BACKUP: "true"
+          REQUIRE_API_KEY: "true"
         run: |
           nohup npm run start > "$RUNNER_TEMP/omniroute.log" 2>&1 &
-          echo $! > "$RUNNER_TEMP/omniroute.pid"
-
-      - name: Wait for server
-        run: |
           for i in $(seq 1 90); do
             if curl -fsS --max-time 3 http://127.0.0.1:20128/healthz >/dev/null 2>&1; then
-              echo "OMNIROUTE_SERVER_READY=1"
+              echo "OmniRoute is ready"
               exit 0
             fi
             sleep 2
           done
-          echo "OmniRoute did not become ready. Recent log:"
-          tail -n 160 "$RUNNER_TEMP/omniroute.log" || true
+          tail -n 200 "$RUNNER_TEMP/omniroute.log" || true
           exit 1
 
-      - name: Generate API token
+      - name: Generate API key through OmniRoute API
         run: |
           set -euo pipefail
-          response=$(curl -fsS --max-time 20 \
+          response=$(curl -fsS --max-time 30 \
             -X POST http://127.0.0.1:20128/api/keys \
             -H 'Content-Type: application/json' \
             --data '{"name":"github-ci-token","scopes":["chat"]}')
+          printf '%s' "$response" > "$RUNNER_TEMP/key-response.json"
+          node -e 'const x=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")); if(!x.key || !x.id) process.exit(1); if(!String(x.key).startsWith("sk-")) process.exit(2); console.log("API key generation: PASS"); console.log("Key id:", x.id);' "$RUNNER_TEMP/key-response.json"
+          node -e 'const x=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")); require("fs").writeFileSync(process.env.RUNNER_TEMP+"/omniroute-api-key",x.key)' "$RUNNER_TEMP/key-response.json"
 
-          key=$(node -e 'const x=JSON.parse(process.argv[1]); if(!x.key) process.exit(2); process.stdout.write(x.key)' "$response")
-          id=$(node -e 'const x=JSON.parse(process.argv[1]); process.stdout.write(String(x.id ?? ""))' "$response")
-
-          test -n "$key"
-          test -n "$id"
-          case "$key" in
-            sk-*) echo "Generated API key: PASS (prefix masked)" ;;
-            *) echo "Generated API key has an unexpected prefix"; exit 1 ;;
-          esac
-          echo "API key record id: $id"
-          printf '%s' "$key" > "$RUNNER_TEMP/omniroute-api-key"
-
-      - name: Validate Bearer token against /v1/models
+      - name: Validate generated key on /v1/models
         run: |
           set -euo pipefail
           key=$(cat "$RUNNER_TEMP/omniroute-api-key")
-          status=$(curl -sS -o "$RUNNER_TEMP/models.json" -w '%{http_code}' --max-time 20 \
+          status=$(curl -sS -o "$RUNNER_TEMP/models.json" -w '%{http_code}' --max-time 30 \
             http://127.0.0.1:20128/v1/models \
             -H "Authorization: Bearer $key")
-          echo "Bearer /v1/models HTTP status: $status"
-          test "$status" = "200"
-          node -e 'const fs=require("fs"); const x=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if(!Array.isArray(x.data)) process.exit(1); console.log("Bearer token validation: PASS"); console.log("Models returned:", x.data.length)' "$RUNNER_TEMP/models.json"
+          echo "Valid key /v1/models status: $status"
+          test "$status" = 200
+          node -e 'const x=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")); if(!Array.isArray(x.data)) process.exit(1); console.log("Bearer token validation: PASS"); console.log("Models returned:",x.data.length)' "$RUNNER_TEMP/models.json"
 
-      - name: Token rejection check
+      - name: Confirm invalid key is rejected
         run: |
-          set -euo pipefail
           status=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 \
             http://127.0.0.1:20128/v1/models \
-            -H 'Authorization: Bearer sk-invalid-token-for-ci-test')
-          echo "Invalid token HTTP status: $status"
-          test "$status" = "401" || test "$status" = "403"
-          echo "Invalid token rejection: PASS"
+            -H 'Authorization: Bearer sk-invalid-token-for-smoke-test')
+          echo "Invalid key status: $status"
+          test "$status" = 401 || test "$status" = 403
+          echo "Invalid key rejection: PASS"
 
-      - name: Dump sanitized server log on failure
+      - name: Show sanitized server log on failure
         if: failure()
-        run: |
-          echo '===== OmniRoute log (sanitized tail) ====='
-          tail -n 240 "$RUNNER_TEMP/omniroute.log" || true
+        run: tail -n 240 "$RUNNER_TEMP/omniroute.log" || true
