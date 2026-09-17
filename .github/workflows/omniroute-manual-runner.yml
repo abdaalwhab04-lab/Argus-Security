@@ -14,11 +14,9 @@ jobs:
     name: OmniRoute GitHub-hosted Ubuntu Runner
     runs-on: ubuntu-latest
     timeout-minutes: 30
-
     defaults:
       run:
         working-directory: omniroute
-
     env:
       NODE_ENV: test
       JWT_SECRET: ci-only-jwt-secret
@@ -29,84 +27,77 @@ jobs:
       HOSTNAME: 127.0.0.1
       DATA_DIR: ${{ github.workspace }}/.omniroute-ci-data
       DISABLE_SQLITE_AUTO_BACKUP: 'true'
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Setup Node.js 24
         uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
           cache-dependency-path: omniroute/package-lock.json
-
+      - name: Verify OmniRoute build entrypoints
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f scripts/build/build-next-isolated.mjs
+          test -f scripts/build/assembleStandalone.mjs
+          test -f scripts/build/backendOnlyPages.mjs
+          node --check scripts/build/build-next-isolated.mjs
+          node -e "const p=require('./package.json'); if (!p.scripts?.build) throw new Error('package.json build script missing'); console.log(p.scripts.build)"
       - name: Install dependencies
         run: npm install --ignore-scripts
-
       - name: Build OmniRoute
         run: npm run build
-
+      - name: Verify build output
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d .next
+          if [ ! -d .next/standalone ] && [ ! -d dist ]; then
+            echo 'Expected standalone or dist build output was not produced.'
+            find .next -maxdepth 2 -type d -print | head -80 || true
+            exit 1
+          fi
       - name: Start OmniRoute
         shell: bash
         run: |
           mkdir -p "$DATA_DIR"
           nohup npm run start > "$RUNNER_TEMP/omniroute.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/omniroute.pid"
-
       - name: Wait for health endpoint
         shell: bash
         run: |
           for i in {1..60}; do
-            if curl -fsS http://127.0.0.1:20128/api/health; then
-              echo
-              exit 0
-            fi
+            if curl -fsS http://127.0.0.1:20128/api/health; then echo; exit 0; fi
             sleep 2
           done
-          echo 'OmniRoute did not become healthy.'
           cat "$RUNNER_TEMP/omniroute.log" || true
           exit 1
-
       - name: Verify providers endpoint
         run: curl -fsS http://127.0.0.1:20128/api/providers
-
       - name: Verify models endpoint
         run: curl -fsS http://127.0.0.1:20128/v1/models
-
       - name: Create CI API key
         shell: bash
         run: |
-          response=$(curl -fsS -X POST http://127.0.0.1:20128/api/keys \
-            -H 'Content-Type: application/json' \
-            --data '{"name":"github-ci-token","scopes":["chat"]}')
+          response=$(curl -fsS -X POST http://127.0.0.1:20128/api/keys -H 'Content-Type: application/json' --data '{"name":"github-ci-token","scopes":["chat"]}')
           key=$(printf '%s' "$response" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s); process.stdout.write(j.key || j.apiKey || '')})")
           test -n "$key"
-          case "$key" in sk-*) ;; *) echo 'API key format is invalid'; exit 1;; esac
+          case "$key" in sk-*) ;; *) exit 1;; esac
           echo "OMNIROUTE_CI_API_KEY=$key" >> "$GITHUB_ENV"
-
       - name: Verify authenticated API access
-        run: |
-          curl -fsS http://127.0.0.1:20128/v1/models \
-            -H "Authorization: Bearer $OMNIROUTE_CI_API_KEY"
-
+        run: curl -fsS http://127.0.0.1:20128/v1/models -H "Authorization: Bearer $OMNIROUTE_CI_API_KEY"
       - name: Verify invalid token is rejected
         shell: bash
         run: |
-          code=$(curl -s -o /dev/null -w '%{http_code}' \
-            http://127.0.0.1:20128/v1/models \
-            -H 'Authorization: Bearer sk-ci-invalid-token')
-          echo "HTTP status: $code"
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:20128/v1/models -H 'Authorization: Bearer sk-ci-invalid-token')
           test "$code" = '401' || test "$code" = '403'
-
       - name: Verify home page
         run: curl -fsS http://127.0.0.1:20128/home -o /dev/null
-
       - name: Show logs on failure
         if: failure()
-        shell: bash
         run: cat "$RUNNER_TEMP/omniroute.log" || true
-
       - name: Upload logs
         if: failure()
         uses: actions/upload-artifact@v4
@@ -114,11 +105,8 @@ jobs:
           name: omniroute-github-runner-logs
           path: ${{ runner.temp }}/omniroute.log
           if-no-files-found: ignore
-
       - name: Stop OmniRoute
         if: always()
         shell: bash
         run: |
-          if [ -f "$RUNNER_TEMP/omniroute.pid" ]; then
-            kill "$(cat "$RUNNER_TEMP/omniroute.pid")" 2>/dev/null || true
-          fi
+          if [ -f "$RUNNER_TEMP/omniroute.pid" ]; then kill "$(cat "$RUNNER_TEMP/omniroute.pid")" 2>/dev/null || true; fi
