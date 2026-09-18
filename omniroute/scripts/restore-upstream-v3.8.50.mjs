@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 const execFileAsync = promisify(execFile);
-const ROOT = resolve(new URL("..", import.meta.url).pathname, "..");
+const ROOT = resolve(new URL(".", import.meta.url).pathname, "..");
 const URL = "https://github.com/diegosouzapw/OmniRoute/archive/refs/tags/v3.8.50.tar.gz";
 const REQUIRED = [
   "src/lib/usageDb.ts",
