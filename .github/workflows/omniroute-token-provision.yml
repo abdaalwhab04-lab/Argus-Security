@@ -121,3 +121,4 @@ jobs:
       - name: Final permissions check
         run: |
           stat -c '%A %n' "$HOME/.omniroute/tokens.json"
+# manual trigger verification 2026-09-18T05:40Z
