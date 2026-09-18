@@ -16,6 +16,19 @@ jobs:
         with:
           ref: omniroute-v3.8.50-integration
 
+      - name: Verify job execution context
+        env:
+          EXPECTED_RUN_NUMBER: "4"
+        run: |
+          set -euo pipefail
+          echo "OmniRoute Token Provision run #${{ github.run_number }}"
+          echo "Job: ${{ github.job }}"
+          echo "Runner: $RUNNER_NAME"
+          echo "Runner OS: $RUNNER_OS"
+          echo "Runner arch: $RUNNER_ARCH"
+          echo "Expected run #4 marker: $EXPECTED_RUN_NUMBER"
+          test "${{ github.run_number }}" = "$EXPECTED_RUN_NUMBER"
+
       - name: Verify local OmniRoute token endpoint
         env:
           PORT: "20128"
