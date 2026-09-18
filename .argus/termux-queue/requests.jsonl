@@ -2,3 +2,4 @@
 {"id":"chatgpt-write-test-20260918-1","operation":"write","path":"ARGUS_CHATGPT_TEST.txt","content":"تم إرسال هذا الملف من ChatGPT إلى Termux عبر GitHub Queue Worker.\n"}
 {"id":"chatgpt-status-test-20260918-1","operation":"status"}
 {"id":"stage4-read-test-20260918-1","operation":"read","path":"ARGUS_STAGE3_TEST.txt"}
+{"id":"stage4-write-test-20260918-1","operation":"write","path":"ARGUS_STAGE4_TEST.txt","content":"STAGE4_QUEUE_WRITE_OK\n"}
