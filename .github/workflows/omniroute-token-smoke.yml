@@ -29,7 +29,7 @@ jobs:
         env:
           NODE_ENV: test
           JWT_SECRET: ci-only-jwt-secret-0123456789abcdef
-          API_KEY_SECRET: ci-only-api-key-secret
+          API_KEY_SECRET: ci-only-api-key-secret-0123456789abcdef
           INITIAL_PASSWORD: ci-only-password
           STORAGE_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
           DATA_DIR: ${{ runner.temp }}/omniroute-data
@@ -46,7 +46,7 @@ jobs:
           PORT: 20128
           HOSTNAME: 127.0.0.1
           JWT_SECRET: ci-only-jwt-secret
-          API_KEY_SECRET: ci-only-api-key-secret
+          API_KEY_SECRET: ci-only-api-key-secret-0123456789abcdef
           INITIAL_PASSWORD: ci-only-password
           STORAGE_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
           DATA_DIR: ${{ runner.temp }}/omniroute-data
