@@ -35,7 +35,7 @@ jobs:
           DATA_DIR: ${{ runner.temp }}/omniroute-data
           DISABLE_SQLITE_AUTO_BACKUP: "true"
           OMNIROUTE_USE_TURBOPACK: "0"
-          OMNIROUTE_BUILD_MEMORY_MB: "6144"
+          OMNIROUTE_BUILD_MEMORY_MB: "8192"
           NEXT_TELEMETRY_DISABLED: "1"
         run: npm run build
 
