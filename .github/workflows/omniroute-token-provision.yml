@@ -17,7 +17,6 @@ jobs:
           ref: omniroute-v3.8.50-integration
 
       - name: Verify job execution context
-        env:
         run: |
           set -euo pipefail
           echo "OmniRoute Token Provision run #${{ github.run_number }}"
@@ -45,10 +44,6 @@ jobs:
           OMNIROUTE_INTERNAL_SERVICE_TOKEN: ${{ secrets.OMNIROUTE_INTERNAL_SERVICE_TOKEN }}
         run: |
           set -euo pipefail
-
-          # Prefer the GitHub secret when configured. If it is absent, preserve
-          # the runner's existing environment value instead of overwriting it
-          # with an empty secret.
           if [ -n "${OMNIROUTE_INTERNAL_SERVICE_TOKEN:-}" ]; then
             TOKEN_SOURCE="github-secret"
           elif [ -n "${RUNNER_OMNIROUTE_INTERNAL_SERVICE_TOKEN:-}" ]; then
@@ -68,18 +63,14 @@ jobs:
             --data '{"name":"argus-token-auth-check","scopes":["chat"]}' || true)
 
           case "$status" in
-            201)
-              echo "Internal service authentication: OK (source: $TOKEN_SOURCE)"
-              ;;
+            201) echo "Internal service authentication: OK (source: $TOKEN_SOURCE)" ;;
             401)
               echo "Internal service authentication rejected (source: $TOKEN_SOURCE)."
               echo "The supplied token does not match the running OmniRoute instance."
-              exit 1
-              ;;
+              exit 1 ;;
             *)
               echo "Unexpected /api/keys HTTP status: $status"
-              exit 1
-              ;;
+              exit 1 ;;
           esac
 
       - name: Create three OmniRoute tokens
@@ -87,7 +78,6 @@ jobs:
           OMNIROUTE_INTERNAL_SERVICE_TOKEN: ${{ secrets.OMNIROUTE_INTERNAL_SERVICE_TOKEN }}
         run: |
           set -euo pipefail
-
           if [ -z "${OMNIROUTE_INTERNAL_SERVICE_TOKEN:-}" ] && [ -n "${RUNNER_OMNIROUTE_INTERNAL_SERVICE_TOKEN:-}" ]; then
             export OMNIROUTE_INTERNAL_SERVICE_TOKEN="$RUNNER_OMNIROUTE_INTERNAL_SERVICE_TOKEN"
           fi
@@ -95,7 +85,6 @@ jobs:
             echo "Internal service token is unavailable."
             exit 1
           fi
-
           BASE_DIR="$HOME/.omniroute"
           mkdir -p "$BASE_DIR"
           chmod 700 "$BASE_DIR"
@@ -104,7 +93,6 @@ jobs:
           rm -f "$TMP"
           printf '[]' > "$TMP"
           chmod 600 "$TMP"
-
           for name in argus-chat-1 argus-chat-2 argus-chat-3; do
             response=$(curl -fsS --max-time 30 \
               -X POST http://127.0.0.1:20128/api/keys \
@@ -114,7 +102,6 @@ jobs:
             node -e 'const x=JSON.parse(process.argv[1]); if(!x.key||!x.id||!String(x.key).startsWith("sk-")) process.exit(1);' "$response"
             node -e 'const fs=require("fs"); const x=JSON.parse(process.argv[1]); const p=process.argv[2]; const a=JSON.parse(fs.readFileSync(p,"utf8")); a.push({name:x.name,id:x.id,key:x.key}); fs.writeFileSync(p,JSON.stringify(a,null,2));' "$response" "$TMP"
           done
-
           mv "$TMP" "$OUT"
           chmod 600 "$OUT"
           echo "Created 3 OmniRoute tokens; values withheld."
@@ -133,4 +120,4 @@ jobs:
       - name: Final permissions check
         run: |
           stat -c '%A %n' "$HOME/.omniroute/tokens.json"
-# manual trigger verification 2026-09-18T05:40Z
+# runner dispatch trigger: 2026-09-19
