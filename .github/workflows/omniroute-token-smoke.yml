@@ -28,7 +28,7 @@ jobs:
         working-directory: omniroute
         env:
           NODE_ENV: test
-          JWT_SECRET: ci-only-jwt-secret
+          JWT_SECRET: ci-only-jwt-secret-0123456789abcdef
           API_KEY_SECRET: ci-only-api-key-secret
           INITIAL_PASSWORD: ci-only-password
           STORAGE_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
