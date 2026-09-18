@@ -20,24 +20,76 @@ jobs:
           PORT: "20128"
         run: |
           set -euo pipefail
-          test -f /root/.argus-bridge/token || true
-          if ! curl -fsS --max-time 5 http://127.0.0.1:$PORT/healthz >/dev/null 2>&1; then
+          if ! curl -fsS --max-time 5 "http://127.0.0.1:$PORT/healthz" >/dev/null 2>&1; then
             echo "OmniRoute is not running on the Termux runner at port $PORT."
             echo "Start OmniRoute locally, then re-run this workflow."
             exit 1
           fi
+          echo "OmniRoute health check: OK"
+
+      - name: Verify internal service authentication configuration
+        env:
+          OMNIROUTE_INTERNAL_SERVICE_TOKEN: ${{ secrets.OMNIROUTE_INTERNAL_SERVICE_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          # Prefer the GitHub secret when configured. If it is absent, preserve
+          # the runner's existing environment value instead of overwriting it
+          # with an empty secret.
+          if [ -n "${OMNIROUTE_INTERNAL_SERVICE_TOKEN:-}" ]; then
+            TOKEN_SOURCE="github-secret"
+          elif [ -n "${RUNNER_OMNIROUTE_INTERNAL_SERVICE_TOKEN:-}" ]; then
+            export OMNIROUTE_INTERNAL_SERVICE_TOKEN="$RUNNER_OMNIROUTE_INTERNAL_SERVICE_TOKEN"
+            TOKEN_SOURCE="runner-environment"
+          else
+            echo "No OmniRoute internal service token is available."
+            echo "Configure the GitHub secret OMNIROUTE_INTERNAL_SERVICE_TOKEN"
+            echo "or export RUNNER_OMNIROUTE_INTERNAL_SERVICE_TOKEN in the self-hosted runner environment."
+            exit 1
+          fi
+
+          status=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 \
+            -X POST http://127.0.0.1:20128/api/keys \
+            -H 'Content-Type: application/json' \
+            -H "x-omniroute-internal-service-token: $OMNIROUTE_INTERNAL_SERVICE_TOKEN" \
+            --data '{"name":"argus-token-auth-check","scopes":["chat"]}' || true)
+
+          case "$status" in
+            201)
+              echo "Internal service authentication: OK (source: $TOKEN_SOURCE)"
+              ;;
+            401)
+              echo "Internal service authentication rejected (source: $TOKEN_SOURCE)."
+              echo "The supplied token does not match the running OmniRoute instance."
+              exit 1
+              ;;
+            *)
+              echo "Unexpected /api/keys HTTP status: $status"
+              exit 1
+              ;;
+          esac
 
       - name: Create three OmniRoute tokens
         env:
           OMNIROUTE_INTERNAL_SERVICE_TOKEN: ${{ secrets.OMNIROUTE_INTERNAL_SERVICE_TOKEN }}
         run: |
           set -euo pipefail
+
+          if [ -z "${OMNIROUTE_INTERNAL_SERVICE_TOKEN:-}" ] && [ -n "${RUNNER_OMNIROUTE_INTERNAL_SERVICE_TOKEN:-}" ]; then
+            export OMNIROUTE_INTERNAL_SERVICE_TOKEN="$RUNNER_OMNIROUTE_INTERNAL_SERVICE_TOKEN"
+          fi
+          if [ -z "${OMNIROUTE_INTERNAL_SERVICE_TOKEN:-}" ]; then
+            echo "Internal service token is unavailable."
+            exit 1
+          fi
+
           BASE_DIR="$HOME/.omniroute"
           mkdir -p "$BASE_DIR"
           chmod 700 "$BASE_DIR"
           OUT="$BASE_DIR/tokens.json"
           TMP="$BASE_DIR/tokens.tmp.json"
-          : > "$TMP"
+          rm -f "$TMP"
+          printf '[]' > "$TMP"
           chmod 600 "$TMP"
 
           for name in argus-chat-1 argus-chat-2 argus-chat-3; do
@@ -47,13 +99,12 @@ jobs:
               -H "x-omniroute-internal-service-token: $OMNIROUTE_INTERNAL_SERVICE_TOKEN" \
               --data "{\"name\":\"$name\",\"scopes\":[\"chat\"]}")
             node -e 'const x=JSON.parse(process.argv[1]); if(!x.key||!x.id||!String(x.key).startsWith("sk-")) process.exit(1);' "$response"
-            node -e 'const fs=require("fs"); const x=JSON.parse(process.argv[1]); const p=process.argv[2]; let a=[]; try{a=JSON.parse(fs.readFileSync(p,"utf8")||"[]")}catch{} a.push({name:x.name,id:x.id,key:x.key}); fs.writeFileSync(p,JSON.stringify(a,null,2));' "$response" "$TMP"
+            node -e 'const fs=require("fs"); const x=JSON.parse(process.argv[1]); const p=process.argv[2]; const a=JSON.parse(fs.readFileSync(p,"utf8")); a.push({name:x.name,id:x.id,key:x.key}); fs.writeFileSync(p,JSON.stringify(a,null,2));' "$response" "$TMP"
           done
 
           mv "$TMP" "$OUT"
           chmod 600 "$OUT"
-          printf 'Created 3 OmniRoute tokens and stored them at %s (permissions 600).\n' "$OUT"
-          printf 'Token values are intentionally not printed to GitHub logs.\n'
+          echo "Created 3 OmniRoute tokens; values withheld."
 
       - name: Validate all three tokens
         run: |
@@ -61,8 +112,7 @@ jobs:
           OUT="$HOME/.omniroute/tokens.json"
           node -e 'const fs=require("fs"); const a=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if(a.length!==3) process.exit(1); for(const x of a){if(!x.key.startsWith("sk-")) process.exit(2)} console.log("3 token records present; values withheld.");' "$OUT"
           while IFS= read -r key; do
-            status=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 \
-              http://127.0.0.1:20128/v1/models -H "Authorization: Bearer $key")
+            status=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 http://127.0.0.1:20128/v1/models -H "Authorization: Bearer $key")
             test "$status" = 200
           done < <(node -e 'for(const x of JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"))) console.log(x.key)' "$OUT")
           echo "All 3 tokens validated successfully."
