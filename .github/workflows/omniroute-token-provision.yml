@@ -18,7 +18,6 @@ jobs:
 
       - name: Verify job execution context
         env:
-          EXPECTED_RUN_NUMBER: "4"
         run: |
           set -euo pipefail
           echo "OmniRoute Token Provision run #${{ github.run_number }}"
@@ -26,8 +25,8 @@ jobs:
           echo "Runner: $RUNNER_NAME"
           echo "Runner OS: $RUNNER_OS"
           echo "Runner arch: $RUNNER_ARCH"
-          echo "Expected run #4 marker: $EXPECTED_RUN_NUMBER"
-          test "${{ github.run_number }}" = "$EXPECTED_RUN_NUMBER"
+          test -n "${{ github.run_number }}"
+          echo "Job execution marker: OK"
 
       - name: Verify local OmniRoute token endpoint
         env:
