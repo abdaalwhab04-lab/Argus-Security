@@ -52,6 +52,7 @@ jobs:
           DATA_DIR: ${{ runner.temp }}/omniroute-data
           DISABLE_SQLITE_AUTO_BACKUP: "true"
           REQUIRE_API_KEY: "true"
+          OMNIROUTE_INTERNAL_SERVICE_TOKEN: ci-only-jwt-secret-0123456789abcdef
         run: |
           nohup npm run start > "$RUNNER_TEMP/omniroute.log" 2>&1 &
           for i in $(seq 1 90); do
@@ -70,6 +71,7 @@ jobs:
           response=$(curl -fsS --max-time 30 \
             -X POST http://127.0.0.1:20128/api/keys \
             -H 'Content-Type: application/json' \
+            -H 'x-omniroute-internal-service-token: ci-only-jwt-secret-0123456789abcdef' \
             --data '{"name":"github-ci-token","scopes":["chat"]}')
           printf '%s' "$response" > "$RUNNER_TEMP/key-response.json"
           node -e 'const x=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")); if(!x.key || !x.id) process.exit(1); if(!String(x.key).startsWith("sk-")) process.exit(2); console.log("API key generation: PASS"); console.log("Key id:", x.id);' "$RUNNER_TEMP/key-response.json"
