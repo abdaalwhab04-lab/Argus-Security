@@ -34,6 +34,9 @@ jobs:
           STORAGE_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
           DATA_DIR: ${{ runner.temp }}/omniroute-data
           DISABLE_SQLITE_AUTO_BACKUP: "true"
+          OMNIROUTE_USE_TURBOPACK: "0"
+          OMNIROUTE_BUILD_MEMORY_MB: "6144"
+          NEXT_TELEMETRY_DISABLED: "1"
         run: npm run build
 
       - name: Start OmniRoute
