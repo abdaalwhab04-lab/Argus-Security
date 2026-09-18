@@ -6,7 +6,7 @@ import { join, resolve } from "node:path";
 
 const execFileAsync = promisify(execFile);
 const ROOT = resolve(new URL(".", import.meta.url).pathname, "..");
-const URL = "https://github.com/diegosouzapw/OmniRoute/archive/refs/tags/v3.8.50.tar.gz";
+const UPSTREAM_URL = "https://github.com/diegosouzapw/OmniRoute/archive/refs/tags/v3.8.50.tar.gz";
 const REQUIRED = [
   "src/lib/usageDb.ts",
   "src/lib/db/core.ts",
@@ -28,7 +28,7 @@ const archive = join(temp, "omniroute.tar.gz");
 
 try {
   console.log("OmniRoute source is incomplete; restoring missing files from official v3.8.50 release...");
-  await execFileAsync("curl", ["-fsSL", "--retry", "3", "--connect-timeout", "15", URL, "-o", archive], { cwd: ROOT });
+  await execFileAsync("curl", ["-fsSL", "--retry", "3", "--connect-timeout", "15", UPSTREAM_URL, "-o", archive], { cwd: ROOT });
   await execFileAsync("tar", ["-xzf", archive, "-C", temp], { cwd: ROOT });
 
   const entries = (await readdir(temp)).filter((name) => name !== "omniroute.tar.gz");
