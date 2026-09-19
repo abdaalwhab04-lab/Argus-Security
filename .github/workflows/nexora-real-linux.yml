@@ -46,18 +46,7 @@ jobs:
       - name: Build NEXORA RootFS
         run: |
           echo "=== Build NEXORA RootFS ==="
-          bash nexora/scripts/build-rootfs.sh
-
-      - name: Prepare Docker test image
-        run: |
-          echo "=== Prepare Docker test image ==="
-          mkdir -p output
-          docker pull busybox:1.36
-          docker save busybox:1.36 -o output/busybox-1.36.tar
-          mkdir -p nexora/rootfs/opt/nexora-test
-          cp output/busybox-1.36.tar nexora/rootfs/opt/nexora-test/
-          ls -lh nexora/rootfs/opt/nexora-test/busybox-1.36.tar
-          echo "NEXORA_DOCKER_IMAGE_READY"
+          sudo bash nexora/scripts/build-rootfs.sh
 
       - name: Check QEMU
         run: |
@@ -146,7 +135,7 @@ jobs:
       - name: Build NEXORA ISO
         run: |
           echo "=== Build NEXORA ISO ==="
-          bash nexora/scripts/build-iso.sh
+          sudo bash nexora/scripts/build-iso.sh
 
       - name: Verify NEXORA ISO
         run: |
