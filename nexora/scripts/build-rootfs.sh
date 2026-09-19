@@ -84,14 +84,14 @@ echo "=== Configure iptables compatibility ==="
 # Configure the image itself, not the GitHub runner host. Docker bridge NAT
 # needs the legacy iptables userspace backend with the minimal NEXORA kernel.
 if [ -x "${ROOTFS_DIR}/usr/sbin/iptables-legacy" ]; then
-    ln -sfn /usr/sbin/iptables-legacy "${ROOTFS_DIR}/usr/sbin/iptables"
+    sudo ln -sfn /usr/sbin/iptables-legacy "${ROOTFS_DIR}/usr/sbin/iptables"
 else
     echo "ERROR: iptables-legacy is missing from the NEXORA rootfs."
     exit 1
 fi
 
 if [ -x "${ROOTFS_DIR}/usr/sbin/ip6tables-legacy" ]; then
-    ln -sfn /usr/sbin/ip6tables-legacy "${ROOTFS_DIR}/usr/sbin/ip6tables"
+    sudo ln -sfn /usr/sbin/ip6tables-legacy "${ROOTFS_DIR}/usr/sbin/ip6tables"
 else
     echo "ERROR: ip6tables-legacy is missing from the NEXORA rootfs."
     exit 1
