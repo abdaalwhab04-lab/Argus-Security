@@ -81,23 +81,23 @@ rm -f "${TEMP_INIT}"
 echo "=== Configure RootFS ==="
 echo "=== Configure iptables compatibility ==="
 
-# Docker needs the kernel's netfilter stack plus a working modprobe utility.
-# Prefer the legacy iptables backend here for maximum compatibility with the
-# small NEXORA kernel while retaining nftables kernel support.
-if command -v update-alternatives >/dev/null 2>&1; then
-    update-alternatives --set iptables /usr/sbin/iptables-legacy || true
-    update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy || true
-    update-alternatives --set arptables /usr/sbin/arptables-legacy || true
-    update-alternatives --set ebtables /usr/sbin/ebtables-legacy || true
+# Configure the image itself, not the GitHub runner host. Docker bridge NAT
+# needs the legacy iptables userspace backend with the minimal NEXORA kernel.
+if [ -x "${ROOTFS_DIR}/usr/sbin/iptables-legacy" ]; then
+    ln -sfn /usr/sbin/iptables-legacy "${ROOTFS_DIR}/usr/sbin/iptables"
+else
+    echo "ERROR: iptables-legacy is missing from the NEXORA rootfs."
+    exit 1
 fi
 
+if [ -x "${ROOTFS_DIR}/usr/sbin/ip6tables-legacy" ]; then
+    ln -sfn /usr/sbin/ip6tables-legacy "${ROOTFS_DIR}/usr/sbin/ip6tables"
+else
+    echo "ERROR: ip6tables-legacy is missing from the NEXORA rootfs."
+    exit 1
+fi
 
-sudo chown -R "$(id -u):$(id -g)" "${ROOTFS_DIR}"
-
-cat > "${ROOTFS_DIR}/etc/hostname" <<'HOSTNAME'
-nexora
-HOSTNAME
-
+echo "NEXORA_IPTABLES_LEGACY_OK"
 echo "=== Prepare bundled Docker test image ==="
 mkdir -p "${ROOTFS_DIR}/opt/nexora-test"
 if command -v docker >/dev/null 2>&1; then
