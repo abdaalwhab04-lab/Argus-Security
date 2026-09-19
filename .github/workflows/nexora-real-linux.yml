@@ -4,6 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
+      - omniroute-v3.8.50-integration
       - nexora-real-test
 
 permissions:
