@@ -94,20 +94,23 @@ cat > "${ROOTFS_DIR}/usr/local/bin/nexora-docker-container-test.sh" <<'DOCKERTES
 set -eu
 
 IMAGE_TAR="/opt/nexora-test/busybox-1.36.tar"
+IMAGE="busybox:1.36"
 
 echo "=== NEXORA DOCKER CONTAINER TEST ===" > /dev/console
 
-if [ ! -f "${IMAGE_TAR}" ]; then
-    echo "NEXORA_DOCKER_CONTAINER_FAILED: image tar missing" > /dev/console
-    exit 1
+if [ -f "${IMAGE_TAR}" ]; then
+    echo "Loading bundled Docker test image..." > /dev/console
+    docker load -i "${IMAGE_TAR}" > /dev/console 2>&1
+else
+    echo "Bundled Docker image not present; pulling ${IMAGE}..." > /dev/console
+    if ! docker pull "${IMAGE}" > /dev/console 2>&1; then
+        echo "NEXORA_DOCKER_CONTAINER_FAILED: unable to load or pull ${IMAGE}" > /dev/console
+        exit 1
+    fi
 fi
 
-echo "Loading Docker test image..." > /dev/console
-docker load -i "${IMAGE_TAR}" > /dev/console 2>&1
-
 echo "Running real Docker container..." > /dev/console
-docker run --rm busybox:1.36 sh -c 'echo NEXORA_DOCKER_CONTAINER_OK' > /dev/console 2>&1
-
+docker run --rm "${IMAGE}" sh -c 'echo NEXORA_DOCKER_CONTAINER_OK' > /dev/console 2>&1
 echo "NEXORA_DOCKER_CONTAINER_TEST_DONE" > /dev/console
 DOCKERTEST
 
