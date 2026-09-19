@@ -39,6 +39,18 @@ fi
 
 echo "NEXORA_DEBIAN_ROOTFS_FOUND"
 
+echo "=== Prepare writable runtime configuration ==="
+
+# The Debian root filesystem lives on a read-only ISO. Docker and containerd
+# need a few runtime configuration directories to be writable at boot.
+mount -t tmpfs -o size=32M tmpfs /mnt/etc/docker
+mount -t tmpfs -o size=32M tmpfs /mnt/etc/cni
+
+# Recreate the minimal Docker configuration directory expected by dockerd.
+mkdir -p /mnt/etc/docker /mnt/etc/cni/net.d
+
+echo "NEXORA_DOCKER_CONFIG_OK"
+
 echo "=== Switching to Debian RootFS ==="
 
 mkdir -p /mnt/run
