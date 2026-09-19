@@ -86,6 +86,18 @@ cat > "${ROOTFS_DIR}/etc/hostname" <<'HOSTNAME'
 nexora
 HOSTNAME
 
+echo "=== Prepare bundled Docker test image ==="
+mkdir -p "${ROOTFS_DIR}/opt/nexora-test"
+if command -v docker >/dev/null 2>&1; then
+    echo "Pulling busybox:1.36 on the build host..."
+    docker pull busybox:1.36
+    docker save -o "${ROOTFS_DIR}/opt/nexora-test/busybox-1.36.tar" busybox:1.36
+    echo "NEXORA_DOCKER_TEST_IMAGE_OK"
+else
+    echo "ERROR: Docker is required on the build host to bundle the test image."
+    exit 1
+fi
+
 echo "=== Configure NEXORA Docker container test ==="
 mkdir -p "${ROOTFS_DIR}/usr/local/bin"
 
