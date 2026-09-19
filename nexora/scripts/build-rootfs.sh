@@ -40,7 +40,7 @@ echo "=== Bootstrap Debian ==="
 sudo debootstrap \
     --arch=amd64 \
     --variant=minbase \
-    --include=systemd,systemd-sysv,docker.io,containerd,runc \
+    --include=systemd,systemd-sysv,docker.io,containerd,runc,kmod \
     "${DEBIAN_SUITE}" \
     "${ROOTFS_DIR}" \
     "${DEBIAN_MIRROR}"
@@ -79,6 +79,18 @@ chmod +x "${ROOTFS_DIR}/initramfs/init"
 rm -f "${TEMP_INIT}"
 
 echo "=== Configure RootFS ==="
+echo "=== Configure iptables compatibility ==="
+
+# Docker needs the kernel's netfilter stack plus a working modprobe utility.
+# Prefer the legacy iptables backend here for maximum compatibility with the
+# small NEXORA kernel while retaining nftables kernel support.
+if command -v update-alternatives >/dev/null 2>&1; then
+    update-alternatives --set iptables /usr/sbin/iptables-legacy || true
+    update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy || true
+    update-alternatives --set arptables /usr/sbin/arptables-legacy || true
+    update-alternatives --set ebtables /usr/sbin/ebtables-legacy || true
+fi
+
 
 sudo chown -R "$(id -u):$(id -g)" "${ROOTFS_DIR}"
 
