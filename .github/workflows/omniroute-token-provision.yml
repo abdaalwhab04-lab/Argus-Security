@@ -1,5 +1,5 @@
 name: OmniRoute Token Provision
-# Provision workflow: trigger a fresh run for live runner verification.
+# Provision workflow: run token provisioning directly on the self-hosted OmniRoute runner.
 
 on:
   workflow_dispatch:
@@ -11,11 +11,6 @@ jobs:
     runs-on: [self-hosted, termux, ARM64]
     timeout-minutes: 15
     steps:
-      - name: Checkout OmniRoute branch
-        uses: actions/checkout@v4
-        with:
-          ref: omniroute-v3.8.50-integration
-
       - name: Verify job execution context
         run: |
           set -euo pipefail
@@ -56,11 +51,7 @@ jobs:
             exit 1
           fi
 
-          status=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 \
-            -X POST http://127.0.0.1:20128/api/keys \
-            -H 'Content-Type: application/json' \
-            -H "x-omniroute-internal-service-token: $OMNIROUTE_INTERNAL_SERVICE_TOKEN" \
-            --data '{"name":"argus-token-auth-check","scopes":["chat"]}' || true)
+          status=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10             -X POST http://127.0.0.1:20128/api/keys             -H 'Content-Type: application/json'             -H "x-omniroute-internal-service-token: $OMNIROUTE_INTERNAL_SERVICE_TOKEN"             --data '{"name":"argus-token-auth-check","scopes":["chat"]}' || true)
 
           case "$status" in
             201) echo "Internal service authentication: OK (source: $TOKEN_SOURCE)" ;;
@@ -94,11 +85,7 @@ jobs:
           printf '[]' > "$TMP"
           chmod 600 "$TMP"
           for name in argus-chat-1 argus-chat-2 argus-chat-3; do
-            response=$(curl -fsS --max-time 30 \
-              -X POST http://127.0.0.1:20128/api/keys \
-              -H 'Content-Type: application/json' \
-              -H "x-omniroute-internal-service-token: $OMNIROUTE_INTERNAL_SERVICE_TOKEN" \
-              --data "{\"name\":\"$name\",\"scopes\":[\"chat\"]}")
+            response=$(curl -fsS --max-time 30               -X POST http://127.0.0.1:20128/api/keys               -H 'Content-Type: application/json'               -H "x-omniroute-internal-service-token: $OMNIROUTE_INTERNAL_SERVICE_TOKEN"               --data "{\"name\":\"$name\",\"scopes\":[\"chat\"]}")
             node -e 'const x=JSON.parse(process.argv[1]); if(!x.key||!x.id||!String(x.key).startsWith("sk-")) process.exit(1);' "$response"
             node -e 'const fs=require("fs"); const x=JSON.parse(process.argv[1]); const p=process.argv[2]; const a=JSON.parse(fs.readFileSync(p,"utf8")); a.push({name:x.name,id:x.id,key:x.key}); fs.writeFileSync(p,JSON.stringify(a,null,2));' "$response" "$TMP"
           done
