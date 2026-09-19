@@ -1,0 +1,71 @@
+name: Argus NEXORA Linux Test
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - omniroute-v3.8.50-integration
+
+permissions:
+  contents: read
+
+jobs:
+  nexora:
+    name: Build and boot NEXORA
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential bc bison flex libssl-dev libelf-dev libdw-dev cpio gzip xorriso grub-pc-bin grub-efi-amd64-bin grub-efi-amd64 mtools rsync busybox-static qemu-system-x86 debootstrap
+      - name: Check host Docker
+        run: |
+          docker --version
+          docker info
+          echo NEXORA_HOST_DOCKER_OK
+      - name: Build RootFS
+        run: bash nexora/scripts/build-rootfs.sh
+      - name: Build Kernel
+        run: bash nexora/scripts/build-kernel.sh
+      - name: Build Initramfs
+        run: bash nexora/scripts/build-initramfs.sh
+      - name: Build ISO
+        run: bash nexora/scripts/build-iso.sh
+      - name: Verify artifacts
+        run: |
+          test -s nexora/build/linux-6.12.50/arch/x86/boot/bzImage
+          test -s nexora/build/nexora-initramfs.cpio.gz
+          test -s nexora/build/output/nexora.iso
+          file nexora/build/linux-6.12.50/arch/x86/boot/bzImage
+          file nexora/build/nexora-initramfs.cpio.gz
+          file nexora/build/output/nexora.iso
+          echo NEXORA_ARTIFACTS_OK
+      - name: Boot NEXORA with QEMU
+        run: |
+          mkdir -p output
+          set +e
+          timeout 90s qemu-system-x86_64 -m 1536 -machine q35 -display none -serial stdio -cdrom nexora/build/output/nexora.iso -no-reboot 2>&1 | tee output/nexora-qemu-boot.log
+          QEMU_RC=$${PIPESTATUS[0]}
+          set -e
+          echo "QEMU_RC=$${QEMU_RC}"
+          grep -q "NEXORA_BOOT_OK" output/nexora-qemu-boot.log
+          grep -q "NEXORA_DEBIAN_ROOTFS_FOUND" output/nexora-qemu-boot.log
+          grep -q "NEXORA_DOCKER_STORAGE_OK" output/nexora-qemu-boot.log
+          grep -q "NEXORA_DOCKER_OK" output/nexora-qemu-boot.log
+          grep -q "NEXORA_DOCKER_CONTAINER_OK" output/nexora-qemu-boot.log
+          grep -q "NEXORA_DEBIAN_USERSPACE_OK" output/nexora-qemu-boot.log
+          echo NEXORA_QEMU_BOOT_OK
+      - name: Upload NEXORA artifacts
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: nexora-build
+          path: |
+            nexora/build/output/nexora.iso
+            nexora/build/linux-6.12.50/arch/x86/boot/bzImage
+            nexora/build/nexora-initramfs.cpio.gz
+            output/nexora-qemu-boot.log
+          if-no-files-found: warn
