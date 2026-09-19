@@ -1,0 +1,152 @@
+/**
+ * @license
+ * Copyright 2025 Google LLC
+ * Portions Copyright 2025 TerminaI Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import { AuthType, applyTerminaiEnvAliases } from '@terminai/core';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { validateAuthMethod } from './auth.js';
+import { loadSettings } from './settings.js';
+
+vi.mock('./settings.js', () => ({
+  loadEnvironment: vi.fn(),
+  loadSettings: vi.fn(),
+}));
+
+describe('validateAuthMethod', () => {
+  const mockedLoadSettings = vi.mocked(loadSettings);
+
+  beforeEach(() => {
+    vi.stubEnv('GEMINI_API_KEY', undefined);
+    vi.stubEnv('GOOGLE_CLOUD_PROJECT', undefined);
+    vi.stubEnv('GOOGLE_CLOUD_LOCATION', undefined);
+    vi.stubEnv('GOOGLE_API_KEY', undefined);
+    vi.stubEnv('OPENAI_API_KEY', undefined);
+
+    mockedLoadSettings.mockReturnValue({ merged: {} } as never);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it.each([
+    {
+      description: 'should return null for LOGIN_WITH_GOOGLE',
+      authType: AuthType.LOGIN_WITH_GOOGLE,
+      envs: {},
+      expected: null,
+    },
+    {
+      description: 'should return null for COMPUTE_ADC',
+      authType: AuthType.COMPUTE_ADC,
+      envs: {},
+      expected: null,
+    },
+    {
+      description: 'should return null for USE_GEMINI if GEMINI_API_KEY is set',
+      authType: AuthType.USE_GEMINI,
+      envs: { GEMINI_API_KEY: 'test-key' },
+      expected: null,
+    },
+    {
+      description:
+        'should return an error message for USE_GEMINI if GEMINI_API_KEY is not set',
+      authType: AuthType.USE_GEMINI,
+      envs: {},
+      expected:
+        'When using Gemini API, you must specify the GEMINI_API_KEY environment variable.\n' +
+        'Update your environment and try again (no reload needed if using .env)!',
+    },
+    {
+      description:
+        'should return null for USE_VERTEX_AI if GOOGLE_CLOUD_PROJECT and GOOGLE_CLOUD_LOCATION are set',
+      authType: AuthType.USE_VERTEX_AI,
+      envs: {
+        GOOGLE_CLOUD_PROJECT: 'test-project',
+        GOOGLE_CLOUD_LOCATION: 'test-location',
+      },
+      expected: null,
+    },
+    {
+      description:
+        'should return null for USE_VERTEX_AI if GOOGLE_API_KEY is set',
+      authType: AuthType.USE_VERTEX_AI,
+      envs: { GOOGLE_API_KEY: 'test-api-key' },
+      expected: null,
+    },
+    {
+      description:
+        'should return an error message for USE_VERTEX_AI if no required environment variables are set',
+      authType: AuthType.USE_VERTEX_AI,
+      envs: {},
+      expected:
+        'When using Vertex AI, you must specify either:\n' +
+        '• GOOGLE_CLOUD_PROJECT and GOOGLE_CLOUD_LOCATION environment variables.\n' +
+        '• GOOGLE_API_KEY environment variable (if using express mode).\n' +
+        'Update your environment and try again (no reload needed if using .env)!',
+    },
+    {
+      description: 'should return an error message for an invalid auth method',
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      authType: 'invalid-method' as any,
+      envs: {},
+      expected: 'Invalid auth method selected.',
+    },
+  ])('$description', ({ authType, envs, expected }) => {
+    for (const [key, value] of Object.entries(envs)) {
+      vi.stubEnv(key, value as string);
+    }
+    expect(validateAuthMethod(authType)).toBe(expected);
+  });
+
+  it('should allow authentication using TERMINAI_API_KEY via aliasing', () => {
+    vi.stubEnv('TERMINAI_API_KEY', 'test-terminai-key');
+    // We strictly need to simulate the side-effect here because process.env is stubbed
+    // The real app imports './utils/envAliases.js' which calls this:
+    applyTerminaiEnvAliases();
+
+    expect(process.env['GEMINI_API_KEY']).toBe('test-terminai-key');
+    expect(validateAuthMethod(AuthType.USE_GEMINI)).toBe(null);
+  });
+
+  it('should require llm.provider=openai_compatible for USE_OPENAI_COMPATIBLE', () => {
+    mockedLoadSettings.mockReturnValue({ merged: { llm: {} } } as never);
+    expect(validateAuthMethod(AuthType.USE_OPENAI_COMPATIBLE)).toContain(
+      'llm.provider',
+    );
+  });
+
+  it('should require baseUrl/model for USE_OPENAI_COMPATIBLE', () => {
+    mockedLoadSettings.mockReturnValue({
+      merged: { llm: { provider: 'openai_compatible', openaiCompatible: {} } },
+    } as never);
+    expect(validateAuthMethod(AuthType.USE_OPENAI_COMPATIBLE)).toContain(
+      'llm.openaiCompatible.baseUrl',
+    );
+  });
+
+  it('should require OPENAI_API_KEY when auth.type is bearer', () => {
+    mockedLoadSettings.mockReturnValue({
+      merged: {
+        llm: {
+          provider: 'openai_compatible',
+          openaiCompatible: {
+            baseUrl: 'https://openrouter.ai/api/v1',
+            model: 'openai/gpt-oss-120b:free',
+            auth: { type: 'bearer', envVarName: 'OPENAI_API_KEY' },
+          },
+        },
+      },
+    } as never);
+
+    expect(validateAuthMethod(AuthType.USE_OPENAI_COMPATIBLE)).toContain(
+      'OPENAI_API_KEY',
+    );
+
+    vi.stubEnv('OPENAI_API_KEY', 'sk-test');
+    expect(validateAuthMethod(AuthType.USE_OPENAI_COMPATIBLE)).toBe(null);
+  });
+});

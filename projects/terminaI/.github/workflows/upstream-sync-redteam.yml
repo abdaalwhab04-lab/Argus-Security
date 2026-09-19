@@ -1,0 +1,152 @@
+name: Upstream Sync Red-Team Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+    paths:
+      - 'docs-terminai/upstream-merges/**_drafter.md'
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  red-team-review:
+    runs-on: ubuntu-latest
+    if: contains(github.event.pull_request.labels.*.name, 'upstream-sync')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.head_ref }}
+
+      - name: Find Drafter Plan
+        id: find-plan
+        run: |
+          PLAN="$(
+            find docs-terminai/upstream-merges -maxdepth 1 -type f -name '*_drafter.md' -printf '%T@ %p\n' 2>/dev/null \
+              | sort -nr \
+              | head -1 \
+              | cut -d' ' -f2-
+          )"
+          echo "plan_file=$PLAN" >> "$GITHUB_OUTPUT"
+          echo "Found drafter plan: $PLAN"
+
+      - name: Create Red-Team Issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const planFile = '${{ steps.find-plan.outputs.plan_file }}';
+            const today = new Date().toISOString().split('T')[0];
+            const month = new Date().toLocaleString('default', { month: 'short' });
+            const day = new Date().getDate().toString().padStart(2, '0');
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `[Upstream Sync] Week of ${month}${day} - RED-TEAM`,
+              body: `## Red-Team Agent Mission
+
+            **Your role:** Assume the drafter made mistakes. Find them. Quality >> Speed >> Cost.
+
+            **Drafter plan:** \`${planFile}\`
+            **PR:** #${{ github.event.pull_request.number }}
+
+            ---
+
+            ## Required Reading
+
+            - [\`docs-terminai/UPSTREAM_SCRUB_RULES.md\`](../docs-terminai/UPSTREAM_SCRUB_RULES.md) — Deep scrub rules
+            - The drafter's merge plan file
+
+            ---
+
+            ## Red-Team Process
+
+            ### 1. Classification Challenges
+
+            For each 🟢 LEVERAGE commit:
+            - [ ] Verify no import chain touches CANON modules
+            - [ ] Verify no user-facing strings need rebranding
+            - [ ] Verify no hidden dependencies
+
+            For each 🔴 CANON commit:
+            - [ ] Read the actual upstream diff (not just drafter's summary)
+            - [ ] Verify "upstream intent" is correctly captured
+            - [ ] Verify our approach fully addresses the intent
+            - [ ] Look for edge cases drafter missed
+
+            For each ⚪ SKIP commit:
+            - [ ] Verify it's truly irrelevant
+            - [ ] Check it's not a security fix in disguise
+
+            ### 2. Architecture Attacks
+
+            For each architecture spec:
+            - [ ] Can this implementation bypass Approval Ladder?
+            - [ ] Are type signatures compatible with existing code?
+            - [ ] Is testing strategy sufficient for edge cases?
+            - [ ] Are there race conditions or state management issues?
+
+            ### 3. Task List Attacks
+
+            - [ ] Are prerequisites correctly ordered?
+            - [ ] Any circular dependencies between tasks?
+            - [ ] Are code snippets syntactically valid?
+            - [ ] Do all file paths exist (or marked [NEW])?
+            - [ ] Are "definition of done" checks actually verifiable?
+
+            ### 4. Verification Commands
+
+            Run these to validate drafter claims:
+            \`\`\`bash
+            # Verify all mentioned file paths exist
+            for file in $(grep -oP 'packages/[a-zA-Z0-9/_.-]+\\.ts' ${planFile}); do
+              ls "$file" 2>/dev/null || echo "MISSING: $file"
+            done
+
+            # Verify commit hashes exist
+            for hash in $(grep -oP '[a-f0-9]{7,40}' ${planFile} | sort -u); do
+              git cat-file -t "$hash" 2>/dev/null || echo "BAD HASH: $hash"
+            done
+            \`\`\`
+
+            ### 5. Worst Case Analysis
+
+            What happens if we execute this plan blindly and it's wrong?
+            - What's the maximum damage?
+            - How would we detect the problem?
+            - What's the rollback path?
+
+            ---
+
+            ## Output
+
+            Edit the drafter's plan file and complete Section 4 (Red-Team Review):
+            - Issues Found table
+            - Hardening Applied
+            - Red-Team Verdict (PASS / PASS WITH AMENDMENTS / REVISE / REJECT)
+
+            If verdict is REVISE or REJECT:
+            - Create new issue for drafter with specific issues to fix
+            - Do NOT approve PR
+
+            If verdict is PASS or PASS WITH AMENDMENTS:
+            - Commit your changes to the plan file
+            - Add comment to PR: "Red-Team review complete. Ready for local review."
+
+            ---
+
+            ## Quality Standards
+
+            - Be adversarial but constructive
+            - Every issue must have a specific fix recommendation
+            - Don't nitpick formatting; focus on correctness
+            - When you find something wrong, verify your finding is actually correct
+            `,
+              labels: ['upstream-sync', 'red-team']
+            });
+
+            console.log('Red-team issue created');

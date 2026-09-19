@@ -1,0 +1,251 @@
+{
+  "main": {
+    "id": "cf7c1daa2a2af76f",
+    "type": "split",
+    "children": [
+      {
+        "id": "78792f7b1afe9692",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "679bc035dcce914a",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "README.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "README"
+            }
+          },
+          {
+            "id": "726b256b2a615ff2",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "Untitled.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "Untitled"
+            }
+          }
+        ],
+        "currentTab": 1
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "95be470150e6cd38",
+    "type": "split",
+    "children": [
+      {
+        "id": "ad6d08deb22cc4fd",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "1291650a3c43d162",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Files"
+            }
+          },
+          {
+            "id": "777a77de61f4ed2e",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Search"
+            }
+          },
+          {
+            "id": "f3c85be5300a8242",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Bookmarks"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "right": {
+    "id": "a6a4109701045f30",
+    "type": "split",
+    "children": [
+      {
+        "id": "7674e34c0d7b114e",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "c20f7065433c879e",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "tasks.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Backlinks for tasks"
+            }
+          },
+          {
+            "id": "8f31c6ea41d14612",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "tasks.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Outgoing links from tasks"
+            }
+          },
+          {
+            "id": "14a4836367819d2f",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Tags"
+            }
+          },
+          {
+            "id": "ef68df208b0fd333",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "All properties"
+            }
+          },
+          {
+            "id": "eea31c7a86e0b1d9",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "tasks.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Outline of tasks"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Open quick switcher": false,
+      "graph:Open graph view": false,
+      "canvas:Create new canvas": false,
+      "daily-notes:Open today's daily note": false,
+      "templates:Insert template": false,
+      "command-palette:Open command palette": false,
+      "bases:Create new base": false
+    }
+  },
+  "active": "726b256b2a615ff2",
+  "lastOpenFiles": [
+    "local/auth_linux_windows_review_output_antigravity2.md",
+    "local/auth_linux_windows_review_output_antigravity.md",
+    "local/auth_linux_windows_review_output_antigravity 1.md",
+    "windsurf-stable.gpg",
+    "hi",
+    "local/auth_linux_windows_skills.md",
+    "opencode/turbo.json",
+    "opencode/tsconfig.json",
+    "opencode/themes/undertale.json",
+    "opencode/themes/deltarune.json",
+    "opencode/themes",
+    "opencode/sst.config.ts",
+    "opencode/sst-env.d.ts",
+    "opencode/specs/project.md",
+    "opencode/specs/perf-roadmap.md",
+    "opencode/specs/05-modularize-and-dedupe.md",
+    "opencode/specs/04-scroll-spy-optimization.md",
+    "opencode/specs/03-request-throttling.md",
+    "opencode/specs/02-cache-eviction.md",
+    "opencode/specs/01-persist-payload-limits.md",
+    "opencode/specs",
+    "opencode/sdks/vscode/README.md",
+    "opencode/packages/opencode/src/provider/sdk/openai-compatible/src/README.md",
+    "opencode/packages/desktop/src-tauri/icons/prod/android/mipmap-xxxhdpi/ic_launcher_round.png",
+    "opencode/packages/desktop/src-tauri/icons/prod/android/mipmap-xxxhdpi/ic_launcher_foreground.png",
+    "opencode/packages/desktop/src-tauri/icons/prod/android/mipmap-xxxhdpi/ic_launcher.png",
+    "opencode/packages/desktop/src-tauri/icons/prod/android/mipmap-xxhdpi/ic_launcher_round.png",
+    "opencode/packages/desktop/src-tauri/icons/prod/android/mipmap-xxhdpi/ic_launcher_foreground.png",
+    "opencode/packages/desktop/src-tauri/icons/prod/android/mipmap-xxhdpi/ic_launcher.png",
+    "opencode/packages/desktop/src-tauri/icons/prod/android/mipmap-xhdpi/ic_launcher_round.png",
+    "opencode/packages/desktop/src-tauri/icons/prod/android/mipmap-xhdpi/ic_launcher_foreground.png",
+    "opencode/packages/desktop/src-tauri/icons/prod/android/mipmap-xhdpi/ic_launcher.png",
+    "opencode/packages/desktop/src-tauri/icons/prod/android/mipmap-mdpi/ic_launcher_round.png",
+    "opencode/packages/opencode/test/config/fixtures/no-frontmatter.md",
+    "opencode/packages/opencode/test/config/fixtures/frontmatter.md",
+    "opencode/packages/opencode/test/config/fixtures/empty-frontmatter.md",
+    "opencode/packages/opencode/src/acp/README.md",
+    "opencode/packages/desktop/src-tauri/icons/README.md",
+    "opencode/packages/console/app/README.md",
+    "opencode/packages/web/README.md",
+    "opencode/packages/slack/README.md",
+    "opencode/packages/opencode/README.md",
+    "opencode/packages/opencode/AGENTS.md",
+    "opencode/packages/docs/README.md",
+    "opencode/packages/enterprise/README.md",
+    "opencode/packages/app/README.md"
+  ]
+}

@@ -1,0 +1,269 @@
+/**
+ * @license
+ * Copyright 2025 Google LLC
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+import { execSync } from 'node:child_process';
+import {
+  chmodSync,
+  existsSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { join } from 'node:path';
+import os from 'node:os';
+import yargs from 'yargs';
+import { hideBin } from 'yargs/helpers';
+import cliPkgJson from '../packages/cli/package.json' with { type: 'json' };
+
+const argv = yargs(hideBin(process.argv))
+  .option('s', {
+    alias: 'skip-npm-install-build',
+    type: 'boolean',
+    default: false,
+    description: 'skip npm install + npm run build',
+  })
+  .option('f', {
+    alias: 'dockerfile',
+    type: 'string',
+    default: 'packages/sandbox-image/Dockerfile',
+    description: 'use <dockerfile> for custom image',
+  })
+  .option('i', {
+    alias: 'image',
+    type: 'string',
+    default: cliPkgJson.config.sandboxImageUri,
+    description: 'use <image> name for custom image',
+  })
+  .option('output-file', {
+    type: 'string',
+    description:
+      'Path to write the final image URI. Used for CI/CD pipeline integration.',
+  })
+  .option('skip-sandbox', {
+    type: 'boolean',
+    default: false,
+    description: 'Skip sandbox image build and tests',
+  })
+  .option('require-sandbox', {
+    type: 'boolean',
+    default: false,
+    description: 'Fail if sandbox image build cannot run',
+  }).argv;
+
+const skipSandbox =
+  argv['skip-sandbox'] ||
+  process.env.TERMINAI_SKIP_SANDBOX === '1' ||
+  process.env.TERMINAI_SKIP_SANDBOX === 'true';
+const requireSandbox =
+  argv['require-sandbox'] ||
+  process.env.TERMINAI_REQUIRE_SANDBOX === '1' ||
+  process.env.TERMINAI_REQUIRE_SANDBOX === 'true';
+
+if (skipSandbox) {
+  console.warn('Skipping sandbox image build (skip-sandbox enabled).');
+  process.exit(0);
+}
+
+let sandboxCommand;
+try {
+  sandboxCommand = execSync('node scripts/sandbox_command.js')
+    .toString()
+    .trim();
+} catch (e) {
+  console.warn('ERROR: could not detect sandbox container command');
+  console.error(e);
+  if (requireSandbox) {
+    process.exit(1);
+  }
+  console.warn('Skipping sandbox image build.');
+  process.exit(0);
+}
+
+if (sandboxCommand === 'sandbox-exec') {
+  console.warn(
+    'WARNING: container-based sandboxing is disabled (see README.md#sandboxing)',
+  );
+  if (requireSandbox) {
+    process.exit(1);
+  }
+  process.exit(0);
+}
+
+console.log(`using ${sandboxCommand} for sandboxing`);
+
+const image = argv.i;
+const dockerFile = argv.f;
+
+if (!image.length) {
+  console.warn(
+    'No default image tag specified in gemini-cli/packages/cli/package.json',
+  );
+}
+
+if (!argv.s) {
+  execSync('npm install', { stdio: 'inherit' });
+  execSync('npm run build --workspaces', { stdio: 'inherit' });
+}
+
+console.log('packing @terminai/cli ...');
+const cliPackageDir = join('packages', 'cli');
+rmSync(join(cliPackageDir, 'dist', 'terminai-cli-*.tgz'), { force: true });
+execSync(`npm pack -w @terminai/cli --pack-destination ./packages/cli/dist`, {
+  stdio: 'ignore',
+});
+
+console.log('packing @terminai/core ...');
+const corePackageDir = join('packages', 'core');
+rmSync(join(corePackageDir, 'dist', 'terminai-core-*.tgz'), {
+  force: true,
+});
+execSync(`npm pack -w @terminai/core --pack-destination ./packages/core/dist`, {
+  stdio: 'ignore',
+});
+
+const cliPackageVersion = JSON.parse(
+  readFileSync(join(cliPackageDir, 'package.json'), 'utf-8'),
+).version;
+
+const corePackageVersion = JSON.parse(
+  readFileSync(join(corePackageDir, 'package.json'), 'utf-8'),
+).version;
+
+chmodSync(
+  join(cliPackageDir, 'dist', `terminai-cli-${cliPackageVersion}.tgz`),
+  0o755,
+);
+chmodSync(
+  join(corePackageDir, 'dist', `terminai-core-${corePackageVersion}.tgz`),
+  0o755,
+);
+
+const buildStdout = process.env.VERBOSE ? 'inherit' : 'ignore';
+
+// Determine the appropriate shell based on OS
+const isWindows = os.platform() === 'win32';
+const shellToUse = isWindows ? 'powershell.exe' : '/bin/bash';
+
+function buildImage(imageName, dockerfile) {
+  console.log(`building ${imageName} ... (can be slow first time)`);
+
+  let buildCommandArgs = '';
+  let tempAuthFile = '';
+
+  if (sandboxCommand === 'podman') {
+    if (isWindows) {
+      // PowerShell doesn't support <() process substitution.
+      // Create a temporary auth file that we will clean up after.
+      tempAuthFile = join(os.tmpdir(), `gemini-auth-${Date.now()}.json`);
+      writeFileSync(tempAuthFile, '{}');
+      buildCommandArgs = `--authfile="${tempAuthFile}"`;
+    } else {
+      // Use bash-specific syntax for Linux/macOS
+      buildCommandArgs = `--authfile=<(echo '{}')`;
+    }
+  }
+
+  const npmPackageVersion = JSON.parse(
+    readFileSync(join(process.cwd(), 'package.json'), 'utf-8'),
+  ).version;
+
+  const imageTag =
+    process.env.TERMINAI_SANDBOX_IMAGE_TAG ||
+    process.env.GEMINI_SANDBOX_IMAGE_TAG ||
+    imageName.split(':')[1];
+  const finalImageName = `${imageName.split(':')[0]}:${imageTag}`;
+
+  try {
+    execSync(
+      `${sandboxCommand} build ${buildCommandArgs} ${
+        process.env.BUILD_SANDBOX_FLAGS || ''
+      } --build-arg CLI_VERSION_ARG=${npmPackageVersion} -f "${dockerfile}" -t "${finalImageName}" .`,
+      { stdio: buildStdout, shell: shellToUse },
+    );
+    console.log(`built ${finalImageName}`);
+
+    // If an output file path was provided via command-line, write the final image URI to it.
+    if (argv.outputFile) {
+      console.log(
+        `Writing final image URI for CI artifact to: ${argv.outputFile}`,
+      );
+      // The publish step only supports one image. If we build multiple, only the last one
+      // will be published. Throw an error to make this failure explicit if the file already exists.
+      if (existsSync(argv.outputFile)) {
+        throw new Error(
+          `CI artifact file ${argv.outputFile} already exists. Refusing to overwrite.`,
+        );
+      }
+      writeFileSync(argv.outputFile, finalImageName);
+    }
+  } finally {
+    // If we created a temp file, delete it now.
+    if (tempAuthFile) {
+      rmSync(tempAuthFile, { force: true });
+    }
+  }
+}
+
+function testImage(imageName) {
+  console.log(`Testing ${imageName} contract compliance...`);
+
+  // Run pytest inside the container
+  execSync(
+    `${sandboxCommand} run --rm ${imageName} ` +
+      `python3 -m pytest /opt/terminai/tests --tb=short`,
+    { stdio: 'inherit' },
+  );
+
+  // Run contract checks script
+  execSync(
+    `${sandboxCommand} run --rm ${imageName} ` +
+      `/opt/terminai/contract_checks.sh`,
+    { stdio: 'inherit' },
+  );
+
+  console.log(`Contract tests passed ✓`);
+
+  // Generate SBOM if syft is available
+  try {
+    const hasSyft = execSync('command -v syft || true').toString().trim();
+    if (hasSyft) {
+      console.log(`Generating SBOM for ${imageName}...`);
+      execSync(`syft ${imageName} -o cyclonedx-json > sbom.json`, {
+        stdio: 'inherit',
+      });
+      console.log(`SBOM generated: sbom.json`);
+    }
+  } catch (e) {
+    console.warn(`Warning: SBOM generation failed: ${e.message}`);
+  }
+}
+
+function buildAndTest(image, dockerFile) {
+  buildImage(image, dockerFile);
+  testImage(image);
+}
+
+buildAndTest(image, dockerFile);
+
+// Only prune images if explicitly requested or in CI.
+// This avoids surprising local dev workflows where pruning may remove unrelated images.
+if (process.env.TERMINAI_SANDBOX_PRUNE === '1' || process.env.CI === 'true') {
+  console.log('Pruning unused images...');
+  execSync(`${sandboxCommand} image prune -f`, { stdio: 'ignore' });
+}

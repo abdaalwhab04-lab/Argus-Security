@@ -1,0 +1,86 @@
+name: 'Release to npm'
+
+on:
+  release:
+    types: ['published']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v1.0.0) - required for preflight validation'
+        required: true
+      npm_tag:
+        description: 'npm dist-tag (e.g. latest, beta)'
+        required: true
+        default: 'latest'
+
+jobs:
+  build-and-publish:
+    runs-on: 'ubuntu-latest'
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+    steps:
+      - uses: 'actions/checkout@v4'
+
+      - uses: 'actions/setup-node@v4'
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: 'Install Dependencies'
+        run: 'npm ci'
+
+      - name: 'Determine Release Tag'
+        id: release-tag
+        run: |
+          if [ "${{ github.event_name }}" == "release" ]; then
+            TAG="${{ github.event.release.tag_name }}"
+          else
+            TAG="${{ github.event.inputs.tag }}"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Release tag: $TAG"
+
+      - name: 'Release Preflight - Assert Versions'
+        run: 'node scripts/releasing/assert-release-version.js --tag "${{ steps.release-tag.outputs.tag }}"'
+
+      - name: 'Release Preflight - Pin Internal Dependencies'
+        run: |
+          node scripts/releasing/pin-internal-deps.js
+          node scripts/releasing/pin-internal-deps.js --check
+
+      - name: 'Build'
+        run: 'npm run build'
+
+      - name: 'Run Tests'
+        run: 'npm run test:ci'
+        env:
+          NO_COLOR: true
+
+      - name: 'Release Preflight - Dry Run Pack'
+        run: |
+          echo "::group::Pack @terminai/core"
+          npm pack --workspace @terminai/core --dry-run
+          echo "::endgroup::"
+          echo "::group::Pack @terminai/a2a-server"
+          npm pack --workspace @terminai/a2a-server --dry-run
+          echo "::endgroup::"
+          echo "::group::Pack @terminai/cli"
+          npm pack --workspace @terminai/cli --dry-run
+          echo "::endgroup::"
+
+      # Publish in dependency order: core → a2a-server → cli
+      - name: 'Publish @terminai/core'
+        run: "npm publish -w @terminai/core --tag ${{ github.event.inputs.npm_tag || 'latest' }} --access public"
+        env:
+          NODE_AUTH_TOKEN: '${{ secrets.NPM_TOKEN }}'
+
+      - name: 'Publish @terminai/a2a-server'
+        run: "npm publish -w @terminai/a2a-server --tag ${{ github.event.inputs.npm_tag || 'latest' }} --access public"
+        env:
+          NODE_AUTH_TOKEN: '${{ secrets.NPM_TOKEN }}'
+
+      - name: 'Publish @terminai/cli'
+        run: "npm publish -w @terminai/cli --tag ${{ github.event.inputs.npm_tag || 'latest' }} --access public"
+        env:
+          NODE_AUTH_TOKEN: '${{ secrets.NPM_TOKEN }}'

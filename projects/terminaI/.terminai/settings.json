@@ -1,0 +1,10 @@
+{
+  "security": {
+    "auth": {}
+  },
+  "llm": {},
+  "telemetry": {
+    "useCollector": true
+  },
+  "sandbox": false
+}

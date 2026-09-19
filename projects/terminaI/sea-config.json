@@ -1,0 +1,10 @@
+{
+  "main": "scripts/sea_loader.cjs",
+  "output": "packages/desktop/src-tauri/resources/terminai.blob",
+  "disableExperimentalSEAWarning": true,
+  "useSnapshot": false,
+  "useCodeCache": false,
+  "assets": {
+    "terminai_cli.mjs": "packages/desktop/src-tauri/resources/terminai_cli.mjs"
+  }
+}

@@ -1,0 +1,164 @@
+name: Weekly Upstream Sync
+
+on:
+  schedule:
+    - cron: '0 3 * * THU' # Thursday 3 AM UTC
+  workflow_dispatch: # Manual trigger
+
+permissions:
+  issues: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  # Phase 1: Drafter Agent
+  trigger-drafter:
+    runs-on: ubuntu-latest
+    outputs:
+      issue_number: ${{ steps.create-issue.outputs.issue_number }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get Last Synced Hash
+        id: last-sync
+        run: |
+          # Extract last synced hash from absorption-log.md
+          LAST_HASH="$(grep -oP '[a-f0-9]{7,40}' .upstream/absorption-log.md | tail -1 || true)"
+          if [ -z "$LAST_HASH" ]; then
+            LAST_HASH="HEAD~50"
+          fi
+          echo "hash=$LAST_HASH" >> "$GITHUB_OUTPUT"
+
+      - name: Fetch Upstream
+        run: |
+          git remote add upstream https://github.com/google-gemini/gemini-cli.git 2>/dev/null || true
+          git fetch upstream
+
+      - name: Get Commit Range
+        id: commits
+        run: |
+          RANGE="${{ steps.last-sync.outputs.hash }}..upstream/main"
+          COMMITS="$(git log "$RANGE" --oneline | wc -l)"
+          echo "count=$COMMITS" >> "$GITHUB_OUTPUT"
+          echo "range=$RANGE" >> "$GITHUB_OUTPUT"
+
+      - name: Create Issue for Drafter Agent
+        id: create-issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const today = new Date().toISOString().split('T')[0];
+            const month = new Date().toLocaleString('default', { month: 'short' });
+            const day = new Date().getDate().toString().padStart(2, '0');
+
+            const issue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `[Upstream Sync] Week of ${month}${day} - DRAFTER`,
+              body: `## Drafter Agent Mission
+
+            **Your role:** Analyze upstream changes with extreme thoroughness. Quality >> Speed >> Cost.
+
+            **Upstream range:** \`${{ steps.commits.outputs.range }}\`
+            **Commits to analyze:** ${{ steps.commits.outputs.count }}
+
+            ---
+
+            ## Required Reading
+
+            Before starting, read these documents completely:
+            - [\`AGENTS.md\`](../AGENTS.md) — Project identity and golden rules
+            - [\`docs-terminai/FORK_ZONES.md\`](../docs-terminai/FORK_ZONES.md) — Zone classification (CANON/LEVERAGE/SKIP)
+            - [\`docs-terminai/UPSTREAM_SCRUB_RULES.md\`](../docs-terminai/UPSTREAM_SCRUB_RULES.md) — Deep scrub rule set
+
+            ---
+
+            ## Drafter Process
+
+            ### Phase 1: Fetch & Analyze
+            \`\`\`bash
+            git remote add upstream https://github.com/google-gemini/gemini-cli.git 2>/dev/null || true
+            git fetch upstream
+            git log ${{ steps.commits.outputs.range }} --name-only --oneline
+            \`\`\`
+
+            ### Phase 2: Classify Every Commit
+            Apply UPSTREAM_SCRUB_RULES.md to each commit:
+            - 🟢 LEVERAGE: Clean, no overlaps, cherry-pick directly
+            - 🔴 CANON: Overlaps our systems, reimplement intent
+            - 🟡 QUARANTINE: Uncertain, needs human decision
+            - ⚪ SKIP: Irrelevant (telemetry, version bumps)
+
+            **Grounding requirements:**
+            - Before mentioning a file → Run \`ls\` to verify it exists
+            - Before claiming overlap → Run \`grep\` to confirm
+            - Every classification → Must reference real commit hash
+
+            ### Phase 3: Architecture for CANON
+            For each 🔴 CANON commit, write full architecture spec:
+            - Upstream intent analysis
+            - Our system context (with diagram)
+            - Technical specification
+            - Data models
+            - Security considerations
+            - Testing strategy
+
+            ### Phase 4: Atomic Task List
+            For each architecture, write complete task list:
+            - Each task 5-30 minutes
+            - Include code snippets
+            - Include verification commands
+            - Include potential issues
+
+            ---
+
+            ## Output
+
+            Create file: \`docs-terminai/upstream-merges/WeekOf${month}${day}_drafter.md\`
+
+            Use template from: \`docs-terminai/templates/upstream-merge-plan.md\`
+
+            Complete Sections 1-3 (Classification, Architecture, Tasks).
+            Leave Sections 4-5 (Red-Team, Local) empty for next agents.
+
+            ---
+
+            ## Quality Standards
+
+            - Take as long as needed for perfection
+            - Length is acceptable if accurate and complete
+            - Every claim must be verifiable
+            - When in doubt, provide more detail
+            - Mark uncertainty as QUARANTINE, don't guess
+
+            ---
+
+            ## When Complete
+
+            1. Commit the merge plan file
+            2. Open a PR titled: \`[Upstream Sync] Week of ${month}${day}\`
+            3. Assign label: \`upstream-sync\`
+            4. The Red-Team agent will be triggered automatically
+            `,
+              labels: ['upstream-sync', 'drafter']
+            });
+
+            core.setOutput('issue_number', issue.data.number);
+            console.log('Drafter issue created:', issue.data.number);
+
+  # Phase 2: Red-Team Agent (triggered by PR)
+  # This is handled by a separate workflow that triggers on PR with upstream-sync label
+
+  # For manual workflow dispatch, we can trigger both in sequence
+  trigger-redteam:
+    runs-on: ubuntu-latest
+    needs: trigger-drafter
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Wait for Drafter
+        run: |
+          echo "In automated mode, Red-Team triggers on PR creation."
+          echo "For manual testing, check issue #${{ needs.trigger-drafter.outputs.issue_number }}"

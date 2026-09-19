@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# TerminaI CLI Launcher (Shell Wrapper)
+
+# Resolve real directory
+SOURCE=${BASH_SOURCE[0]}
+while [ -L "$SOURCE" ]; do
+  DIR=$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )
+  SOURCE=$(readlink "$SOURCE")
+  [[ $SOURCE != /* ]] && SOURCE=$DIR/$SOURCE
+done
+DIR=$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )
+
+# Check node
+NODE_BIN=$(command -v node)
+if [ -z "$NODE_BIN" ]; then
+    echo "Error: 'node' not found."
+    exit 1
+fi
+
+# Use dist/index.js as entry point
+ENTRY_POINT="$DIR/dist/index.js"
+exec "$NODE_BIN" "$ENTRY_POINT" "$@"
