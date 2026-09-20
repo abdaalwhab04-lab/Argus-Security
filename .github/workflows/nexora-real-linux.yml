@@ -164,31 +164,17 @@ jobs:
               return 1
             fi
 
-            python3 - "${QMP_SOCKET}" <<'PY'
-            import json, socket, sys, time
-            path = sys.argv[1]
-            deadline = time.time() + 10
-            while time.time() < deadline:
-                sock = None
-                try:
-                    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-                    sock.settimeout(3)
-                    sock.connect(path)
-                    sock.recv(65536)
-                    sock.sendall((json.dumps({"execute":"qmp_capabilities"}) + "\r\n").encode())
-                    sock.recv(65536)
-                    sock.sendall((json.dumps({"execute":"system_powerdown"}) + "\r\n").encode())
-                    print("NEXORA_QMP_POWERDOWN_SENT")
-                    sock.close()
-                    break
-                except (FileNotFoundError, ConnectionRefusedError, TimeoutError, OSError):
-                    if sock:
-                        try: sock.close()
-                        except OSError: pass
-                    time.sleep(0.25)
-            else:
-                raise SystemExit("ERROR: unable to connect to NEXORA QMP socket")
-            PY
+            python3 -c 'import json,socket,sys,time; p=sys.argv[1]; d=time.time()+10; ok=False
+while time.time()<d and not ok:
+ s=None
+ try:
+  s=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM); s.settimeout(3); s.connect(p); s.recv(65536); s.sendall((json.dumps({"execute":"qmp_capabilities"})+"\\r\\n").encode()); s.recv(65536); s.sendall((json.dumps({"execute":"system_powerdown"})+"\\r\\n").encode()); ok=True; print("NEXORA_QMP_POWERDOWN_SENT")
+ except (FileNotFoundError,ConnectionRefusedError,TimeoutError,OSError):
+  if s:
+   try:s.close()
+   except OSError:pass
+  time.sleep(.25)
+if not ok: raise SystemExit("ERROR: unable to connect to NEXORA QMP socket")' "${QMP_SOCKET}"
             echo "NEXORA_QMP_POWERDOWN_SENT" >> "${LOG_FILE}"
 
             for _ in $(seq 1 30); do
