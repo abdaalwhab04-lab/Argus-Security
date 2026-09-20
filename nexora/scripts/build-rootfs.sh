@@ -140,10 +140,29 @@ DOCKERTEST
 
 chmod +x "${ROOTFS_DIR}/usr/local/bin/nexora-docker-container-test.sh"
 
-echo "=== Configure NEXORA Docker storage and boot marker ==="
+echo "=== Configure NEXORA persistent Debian environment ==="
 
 mkdir -p "${ROOTFS_DIR}/var/lib/docker"
 mkdir -p "${ROOTFS_DIR}/var/lib/containerd"
+mkdir -p "${ROOTFS_DIR}/persist"
+
+cat > "${ROOTFS_DIR}/usr/local/bin/nexora-persistence-test.sh" <<'PERSISTTEST'
+#!/bin/sh
+set -eu
+
+MARKER="/persist/nexora-persistence-marker"
+
+if [ -f "${MARKER}" ]; then
+    echo "NEXORA_PERSISTENCE_RESTORED" > /dev/console
+else
+    printf '%s\n' "NEXORA_PERSISTENCE_OK" > "${MARKER}"
+    echo "NEXORA_PERSISTENCE_INITIALIZED" > /dev/console
+fi
+
+echo "NEXORA_PERSISTENCE_TEST_DONE" > /dev/console
+PERSISTTEST
+
+chmod +x "${ROOTFS_DIR}/usr/local/bin/nexora-persistence-test.sh"
 
 mkdir -p "${ROOTFS_DIR}/etc/systemd/system/docker.service.d"
 cat > "${ROOTFS_DIR}/etc/systemd/system/docker.service.d/nexora-storage.conf" <<'DROPIN'
@@ -165,7 +184,7 @@ Before=multi-user.target
 
 [Service]
 Type=oneshot
-ExecStart=/bin/sh -c 'echo "=== NEXORA DOCKER STORAGE ===" > /dev/console; test -d /var/lib/docker || exit 1; test -d /var/lib/containerd || exit 1; test -w /var/lib/docker || exit 1; test -w /var/lib/containerd || exit 1; echo NEXORA_DOCKER_STORAGE_OK > /dev/console; systemctl start containerd || true; echo === CONTAINERD STATUS === > /dev/console; systemctl status containerd --no-pager -l > /dev/console 2>&1 || true; echo === CONTAINERD JOURNAL === > /dev/console; journalctl -u containerd -n 50 --no-pager > /dev/console 2>&1 || true; systemctl start docker || true; echo === DOCKER STATUS === > /dev/console; systemctl status docker --no-pager -l > /dev/console 2>&1 || true; echo === DOCKER JOURNAL === > /dev/console; journalctl -u docker -n 50 --no-pager > /dev/console 2>&1 || true; if systemctl is-active --quiet docker && docker info >/dev/null 2>&1; then echo NEXORA_DOCKER_OK > /dev/console; /usr/local/bin/nexora-docker-container-test.sh; else echo NEXORA_DOCKER_FAILED > /dev/console; exit 1; fi; echo NEXORA_DEBIAN_USERSPACE_OK > /dev/console'
+ExecStart=/bin/sh -c 'echo "=== NEXORA DOCKER STORAGE ===" > /dev/console; test -d /var/lib/docker || exit 1; test -d /var/lib/containerd || exit 1; test -w /var/lib/docker || exit 1; test -w /var/lib/containerd || exit 1; echo NEXORA_DOCKER_STORAGE_OK > /dev/console; systemctl start containerd || true; echo === CONTAINERD STATUS === > /dev/console; systemctl status containerd --no-pager -l > /dev/console 2>&1 || true; echo === CONTAINERD JOURNAL === > /dev/console; journalctl -u containerd -n 50 --no-pager > /dev/console 2>&1 || true; systemctl start docker || true; echo === DOCKER STATUS === > /dev/console; systemctl status docker --no-pager -l > /dev/console 2>&1 || true; echo === DOCKER JOURNAL === > /dev/console; journalctl -u docker -n 50 --no-pager > /dev/console 2>&1 || true; if systemctl is-active --quiet docker && docker info >/dev/null 2>&1; then echo NEXORA_DOCKER_OK > /dev/console; /usr/local/bin/nexora-docker-container-test.sh; else echo NEXORA_DOCKER_FAILED > /dev/console; exit 1; fi; /usr/local/bin/nexora-persistence-test.sh; echo NEXORA_DEBIAN_USERSPACE_OK > /dev/console'
 RemainAfterExit=yes
 
 [Install]
