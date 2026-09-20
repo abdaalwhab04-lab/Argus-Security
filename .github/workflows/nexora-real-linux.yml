@@ -161,7 +161,7 @@ jobs:
               return 1
             fi
 
-            if ! python3 -c 'import json,socket,sys; p=sys.argv[1]; s=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM); s.settimeout(10); s.connect(p); s.recv(65536); s.sendall((json.dumps({"execute":"qmp_capabilities"})+"\r\n").encode()); s.recv(65536); s.sendall((json.dumps({"execute":"system_powerdown"})+"\r\n").encode()); print("NEXORA_QMP_POWERDOWN_SENT"); s.close()' "${QMP_SOCKET}"; then
+            if ! python3 -c 'import json,socket,sys,time; p=sys.argv[1]; s=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM); s.settimeout(10); s.connect(p); s.recv(65536); s.sendall((json.dumps({"execute":"qmp_capabilities","id":"caps"})+"\r\n").encode()); b=b""; deadline=time.time()+10;\nwhile b"\"id\": \"caps\"" not in b and time.time()<deadline: b+=s.recv(65536);\ns.sendall((json.dumps({"execute":"system_powerdown","id":"powerdown"})+"\r\n").encode()); print("NEXORA_QMP_POWERDOWN_SENT"); s.close()' "${QMP_SOCKET}"; then
               echo "ERROR: QMP system_powerdown command failed"
               cat "${LOG_FILE}"
               kill -TERM "${QEMU_PID}" 2>/dev/null || true
@@ -179,7 +179,7 @@ jobs:
             if [ "${qemu_exited}" -ne 1 ]; then
               echo "NEXORA_GRACEFUL_SHUTDOWN_TIMEOUT"
               echo "NEXORA_GRACEFUL_SHUTDOWN_TIMEOUT" >> "${LOG_FILE}"
-              if ! python3 -c 'import json,socket,sys; p=sys.argv[1]; s=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM); s.settimeout(10); s.connect(p); s.recv(65536); s.sendall((json.dumps({"execute":"qmp_capabilities"})+"\r\n").encode()); s.recv(65536); s.sendall((json.dumps({"execute":"quit"})+"\r\n").encode()); s.close(); print("NEXORA_QMP_QUIT_SENT")' "${QMP_SOCKET}"; then
+              if ! python3 -c 'import json,socket,sys,time; p=sys.argv[1]; s=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM); s.settimeout(10); s.connect(p); s.recv(65536); s.sendall((json.dumps({"execute":"qmp_capabilities","id":"caps"})+"\r\n").encode()); b=b""; deadline=time.time()+10;\nwhile b"\"id\": \"caps\"" not in b and time.time()<deadline: b+=s.recv(65536);\ns.sendall((json.dumps({"execute":"quit","id":"quit"})+"\r\n").encode()); s.close(); print("NEXORA_QMP_QUIT_SENT")' "${QMP_SOCKET}"; then
                 echo "ERROR: QMP quit command failed"
                 echo "ERROR: QMP quit command failed" >> "${LOG_FILE}"
                 kill -TERM "${QEMU_PID}" 2>/dev/null || true
