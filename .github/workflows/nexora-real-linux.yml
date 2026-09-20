@@ -184,7 +184,7 @@ jobs:
             if qemu_running; then
               echo "NEXORA_GRACEFUL_SHUTDOWN_TIMEOUT"
               echo "NEXORA_GRACEFUL_SHUTDOWN_TIMEOUT" >> "${LOG_FILE}"
-              python3 -c 'import json,socket,sys; p=sys.argv[1]; s=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM); s.settimeout(10); s.connect(p); s.recv(65536); s.sendall((json.dumps({"execute":"quit"})+"\r\n").encode()); print("NEXORA_QMP_QUIT_SENT"); s.close()' "${QMP_SOCKET}"
+              python3 -c 'import json,socket,sys; p=sys.argv[1]; s=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM); s.settimeout(10); s.connect(p); s.recv(65536); s.sendall((json.dumps({"execute":"qmp_capabilities"})+"\r\n").encode()); s.recv(65536); s.sendall((json.dumps({"execute":"quit"})+"\r\n").encode()); print("NEXORA_QMP_QUIT_SENT"); s.close()' "${QMP_SOCKET}"
               echo "NEXORA_QMP_QUIT_SENT" >> "${LOG_FILE}"
               for _ in $(seq 1 10); do
                 if ! qemu_running; then
