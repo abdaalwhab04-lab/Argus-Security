@@ -167,17 +167,21 @@ jobs:
               return 1
             fi
 
-            # QMP shutdown is best-effort. The persistence gate must not fail because
-            # the control socket races with guest shutdown.
-            if python3 -c 'import json,socket,sys; p=sys.argv[1]; s=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM); s.settimeout(5); s.connect(p); f=s.makefile("rwb",buffering=0); f.readline(); f.write((json.dumps({"execute":"qmp_capabilities","id":"caps"})+"\\r\\n").encode()); f.readline(); f.write((json.dumps({"execute":"quit","id":"quit"})+"\\r\\n").encode()); f.readline(); s.close()' "${QMP_SOCKET}"; then
-              echo "NEXORA_QMP_QUIT_SENT" >> "${LOG_FILE}"
+            # QMP is only a graceful-shutdown optimization. It is deliberately
+            # NOT a correctness gate: guest markers and disk sync are the gates.
+            if [ -S "${QMP_SOCKET}" ]; then
+              if python3 -c 'import json,socket,sys,time; p=sys.argv[1]; s=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM); s.settimeout(3); s.connect(p); s.recv(65536); s.sendall((json.dumps({"execute":"qmp_capabilities","id":"caps"})+"\\r\\n").encode()); time.sleep(0.1); s.recv(65536); s.sendall((json.dumps({"execute":"quit","id":"quit"})+"\\r\\n").encode()); s.close()' "${QMP_SOCKET}"; then
+                echo "NEXORA_QMP_QUIT_SENT" >> "${LOG_FILE}"
+              else
+                echo "NEXORA_QMP_QUIT_FAILED" >> "${LOG_FILE}"
+              fi
             else
-              echo "NEXORA_QMP_QUIT_FAILED" >> "${LOG_FILE}"
+              echo "NEXORA_QMP_SOCKET_ABSENT" >> "${LOG_FILE}"
             fi
 
-            # QMP quit is requested, but QEMU is not required to exit synchronously.
-            # Never fail the persistence test solely because the emulator remains alive.
-            for _ in $(seq 1 5); do
+            # Always reclaim QEMU and flush the persistent image, even if QMP
+            # is unavailable or the guest has already exited.
+            for _ in $(seq 1 10); do
               if ! qemu_running; then break; fi
               sleep 1
             done
