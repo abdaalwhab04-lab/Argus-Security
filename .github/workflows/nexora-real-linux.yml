@@ -228,36 +228,62 @@ jobs:
 
           echo "NEXORA_INITRAMFS_INSPECT_DONE"
 
+      - name: Build NEXORA persistent data disk
+        run: |
+          echo "=== Build NEXORA persistent data disk ==="
+          sudo bash nexora/scripts/build-persistent-storage.sh
+          ls -lh nexora/build/persistent-data.img
+          echo "NEXORA_PERSISTENT_DISK_READY"
+
       - name: Boot NEXORA ISO with QEMU
         run: |
           echo "=== NEXORA QEMU BOOT TEST ==="
 
           ISO_IMAGE="nexora/build/output/nexora.iso"
+          PERSISTENT_DISK="nexora/build/persistent-data.img"
           BOOT_LOG="output/nexora-qemu-boot.log"
 
           mkdir -p output
 
-          timeout 60s qemu-system-x86_64 \
+          timeout 40s qemu-system-x86_64 \
             -m 1024 \
             -machine q35 \
             -display none \
             -serial stdio \
             -cdrom "${ISO_IMAGE}" \
+            -drive file="${PERSISTENT_DISK}",format=raw,if=virtio \
             -no-reboot \
-            2>&1 | tee "${BOOT_LOG}" &
+            2>&1 | tee "${BOOT_LOG}" || true
 
-          QEMU_PID=$!
+          echo "=== Check first NEXORA boot markers ==="
 
-          wait "${QEMU_PID}" || true
-
-          echo "=== Check NEXORA boot marker ==="
-
-          if grep -q "NEXORA_BOOT_OK" "${BOOT_LOG}" && grep -q "NEXORA_DEBIAN_ROOTFS_FOUND" "${BOOT_LOG}" && grep -q "NEXORA_ROOTFS_SWITCH" "${BOOT_LOG}" && grep -q "NEXORA_DEBIAN_USERSPACE_OK" "${BOOT_LOG}" && grep -q "NEXORA_DOCKER_CONTAINER_OK" "${BOOT_LOG}"; then
+          if grep -q "NEXORA_BOOT_OK" "${BOOT_LOG}" && grep -q "NEXORA_DEBIAN_ROOTFS_FOUND" "${BOOT_LOG}" && grep -q "NEXORA_PERSISTENT_STORAGE_OK" "${BOOT_LOG}" && grep -q "NEXORA_ROOTFS_SWITCH" "${BOOT_LOG}" && grep -q "NEXORA_DEBIAN_USERSPACE_OK" "${BOOT_LOG}" && grep -q "NEXORA_DOCKER_CONTAINER_OK" "${BOOT_LOG}" && grep -q "NEXORA_PERSISTENCE_INITIALIZED" "${BOOT_LOG}"; then
             echo "NEXORA_QEMU_BOOT_OK"
           else
-            echo "ERROR: NEXORA boot or real Docker container test failed."
-            echo "=== QEMU BOOT LOG ==="
+            echo "ERROR: NEXORA first boot or persistent storage test failed."
             cat "${BOOT_LOG}"
+            exit 1
+          fi
+
+          echo "=== Reboot NEXORA with the same persistent disk ==="
+
+          SECOND_BOOT_LOG="output/nexora-qemu-persistence-reboot.log"
+
+          timeout 40s qemu-system-x86_64 \
+            -m 1024 \
+            -machine q35 \
+            -display none \
+            -serial stdio \
+            -cdrom "${ISO_IMAGE}" \
+            -drive file="${PERSISTENT_DISK}",format=raw,if=virtio \
+            -no-reboot \
+            2>&1 | tee "${SECOND_BOOT_LOG}" || true
+
+          if grep -q "NEXORA_PERSISTENCE_RESTORED" "${SECOND_BOOT_LOG}" && grep -q "NEXORA_DOCKER_CONTAINER_OK" "${SECOND_BOOT_LOG}" && grep -q "NEXORA_DEBIAN_USERSPACE_OK" "${SECOND_BOOT_LOG}"; then
+            echo "NEXORA_PERSISTENCE_REBOOT_OK"
+          else
+            echo "ERROR: persistent data did not survive the second boot."
+            cat "${SECOND_BOOT_LOG}"
             exit 1
           fi
 
