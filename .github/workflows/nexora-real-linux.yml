@@ -131,7 +131,7 @@ jobs:
           mkdir -p "${OUTPUT_DIR}"
 
           run_nexora_boot() {
-            local LOG_FILE="${1}"
+            local LOG_FILE="$1"
             rm -f "${QMP_SOCKET}" "${LOG_FILE}"
             qemu-system-x86_64 \
               -m 1024 -machine q35 -display none -serial stdio \
@@ -143,17 +143,17 @@ jobs:
             qemu_running() {
               if ! kill -0 "${QEMU_PID}" 2>/dev/null; then return 1; fi
               local state
-              state="$(ps -o stat= -p "${QEMU_PID}" 2>/dev/null | tr -d ' ' || true)"
+              state="$(ps -o stat= -p "${QEMU_PID}" 2>/dev/null | tr -d " " || true)"
               [ -n "${state}" ] && [ "${state#Z}" = "${state}" ]
             }
 
             for _ in $(seq 1 90); do
-              if grep -qE 'NEXORA_PERSISTENCE_INITIALIZED|NEXORA_PERSISTENCE_RESTORED' "${LOG_FILE}"; then break; fi
+              if grep -qE "NEXORA_PERSISTENCE_INITIALIZED|NEXORA_PERSISTENCE_RESTORED" "${LOG_FILE}"; then break; fi
               if ! qemu_running; then cat "${LOG_FILE}"; return 1; fi
               sleep 1
             done
 
-            if ! grep -qE 'NEXORA_PERSISTENCE_INITIALIZED|NEXORA_PERSISTENCE_RESTORED' "${LOG_FILE}"; then
+            if ! grep -qE "NEXORA_PERSISTENCE_INITIALIZED|NEXORA_PERSISTENCE_RESTORED" "${LOG_FILE}"; then
               echo "ERROR: persistence marker not reached within 90 seconds"
               cat "${LOG_FILE}"
               kill -TERM "${QEMU_PID}" 2>/dev/null || true
@@ -161,21 +161,18 @@ jobs:
               return 1
             fi
 
-            echo "NEXORA_QMP_SHUTDOWN_START" >> "${LOG_FILE}"
-
-            if python3 -c 'import json,socket,sys,time; p=sys.argv[1]; s=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM); s.settimeout(10); s.connect(p); s.recv(65536); s.sendall((json.dumps({"execute":"qmp_capabilities","id":"caps"})+"\\r\\n").encode()); time.sleep(0.2); s.recv(65536); s.sendall((json.dumps({"execute":"quit","id":"quit"})+"\\r\\n").encode()); s.close()' "${QMP_SOCKET}"; then
-              echo "NEXORA_QMP_QUIT_SENT" >> "${LOG_FILE}"
-            else
+            if ! python3 -c 'import json,socket,sys,time; p=sys.argv[1]; s=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM); s.settimeout(10); s.connect(p); s.recv(65536); s.sendall((json.dumps({"execute":"qmp_capabilities","id":"caps"})+"\\r\\n").encode()); time.sleep(0.2); s.recv(65536); s.sendall((json.dumps({"execute":"quit","id":"quit"})+"\\r\\n").encode()); s.close()' "${QMP_SOCKET}"; then
               echo "NEXORA_QMP_QUIT_FAILED" >> "${LOG_FILE}"
+            else
+              echo "NEXORA_QMP_QUIT_SENT" >> "${LOG_FILE}"
             fi
 
-            qemu_exited=0
             for _ in $(seq 1 20); do
-              if ! qemu_running; then qemu_exited=1; break; fi
+              if ! qemu_running; then break; fi
               sleep 1
             done
 
-            if [ "${qemu_exited}" -ne 1 ]; then
+            if qemu_running; then
               echo "NEXORA_QEMU_TERM_SENT" >> "${LOG_FILE}"
               kill -TERM "${QEMU_PID}" 2>/dev/null || true
               sleep 2
@@ -184,42 +181,6 @@ jobs:
             if qemu_running; then
               echo "NEXORA_QEMU_KILL_SENT" >> "${LOG_FILE}"
               kill -KILL "${QEMU_PID}" 2>/dev/null || true
-            fi
-
-            wait "${QEMU_PID}" 2>/dev/null || true
-              return 1
-            fi
-            echo "NEXORA_QMP_POWERDOWN_SENT" >> "${LOG_FILE}"
-
-            qemu_exited=0
-            for _ in $(seq 1 30); do
-              if ! qemu_running; then qemu_exited=1; break; fi
-              sleep 1
-            done
-
-            if [ "${qemu_exited}" -ne 1 ]; then
-              echo "NEXORA_GRACEFUL_SHUTDOWN_TIMEOUT"
-              echo "NEXORA_GRACEFUL_SHUTDOWN_TIMEOUT" >> "${LOG_FILE}"
-              if ! python3 -c 'import json,socket,sys,time; p=sys.argv[1]; s=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM); s.settimeout(10); s.connect(p); s.recv(65536); s.sendall((json.dumps({"execute":"qmp_capabilities","id":"caps"})+"\r\n").encode()); time.sleep(0.5); s.recv(65536); s.sendall((json.dumps({"execute":"quit","id":"quit"})+"\r\n").encode()); s.close(); print("NEXORA_QMP_QUIT_SENT")' "${QMP_SOCKET}"; then
-                echo "ERROR: QMP quit command failed"
-                echo "ERROR: QMP quit command failed" >> "${LOG_FILE}"
-                kill -TERM "${QEMU_PID}" 2>/dev/null || true
-              fi
-              echo "NEXORA_QMP_QUIT_SENT" >> "${LOG_FILE}"
-
-              qemu_exited=0
-              for _ in $(seq 1 15); do
-                if ! qemu_running; then qemu_exited=1; break; fi
-                sleep 1
-              done
-
-              if [ "${qemu_exited}" -ne 1 ]; then
-                echo "ERROR: QEMU did not exit after QMP quit"
-                echo "ERROR: QEMU did not exit after QMP quit" >> "${LOG_FILE}"
-                kill -TERM "${QEMU_PID}" 2>/dev/null || true
-                sleep 2
-                if qemu_running; then kill -KILL "${QEMU_PID}" 2>/dev/null || true; fi
-              fi
             fi
 
             wait "${QEMU_PID}" 2>/dev/null || true
