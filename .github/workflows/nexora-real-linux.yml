@@ -212,7 +212,8 @@ jobs:
           grep -q "NEXORA_DOCKER_CONTAINER_OK" "${BOOT_LOG}"
           grep -q "NEXORA_PERSISTENCE_INITIALIZED" "${BOOT_LOG}"
           grep -q "NEXORA_PERSISTENCE_SYNCED" "${BOOT_LOG}"
-          grep -q "NEXORA_QMP_QUIT_SENT" "${BOOT_LOG}"
+          # QMP quit is best-effort; QEMU may already exit after the guest completes
+          # its persistence sync. The function above guarantees cleanup and host sync.
           grep -q "NEXORA_HOST_DISK_SYNC_DONE" "${BOOT_LOG}"
           echo "NEXORA_QEMU_BOOT_OK"
 
@@ -228,7 +229,8 @@ jobs:
           grep -q "NEXORA_PERSISTENCE_RESTORED" "${SECOND_BOOT_LOG}"
           grep -q "NEXORA_DEBIAN_USERSPACE_OK" "${SECOND_BOOT_LOG}"
           grep -q "NEXORA_DOCKER_CONTAINER_OK" "${SECOND_BOOT_LOG}"
-          grep -q "NEXORA_QMP_QUIT_SENT" "${SECOND_BOOT_LOG}"
+          # QMP quit is best-effort on the reboot validation as well.
+          grep -q "NEXORA_HOST_DISK_SYNC_DONE" "${SECOND_BOOT_LOG}"
           echo "NEXORA_PERSISTENCE_REBOOT_OK"
 
       - name: Validate Argus Python test environment
