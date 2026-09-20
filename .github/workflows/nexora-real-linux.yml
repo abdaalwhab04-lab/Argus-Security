@@ -165,30 +165,30 @@ jobs:
             fi
 
             python3 - "${QMP_SOCKET}" <<'PY'
-import json, socket, sys, time
-path = sys.argv[1]
-deadline = time.time() + 10
-while time.time() < deadline:
-    sock = None
-    try:
-        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        sock.settimeout(3)
-        sock.connect(path)
-        sock.recv(65536)
-        sock.sendall((json.dumps({"execute":"qmp_capabilities"}) + "\r\n").encode())
-        sock.recv(65536)
-        sock.sendall((json.dumps({"execute":"system_powerdown"}) + "\r\n").encode())
-        print("NEXORA_QMP_POWERDOWN_SENT")
-        sock.close()
-        break
-    except (FileNotFoundError, ConnectionRefusedError, TimeoutError, OSError):
-        if sock:
-            try: sock.close()
-            except OSError: pass
-        time.sleep(0.25)
-else:
-    raise SystemExit("ERROR: unable to connect to NEXORA QMP socket")
-PY
+              import json, socket, sys, time
+              path = sys.argv[1]
+              deadline = time.time() + 10
+              while time.time() < deadline:
+                  sock = None
+                  try:
+                      sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                      sock.settimeout(3)
+                      sock.connect(path)
+                      sock.recv(65536)
+                      sock.sendall((json.dumps({"execute":"qmp_capabilities"}) + "\r\n").encode())
+                      sock.recv(65536)
+                      sock.sendall((json.dumps({"execute":"system_powerdown"}) + "\r\n").encode())
+                      print("NEXORA_QMP_POWERDOWN_SENT")
+                      sock.close()
+                      break
+                  except (FileNotFoundError, ConnectionRefusedError, TimeoutError, OSError):
+                      if sock:
+                          try: sock.close()
+                          except OSError: pass
+                      time.sleep(0.25)
+              else:
+                  raise SystemExit("ERROR: unable to connect to NEXORA QMP socket")
+              PY
 
             for _ in $(seq 1 30); do
               if ! kill -0 "${QEMU_PID}" 2>/dev/null; then
