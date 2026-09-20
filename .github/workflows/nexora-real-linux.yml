@@ -184,19 +184,38 @@ jobs:
             if qemu_running; then
               echo "NEXORA_GRACEFUL_SHUTDOWN_TIMEOUT"
               echo "NEXORA_GRACEFUL_SHUTDOWN_TIMEOUT" >> "${LOG_FILE}"
-              python3 -c 'import json,socket,sys; p=sys.argv[1]; s=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM); s.settimeout(10); s.connect(p); s.recv(65536); s.sendall((json.dumps({"execute":"qmp_capabilities"})+"\r\n").encode()); s.recv(65536); s.sendall((json.dumps({"execute":"quit"})+"\r\n").encode()); print("NEXORA_QMP_QUIT_SENT"); s.close()' "${QMP_SOCKET}"
+              # QMP fallback: negotiate capabilities and issue quit, but never let
+              # shutdown diagnostics themselves terminate the shell step.
+              python3 -c 'import json,socket,sys; p=sys.argv[1]; s=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM); s.settimeout(10); s.connect(p); s.recv(65536); s.sendall((json.dumps({"execute":"qmp_capabilities"})+"\r\n").encode()); s.recv(65536); s.sendall((json.dumps({"execute":"quit"})+"\r\n").encode()); s.close(); print("NEXORA_QMP_QUIT_SENT")' "${QMP_SOCKET}" || {
+                echo "ERROR: QMP quit command failed"
+                echo "ERROR: QMP quit command failed" >> "${LOG_FILE}"
+                cat "${LOG_FILE}"
+                kill -TERM "${QEMU_PID}" 2>/dev/null || true
+              }
               echo "NEXORA_QMP_QUIT_SENT" >> "${LOG_FILE}"
-              for _ in $(seq 1 10); do
+
+              qemu_exited=0
+              for _ in $(seq 1 15); do
                 if ! qemu_running; then
+                  qemu_exited=1
                   break
                 fi
                 sleep 1
               done
-              if qemu_running; then
+
+              if [ "${qemu_exited}" -ne 1 ]; then
                 echo "ERROR: QEMU did not exit after QMP quit"
+                echo "ERROR: QEMU did not exit after QMP quit" >> "${LOG_FILE}"
                 cat "${LOG_FILE}"
                 kill -TERM "${QEMU_PID}" 2>/dev/null || true
-                wait "${QEMU_PID}" 2>/dev/null || true
+                sleep 2
+                if qemu_running; then
+                  kill -KILL "${QEMU_PID}" 2>/dev/null || true
+                fi
+              fi
+            fi
+
+          wait "${QEMU_PID}" 2>/dev/null || true
                 return 1
               fi
             fi
