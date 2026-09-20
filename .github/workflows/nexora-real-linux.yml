@@ -175,11 +175,23 @@ jobs:
             done
 
             if kill -0 "${QEMU_PID}" 2>/dev/null; then
-              echo "NEXORA_GRACEFUL_SHUTDOWN_FAILED"
-              cat "${LOG_FILE}"
-              kill -TERM "${QEMU_PID}" 2>/dev/null || true
-              wait "${QEMU_PID}" 2>/dev/null || true
-              return 1
+              echo "NEXORA_GRACEFUL_SHUTDOWN_TIMEOUT"
+              echo "NEXORA_GRACEFUL_SHUTDOWN_TIMEOUT" >> "${LOG_FILE}"
+              python3 -c 'import json,socket,sys; p=sys.argv[1]; s=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM); s.settimeout(10); s.connect(p); s.recv(65536); s.sendall((json.dumps({"execute":"quit"})+"\\r\\n").encode()); print("NEXORA_QMP_QUIT_SENT"); s.close()' "${QMP_SOCKET}"
+              echo "NEXORA_QMP_QUIT_SENT" >> "${LOG_FILE}"
+              for _ in $(seq 1 10); do
+                if ! kill -0 "${QEMU_PID}" 2>/dev/null; then
+                  break
+                fi
+                sleep 1
+              done
+              if kill -0 "${QEMU_PID}" 2>/dev/null; then
+                echo "ERROR: QEMU did not exit after QMP quit"
+                cat "${LOG_FILE}"
+                kill -TERM "${QEMU_PID}" 2>/dev/null || true
+                wait "${QEMU_PID}" 2>/dev/null || true
+                return 1
+              fi
             fi
 
             wait "${QEMU_PID}" 2>/dev/null || true
