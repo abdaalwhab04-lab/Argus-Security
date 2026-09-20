@@ -423,3 +423,4 @@ PY
           if-no-files-found: warn
 
 # NEXORA trigger: validate BPF cgroup device support
+# NEXORA Run #43 trigger: execute the latest persistence and graceful-shutdown validation
