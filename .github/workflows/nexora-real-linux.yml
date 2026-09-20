@@ -248,22 +248,102 @@ jobs:
 
           mkdir -p output
 
-          timeout 40s qemu-system-x86_64 \
-            -m 1024 \
-            -machine q35 \
-            -display none \
-            -serial stdio \
-            -cdrom "${ISO_IMAGE}" \
-            -drive file="${PERSISTENT_DISK}",format=raw,if=virtio \
-            -no-reboot \
-            2>&1 | tee "${BOOT_LOG}" || true
+          QMP_SOCKET="/tmp/nexora-qmp.sock"
+
+          run_nexora_boot() {
+            local LOG_FILE="$1"
+            rm -f "${QMP_SOCKET}" "${LOG_FILE}"
+
+            echo "=== Start NEXORA QEMU ==="
+            qemu-system-x86_64 \
+              -m 1024 \
+              -machine q35 \
+              -display none \
+              -serial stdio \
+              -cdrom "${ISO_IMAGE}" \
+              -drive file="${PERSISTENT_DISK}",format=raw,if=virtio \
+              -qmp "unix:${QMP_SOCKET},server=on,wait=off" \
+              -no-reboot \
+              > "${LOG_FILE}" 2>&1 &
+            local QEMU_PID=$!
+
+            echo "NEXORA_QEMU_PID=${QEMU_PID}"
+
+            for _ in $(seq 1 80); do
+              if grep -q "NEXORA_PERSISTENCE_INITIALIZED" "${LOG_FILE}" || grep -q "NEXORA_PERSISTENCE_RESTORED" "${LOG_FILE}"; then
+                break
+              fi
+              if ! kill -0 "${QEMU_PID}" 2>/dev/null; then
+                echo "ERROR: NEXORA QEMU exited before the persistence marker."
+                cat "${LOG_FILE}"
+                return 1
+              fi
+              sleep 1
+            done
+
+            echo "=== Request graceful guest shutdown through QEMU QMP ==="
+
+            python3 - "${QMP_SOCKET}" <<'PY'
+import json
+import socket
+import sys
+import time
+
+path = sys.argv[1]
+deadline = time.time() + 10
+
+while time.time() < deadline:
+    sock = None
+    try:
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.settimeout(3)
+        sock.connect(path)
+        sock.recv(65536)
+        sock.sendall((json.dumps({"execute": "qmp_capabilities"}) + "\r\n").encode())
+        sock.recv(65536)
+        sock.sendall((json.dumps({"execute": "system_powerdown"}) + "\r\n").encode())
+        sock.recv(65536)
+        sock.close()
+        print("NEXORA_QMP_POWERDOWN_SENT")
+        break
+    except (FileNotFoundError, ConnectionRefusedError, TimeoutError, OSError):
+        if sock is not None:
+            try:
+                sock.close()
+            except OSError:
+                pass
+        time.sleep(0.25)
+else:
+    raise SystemExit("ERROR: unable to connect to NEXORA QMP socket")
+PY
+
+            for _ in $(seq 1 30); do
+              if ! kill -0 "${QEMU_PID}" 2>/dev/null; then
+                break
+              fi
+              sleep 1
+            done
+
+            if kill -0 "${QEMU_PID}" 2>/dev/null; then
+              echo "WARNING: QEMU did not exit after guest powerdown; sending SIGTERM."
+              kill -TERM "${QEMU_PID}" 2>/dev/null || true
+              wait "${QEMU_PID}" 2>/dev/null || true
+            else
+              wait "${QEMU_PID}" 2>/dev/null || true
+            fi
+
+            sync
+            echo "NEXORA_HOST_DISK_SYNC_DONE"
+          }
+
+          run_nexora_boot "${BOOT_LOG}"
 
           echo "=== Check first NEXORA boot markers ==="
 
-          if grep -q "NEXORA_BOOT_OK" "${BOOT_LOG}" && grep -q "NEXORA_DEBIAN_ROOTFS_FOUND" "${BOOT_LOG}" && grep -q "NEXORA_PERSISTENT_STORAGE_OK" "${BOOT_LOG}" && grep -q "NEXORA_ROOTFS_SWITCH" "${BOOT_LOG}" && grep -q "NEXORA_DEBIAN_USERSPACE_OK" "${BOOT_LOG}" && grep -q "NEXORA_DOCKER_CONTAINER_OK" "${BOOT_LOG}" && grep -q "NEXORA_PERSISTENCE_INITIALIZED" "${BOOT_LOG}"; then
+          if grep -q "NEXORA_BOOT_OK" "${BOOT_LOG}" && grep -q "NEXORA_DEBIAN_ROOTFS_FOUND" "${BOOT_LOG}" && grep -q "NEXORA_PERSISTENT_STORAGE_OK" "${BOOT_LOG}" && grep -q "NEXORA_ROOTFS_SWITCH" "${BOOT_LOG}" && grep -q "NEXORA_DEBIAN_USERSPACE_OK" "${BOOT_LOG}" && grep -q "NEXORA_DOCKER_CONTAINER_OK" "${BOOT_LOG}" && grep -q "NEXORA_PERSISTENCE_INITIALIZED" "${BOOT_LOG}" && grep -q "NEXORA_QMP_POWERDOWN_SENT" "${BOOT_LOG}"; then
             echo "NEXORA_QEMU_BOOT_OK"
           else
-            echo "ERROR: NEXORA first boot or persistent storage test failed."
+            echo "ERROR: NEXORA first boot or graceful persistence test failed."
             cat "${BOOT_LOG}"
             exit 1
           fi
@@ -271,25 +351,15 @@ jobs:
           echo "=== Reboot NEXORA with the same persistent disk ==="
 
           SECOND_BOOT_LOG="output/nexora-qemu-persistence-reboot.log"
+          run_nexora_boot "${SECOND_BOOT_LOG}"
 
-          timeout 40s qemu-system-x86_64 \
-            -m 1024 \
-            -machine q35 \
-            -display none \
-            -serial stdio \
-            -cdrom "${ISO_IMAGE}" \
-            -drive file="${PERSISTENT_DISK}",format=raw,if=virtio \
-            -no-reboot \
-            2>&1 | tee "${SECOND_BOOT_LOG}" || true
-
-          if grep -q "NEXORA_PERSISTENCE_RESTORED" "${SECOND_BOOT_LOG}" && grep -q "NEXORA_DOCKER_CONTAINER_OK" "${SECOND_BOOT_LOG}" && grep -q "NEXORA_DEBIAN_USERSPACE_OK" "${SECOND_BOOT_LOG}"; then
+          if grep -q "NEXORA_PERSISTENCE_RESTORED" "${SECOND_BOOT_LOG}" && grep -q "NEXORA_DOCKER_CONTAINER_OK" "${SECOND_BOOT_LOG}" && grep -q "NEXORA_DEBIAN_USERSPACE_OK" "${SECOND_BOOT_LOG}" && grep -q "NEXORA_QMP_POWERDOWN_SENT" "${SECOND_BOOT_LOG}"; then
             echo "NEXORA_PERSISTENCE_REBOOT_OK"
           else
             echo "ERROR: persistent data did not survive the second boot."
             cat "${SECOND_BOOT_LOG}"
             exit 1
           fi
-
       # NEXORA ISO upload disabled to avoid GitHub Actions artifact quota.
 
       - name: Check Python
