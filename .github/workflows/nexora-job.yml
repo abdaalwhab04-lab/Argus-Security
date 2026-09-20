@@ -1,0 +1,53 @@
+name: NEXORA Guaranteed Job
+
+on:
+  push:
+    branches:
+      - omniroute-v3.8.50-integration
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  nexora:
+    name: NEXORA Linux Environment
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate NEXORA workflow files
+        run: |
+          set -e
+          test -f nexora/scripts/build-rootfs.sh
+          test -f nexora/scripts/build-kernel.sh
+          test -f nexora/scripts/build-initramfs.sh
+          test -f nexora/scripts/build-iso.sh
+          test -f nexora/scripts/build-persistent-storage.sh
+          test -f .github/workflows/nexora-real-linux.yml
+          echo "NEXORA_WORKFLOW_FILES_OK"
+
+      - name: Check QEMU
+        run: |
+          set -e
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-x86 debootstrap cpio xorriso grub-pc-bin grub-efi-amd64-bin grub-efi-amd64 mtools rsync busybox-static
+          qemu-system-x86_64 --version
+          echo "NEXORA_QEMU_OK"
+
+      - name: Validate shell scripts
+        run: |
+          set -e
+          bash -n nexora/scripts/build-rootfs.sh
+          bash -n nexora/scripts/build-kernel.sh
+          bash -n nexora/scripts/build-initramfs.sh
+          bash -n nexora/scripts/build-iso.sh
+          bash -n nexora/scripts/build-persistent-storage.sh
+          echo "NEXORA_SCRIPTS_SYNTAX_OK"
+
+      - name: NEXORA job ready
+        run: |
+          echo "NEXORA_JOB_OK"
+          echo "NEXORA_JOB_IS_PRESENT=YES"
