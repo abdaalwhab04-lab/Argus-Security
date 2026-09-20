@@ -39,26 +39,47 @@ fi
 
 echo "NEXORA_DEBIAN_ROOTFS_FOUND"
 
-echo "=== Prepare writable runtime configuration ==="
+echo "=== Prepare persistent Debian storage ==="
 
-# The Debian root filesystem lives on a read-only ISO. Docker and containerd
-# need a few runtime configuration directories to be writable at boot.
-mount -t tmpfs -o size=32M tmpfs /mnt/etc/docker
-mount -t tmpfs -o size=32M tmpfs /mnt/etc/cni
+i=0
+while [ ! -b /dev/vda ] && [ "$i" -lt 20 ]; do
+    sleep 1
+    i=$((i + 1))
+done
 
-# Recreate the minimal Docker configuration directory expected by dockerd.
-mkdir -p /mnt/etc/docker /mnt/etc/cni/net.d
+if [ ! -b /dev/vda ]; then
+    echo "ERROR: persistent NEXORA data disk /dev/vda not found"
+    echo "NEXORA_PERSISTENT_STORAGE_FAILED"
+    exec /bin/sh
+fi
 
+mkdir -p /persist
+if ! mount -t ext4 -o rw /dev/vda /persist; then
+    echo "ERROR: unable to mount persistent NEXORA data disk"
+    echo "NEXORA_PERSISTENT_STORAGE_FAILED"
+    exec /bin/sh
+fi
+
+mkdir -p /persist/overlay/upper /persist/overlay/work
+mkdir -p /newroot
+
+echo "=== Mount writable Debian overlay ==="
+if ! mount -t overlay overlay -o lowerdir=/mnt,upperdir=/persist/overlay/upper,workdir=/persist/overlay/work /newroot; then
+    echo "ERROR: unable to mount Debian writable overlay"
+    echo "NEXORA_PERSISTENT_OVERLAY_FAILED"
+    exec /bin/sh
+fi
+
+mkdir -p /newroot/dev /newroot/proc /newroot/sys /newroot/run /newroot/persist
+mount --bind /dev /newroot/dev
+mount --bind /proc /newroot/proc
+mount --bind /sys /newroot/sys
+mount --bind /run /newroot/run
+mount --bind /persist /newroot/persist
+
+echo "NEXORA_PERSISTENT_STORAGE_OK"
 echo "NEXORA_DOCKER_CONFIG_OK"
-
-echo "=== Switching to Debian RootFS ==="
-
-mkdir -p /mnt/run
-
-echo "NEXORA_ROOTFS_SWITCH"
-mkdir -p /mnt/var/lib/docker /mnt/var/lib/containerd
-mount -t tmpfs -o size=2G tmpfs /mnt/var/lib/docker
-mount -t tmpfs -o size=1G tmpfs /mnt/var/lib/containerd
 echo "NEXORA_DOCKER_STORAGE_OK"
+echo "NEXORA_ROOTFS_SWITCH"
 
-exec switch_root /mnt /sbin/init
+exec switch_root /newroot /sbin/init
