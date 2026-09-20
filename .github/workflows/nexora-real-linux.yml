@@ -27,7 +27,7 @@ jobs:
           sudo apt-get install -y \
             build-essential bc bison flex libssl-dev libelf-dev libdw-dev \
             cpio gzip xorriso grub-pc-bin grub-efi-amd64-bin grub-efi-amd64 \
-            mtools rsync busybox-static qemu-system-x86 debootstrap
+            mtools rsync busybox-static qemu-system-x86 debootstrap e2fsprogs
 
       - name: Show system information
         run: |
@@ -223,12 +223,13 @@ jobs:
           grep -q "NEXORA_HOST_DISK_SYNC_DONE" "${BOOT_LOG}"
           echo "NEXORA_QEMU_BOOT_OK"
 
-          HOST_PERSIST_MOUNT="/tmp/nexora-persist-check"
-          sudo mkdir -p "${HOST_PERSIST_MOUNT}"
-          # The guest may leave the ext4 journal marked dirty after a forced QEMU\n          # shutdown. Validate the persisted filesystem without replaying the journal.\n          # noload keeps the host-side read-only check from requiring a writable mount.\n          sudo mount -o loop,ro,noload "${PERSISTENT_DISK}" "${HOST_PERSIST_MOUNT}"
-          test -f "${HOST_PERSIST_MOUNT}/nexora-persistence-marker"
+          # GitHub-hosted Linux runners do not guarantee usable /dev/loop devices.
+          # Do not mount the image on the host: QEMU already validated the guest-side
+          # filesystem, and debugfs can verify the persisted ext4 marker directly
+          # without requiring a loop device or replaying the journal.
+          sudo debugfs -R "stat /nexora-persistence-marker" "${PERSISTENT_DISK}" 2>/dev/null | grep -q "Type: regular"
+          sudo debugfs -R "cat /nexora-persistence-marker" "${PERSISTENT_DISK}" 2>/dev/null | grep -q "NEXORA"
           echo "NEXORA_HOST_PERSISTENCE_MARKER_OK"
-          sudo umount "${HOST_PERSIST_MOUNT}"
 
           SECOND_BOOT_LOG="${OUTPUT_DIR}/nexora-qemu-persistence-reboot.log"
           run_nexora_boot "${SECOND_BOOT_LOG}"
