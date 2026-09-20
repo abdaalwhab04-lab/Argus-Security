@@ -18,7 +18,7 @@ ruff>=0.8.0,<1.0.0                # Fast linter/formatter (replaces black, pylin
 mypy>=1.0.0,<2.0.0                # Static type checking
 types-requests>=2.31.0            # Type stubs for requests
 types-PyYAML>=6.0.0               # Type stubs for PyYAML
-types-setuptools>=65.0.0          # Type stubs for setuptools
+types-setuptools>=84.0.0.20260812          # Type stubs for setuptools
 
 # Security scanning (for testing)
 bandit>=1.7.0,<2.0.0              # Security issue scanner
