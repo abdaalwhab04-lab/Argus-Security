@@ -153,9 +153,12 @@ set -eu
 MARKER="/persist/nexora-persistence-marker"
 
 if [ -f "${MARKER}" ]; then
+    sync
     echo "NEXORA_PERSISTENCE_RESTORED" > /dev/console
 else
     printf '%s\n' "NEXORA_PERSISTENCE_OK" > "${MARKER}"
+    sync
+    echo "NEXORA_PERSISTENCE_SYNCED" > /dev/console
     echo "NEXORA_PERSISTENCE_INITIALIZED" > /dev/console
 fi
 
