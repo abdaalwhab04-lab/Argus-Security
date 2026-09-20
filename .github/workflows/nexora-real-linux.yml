@@ -225,7 +225,7 @@ jobs:
 
           HOST_PERSIST_MOUNT="/tmp/nexora-persist-check"
           sudo mkdir -p "${HOST_PERSIST_MOUNT}"
-          sudo mount -o loop,ro "${PERSISTENT_DISK}" "${HOST_PERSIST_MOUNT}"
+          # The guest may leave the ext4 journal marked dirty after a forced QEMU\n          # shutdown. Validate the persisted filesystem without replaying the journal.\n          # noload keeps the host-side read-only check from requiring a writable mount.\n          sudo mount -o loop,ro,noload "${PERSISTENT_DISK}" "${HOST_PERSIST_MOUNT}"
           test -f "${HOST_PERSIST_MOUNT}/nexora-persistence-marker"
           echo "NEXORA_HOST_PERSISTENCE_MARKER_OK"
           sudo umount "${HOST_PERSIST_MOUNT}"
