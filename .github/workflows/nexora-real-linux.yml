@@ -302,7 +302,13 @@ while time.time() < deadline:
         sock.sendall((json.dumps({"execute": "qmp_capabilities"}) + "\r\n").encode())
         sock.recv(65536)
         sock.sendall((json.dumps({"execute": "system_powerdown"}) + "\r\n").encode())
-        sock.recv(65536)
+        # QEMU may close the QMP socket immediately while shutting down.
+        # Do not require a response to system_powerdown.
+        sock.settimeout(1)
+        try:
+            sock.recv(65536)
+        except (socket.timeout, ConnectionResetError, BrokenPipeError, OSError):
+            pass
         sock.close()
         print("NEXORA_QMP_POWERDOWN_SENT")
         break
