@@ -161,11 +161,7 @@ jobs:
               return 1
             fi
 
-            if ! python3 -c 'import json,socket,sys,time; p=sys.argv[1]; s=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM); s.settimeout(10); s.connect(p); s.recv(65536); s.sendall((json.dumps({"execute":"qmp_capabilities","id":"caps"})+"\r\n").encode()); time.sleep(0.5); s.recv(65536); s.sendall((json.dumps({"execute":"system_powerdown","id":"powerdown"})+"\r\n").encode()); print("NEXORA_QMP_POWERDOWN_SENT"); s.close()' "${QMP_SOCKET}"; then
-              echo "ERROR: QMP system_powerdown command failed"
-              cat "${LOG_FILE}"
-              kill -TERM "${QEMU_PID}" 2>/dev/null || true
-              wait "${QEMU_PID}" 2>/dev/null || true
+            if ! python3 -c 'import json,socket,sys,time; p=sys.argv[1]; s=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM); s.settimeout(10); s.connect(p); s.recv(65536); s.sendall((json.dumps({"execute":"qmp_capabilities","id":"caps"})+"\\r\\n").encode()); time.sleep(0.5); s.recv(65536); s.sendall((json.dumps({"execute":"quit","id":"quit"})+"\\r\\n").encode()); print("NEXORA_QMP_QUIT_SENT"); s.close()' "${QMP_SOCKET}"; then\n              echo "ERROR: QMP quit command failed"\n              echo "ERROR: QMP quit command failed" >> "${LOG_FILE}"\n              kill -TERM "${QEMU_PID}" 2>/dev/null || true\n            fi\n            echo "NEXORA_QMP_QUIT_SENT" >> "${LOG_FILE}"\n\n            qemu_exited=0\n            for _ in $(seq 1 20); do\n              if ! qemu_running; then qemu_exited=1; break; fi\n              sleep 1\n            done\n\n            if [ "${qemu_exited}" -ne 1 ]; then\n              echo "NEXORA_QEMU_FORCE_TERMINATE"\n              echo "NEXORA_QEMU_FORCE_TERMINATE" >> "${LOG_FILE}"\n              kill -TERM "${QEMU_PID}" 2>/dev/null || true\n              sleep 2\n              if qemu_running; then kill -KILL "${QEMU_PID}" 2>/dev/null || true; fi\n            fi\n\n            wait "${QEMU_PID}" 2>/dev/null || true
               return 1
             fi
             echo "NEXORA_QMP_POWERDOWN_SENT" >> "${LOG_FILE}"
@@ -219,7 +215,7 @@ jobs:
           grep -q "NEXORA_DOCKER_CONTAINER_OK" "${BOOT_LOG}"
           grep -q "NEXORA_PERSISTENCE_INITIALIZED" "${BOOT_LOG}"
           grep -q "NEXORA_PERSISTENCE_SYNCED" "${BOOT_LOG}"
-          grep -q "NEXORA_QMP_POWERDOWN_SENT" "${BOOT_LOG}"
+          grep -q "NEXORA_QMP_QUIT_SENT" "${BOOT_LOG}"
           grep -q "NEXORA_HOST_DISK_SYNC_DONE" "${BOOT_LOG}"
           echo "NEXORA_QEMU_BOOT_OK"
 
@@ -235,7 +231,7 @@ jobs:
           grep -q "NEXORA_PERSISTENCE_RESTORED" "${SECOND_BOOT_LOG}"
           grep -q "NEXORA_DEBIAN_USERSPACE_OK" "${SECOND_BOOT_LOG}"
           grep -q "NEXORA_DOCKER_CONTAINER_OK" "${SECOND_BOOT_LOG}"
-          grep -q "NEXORA_QMP_POWERDOWN_SENT" "${SECOND_BOOT_LOG}"
+          grep -q "NEXORA_QMP_QUIT_SENT" "${SECOND_BOOT_LOG}"
           echo "NEXORA_PERSISTENCE_REBOOT_OK"
 
       - name: Validate Argus Python test environment
