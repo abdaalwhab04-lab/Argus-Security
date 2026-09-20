@@ -2,9 +2,7 @@ name: Argus NEXORA Linux Test
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - omniroute-v3.8.50-integration
+  # Push trigger disabled: nexora-real-linux.yml is the canonical NEXORA validation workflow.
 
 permissions:
   contents: read
@@ -27,13 +25,13 @@ jobs:
           docker info
           echo NEXORA_HOST_DOCKER_OK
       - name: Build RootFS
-        run: bash nexora/scripts/build-rootfs.sh
+        run: sudo bash nexora/scripts/build-rootfs.sh
       - name: Build Kernel
-        run: bash nexora/scripts/build-kernel.sh
+        run: sudo bash nexora/scripts/build-kernel.sh
       - name: Build Initramfs
-        run: bash nexora/scripts/build-initramfs.sh
+        run: sudo bash nexora/scripts/build-initramfs.sh
       - name: Build ISO
-        run: bash nexora/scripts/build-iso.sh
+        run: sudo bash nexora/scripts/build-iso.sh
       - name: Verify artifacts
         run: |
           test -s nexora/build/linux-6.12.50/arch/x86/boot/bzImage
