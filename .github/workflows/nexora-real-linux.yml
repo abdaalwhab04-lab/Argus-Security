@@ -161,7 +161,32 @@ jobs:
               return 1
             fi
 
-            if ! python3 -c 'import json,socket,sys,time; p=sys.argv[1]; s=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM); s.settimeout(10); s.connect(p); s.recv(65536); s.sendall((json.dumps({"execute":"qmp_capabilities","id":"caps"})+"\\r\\n").encode()); time.sleep(0.5); s.recv(65536); s.sendall((json.dumps({"execute":"quit","id":"quit"})+"\\r\\n").encode()); print("NEXORA_QMP_QUIT_SENT"); s.close()' "${QMP_SOCKET}"; then\n              echo "ERROR: QMP quit command failed"\n              echo "ERROR: QMP quit command failed" >> "${LOG_FILE}"\n              kill -TERM "${QEMU_PID}" 2>/dev/null || true\n            fi\n            echo "NEXORA_QMP_QUIT_SENT" >> "${LOG_FILE}"\n\n            qemu_exited=0\n            for _ in $(seq 1 20); do\n              if ! qemu_running; then qemu_exited=1; break; fi\n              sleep 1\n            done\n\n            if [ "${qemu_exited}" -ne 1 ]; then\n              echo "NEXORA_QEMU_FORCE_TERMINATE"\n              echo "NEXORA_QEMU_FORCE_TERMINATE" >> "${LOG_FILE}"\n              kill -TERM "${QEMU_PID}" 2>/dev/null || true\n              sleep 2\n              if qemu_running; then kill -KILL "${QEMU_PID}" 2>/dev/null || true; fi\n            fi\n\n            wait "${QEMU_PID}" 2>/dev/null || true
+            echo "NEXORA_QMP_SHUTDOWN_START" >> "${LOG_FILE}"
+
+            if python3 -c 'import json,socket,sys,time; p=sys.argv[1]; s=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM); s.settimeout(10); s.connect(p); s.recv(65536); s.sendall((json.dumps({"execute":"qmp_capabilities","id":"caps"})+"\\r\\n").encode()); time.sleep(0.2); s.recv(65536); s.sendall((json.dumps({"execute":"quit","id":"quit"})+"\\r\\n").encode()); s.close()' "${QMP_SOCKET}"; then
+              echo "NEXORA_QMP_QUIT_SENT" >> "${LOG_FILE}"
+            else
+              echo "NEXORA_QMP_QUIT_FAILED" >> "${LOG_FILE}"
+            fi
+
+            qemu_exited=0
+            for _ in $(seq 1 20); do
+              if ! qemu_running; then qemu_exited=1; break; fi
+              sleep 1
+            done
+
+            if [ "${qemu_exited}" -ne 1 ]; then
+              echo "NEXORA_QEMU_TERM_SENT" >> "${LOG_FILE}"
+              kill -TERM "${QEMU_PID}" 2>/dev/null || true
+              sleep 2
+            fi
+
+            if qemu_running; then
+              echo "NEXORA_QEMU_KILL_SENT" >> "${LOG_FILE}"
+              kill -KILL "${QEMU_PID}" 2>/dev/null || true
+            fi
+
+            wait "${QEMU_PID}" 2>/dev/null || true
               return 1
             fi
             echo "NEXORA_QMP_POWERDOWN_SENT" >> "${LOG_FILE}"
