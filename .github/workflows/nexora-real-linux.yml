@@ -232,7 +232,10 @@ jobs:
         run: |
           echo "=== Build NEXORA persistent data disk ==="
           sudo bash nexora/scripts/build-persistent-storage.sh
+          sudo chown runner:runner nexora/build/persistent-data.img
+          sudo chmod 600 nexora/build/persistent-data.img
           ls -lh nexora/build/persistent-data.img
+          stat -c 'NEXORA_PERSISTENT_DISK_OWNER=%U:%G MODE=%a' nexora/build/persistent-data.img
           echo "NEXORA_PERSISTENT_DISK_READY"
 
       - name: Boot NEXORA ISO with QEMU
