@@ -167,7 +167,9 @@ jobs:
               return 1
             fi
 
-            if python3 -c 'import json,socket,sys,time; p=sys.argv[1]; s=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM); s.settimeout(10); s.connect(p); s.recv(65536); s.sendall((json.dumps({"execute":"qmp_capabilities","id":"caps"})+"\\r\\n").encode()); time.sleep(0.2); s.recv(65536); s.sendall((json.dumps({"execute":"quit","id":"quit"})+"\\r\\n").encode()); s.close()' "${QMP_SOCKET}"; then
+            # QMP shutdown is best-effort. The persistence gate must not fail because
+            # the control socket races with guest shutdown.
+            if python3 -c 'import json,socket,sys; p=sys.argv[1]; s=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM); s.settimeout(5); s.connect(p); f=s.makefile("rwb",buffering=0); f.readline(); f.write((json.dumps({"execute":"qmp_capabilities","id":"caps"})+"\\r\\n").encode()); f.readline(); f.write((json.dumps({"execute":"quit","id":"quit"})+"\\r\\n").encode()); f.readline(); s.close()' "${QMP_SOCKET}"; then
               echo "NEXORA_QMP_QUIT_SENT" >> "${LOG_FILE}"
             else
               echo "NEXORA_QMP_QUIT_FAILED" >> "${LOG_FILE}"
@@ -229,7 +231,7 @@ jobs:
           grep -q "NEXORA_PERSISTENCE_RESTORED" "${SECOND_BOOT_LOG}"
           grep -q "NEXORA_DEBIAN_USERSPACE_OK" "${SECOND_BOOT_LOG}"
           grep -q "NEXORA_DOCKER_CONTAINER_OK" "${SECOND_BOOT_LOG}"
-          # QMP quit is best-effort on the reboot validation as well.
+          # QMP shutdown remains best-effort on the reboot validation.
           grep -q "NEXORA_HOST_DISK_SYNC_DONE" "${SECOND_BOOT_LOG}"
           echo "NEXORA_PERSISTENCE_REBOOT_OK"
 
