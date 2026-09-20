@@ -145,11 +145,18 @@ jobs:
               -no-reboot >"${LOG_FILE}" 2>&1 &
             local QEMU_PID=$!
 
+            qemu_running() {
+              kill -0 "${QEMU_PID}" 2>/dev/null || return 1
+              local state
+              state="$(ps -o stat= -p "${QEMU_PID}" 2>/dev/null | tr -d ' ' || true)"
+              [ -n "${state}" ] && [ "${state#Z}" = "${state}" ]
+            }
+
             for _ in $(seq 1 90); do
               if grep -qE 'NEXORA_PERSISTENCE_INITIALIZED|NEXORA_PERSISTENCE_RESTORED' "${LOG_FILE}"; then
                 break
               fi
-              if ! kill -0 "${QEMU_PID}" 2>/dev/null; then
+              if ! qemu_running; then
                 cat "${LOG_FILE}"
                 return 1
               fi
@@ -168,24 +175,24 @@ jobs:
             echo "NEXORA_QMP_POWERDOWN_SENT" >> "${LOG_FILE}"
 
             for _ in $(seq 1 30); do
-              if ! kill -0 "${QEMU_PID}" 2>/dev/null; then
+              if ! qemu_running; then
                 break
               fi
               sleep 1
             done
 
-            if kill -0 "${QEMU_PID}" 2>/dev/null; then
+            if qemu_running; then
               echo "NEXORA_GRACEFUL_SHUTDOWN_TIMEOUT"
               echo "NEXORA_GRACEFUL_SHUTDOWN_TIMEOUT" >> "${LOG_FILE}"
               python3 -c 'import json,socket,sys; p=sys.argv[1]; s=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM); s.settimeout(10); s.connect(p); s.recv(65536); s.sendall((json.dumps({"execute":"quit"})+"\r\n").encode()); print("NEXORA_QMP_QUIT_SENT"); s.close()' "${QMP_SOCKET}"
               echo "NEXORA_QMP_QUIT_SENT" >> "${LOG_FILE}"
               for _ in $(seq 1 10); do
-                if ! kill -0 "${QEMU_PID}" 2>/dev/null; then
+                if ! qemu_running; then
                   break
                 fi
                 sleep 1
               done
-              if kill -0 "${QEMU_PID}" 2>/dev/null; then
+              if qemu_running; then
                 echo "ERROR: QEMU did not exit after QMP quit"
                 cat "${LOG_FILE}"
                 kill -TERM "${QEMU_PID}" 2>/dev/null || true
