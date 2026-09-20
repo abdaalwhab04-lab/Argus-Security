@@ -316,3 +316,5 @@ jobs:
           name: argus-nexora-test-results
           path: output/
           if-no-files-found: warn
+
+# NEXORA trigger: validate BPF cgroup device support
