@@ -331,22 +331,37 @@ PY
             done
 
             if kill -0 "${QEMU_PID}" 2>/dev/null; then
-              echo "WARNING: QEMU did not exit after guest powerdown; sending SIGTERM."
+              echo "ERROR: QEMU did not exit after graceful guest powerdown."
+              echo "NEXORA_GRACEFUL_SHUTDOWN_FAILED"
+              cat "${LOG_FILE}"
               kill -TERM "${QEMU_PID}" 2>/dev/null || true
               wait "${QEMU_PID}" 2>/dev/null || true
-            else
-              wait "${QEMU_PID}" 2>/dev/null || true
+              return 1
             fi
 
+            wait "${QEMU_PID}" 2>/dev/null || true
             sync
             echo "NEXORA_HOST_DISK_SYNC_DONE"
           }
 
           run_nexora_boot "${BOOT_LOG}"
 
+          echo "=== Verify persistence marker reached the host disk ==="
+          HOST_PERSIST_MOUNT="/tmp/nexora-persist-check"
+          sudo mkdir -p "${HOST_PERSIST_MOUNT}"
+          sudo mount -o loop,ro "${PERSISTENT_DISK}" "${HOST_PERSIST_MOUNT}"
+          if [ -f "${HOST_PERSIST_MOUNT}/nexora-persistence-marker" ]; then
+            echo "NEXORA_HOST_PERSISTENCE_MARKER_OK"
+          else
+            echo "ERROR: persistence marker is missing from the host-visible persistent disk."
+            sudo umount "${HOST_PERSIST_MOUNT}" || true
+            exit 1
+          fi
+          sudo umount "${HOST_PERSIST_MOUNT}"
+
           echo "=== Check first NEXORA boot markers ==="
 
-          if grep -q "NEXORA_BOOT_OK" "${BOOT_LOG}" && grep -q "NEXORA_DEBIAN_ROOTFS_FOUND" "${BOOT_LOG}" && grep -q "NEXORA_PERSISTENT_STORAGE_OK" "${BOOT_LOG}" && grep -q "NEXORA_ROOTFS_SWITCH" "${BOOT_LOG}" && grep -q "NEXORA_DEBIAN_USERSPACE_OK" "${BOOT_LOG}" && grep -q "NEXORA_DOCKER_CONTAINER_OK" "${BOOT_LOG}" && grep -q "NEXORA_PERSISTENCE_INITIALIZED" "${BOOT_LOG}" && grep -q "NEXORA_QMP_POWERDOWN_SENT" "${BOOT_LOG}"; then
+          if grep -q "NEXORA_BOOT_OK" "${BOOT_LOG}" && grep -q "NEXORA_DEBIAN_ROOTFS_FOUND" "${BOOT_LOG}" && grep -q "NEXORA_PERSISTENT_STORAGE_OK" "${BOOT_LOG}" && grep -q "NEXORA_ROOTFS_SWITCH" "${BOOT_LOG}" && grep -q "NEXORA_DEBIAN_USERSPACE_OK" "${BOOT_LOG}" && grep -q "NEXORA_DOCKER_CONTAINER_OK" "${BOOT_LOG}" && grep -q "NEXORA_PERSISTENCE_INITIALIZED" "${BOOT_LOG}" && grep -q "NEXORA_PERSISTENCE_SYNCED" "${BOOT_LOG}" && grep -q "NEXORA_QMP_POWERDOWN_SENT" "${BOOT_LOG}" && grep -q "NEXORA_HOST_DISK_SYNC_DONE" "${BOOT_LOG}"; then
             echo "NEXORA_QEMU_BOOT_OK"
           else
             echo "ERROR: NEXORA first boot or graceful persistence test failed."
