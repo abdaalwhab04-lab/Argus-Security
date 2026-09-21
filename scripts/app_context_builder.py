@@ -763,22 +763,18 @@ class AppContextBuilder:
     # ------------------------------------------------------------------
 
     def _collect_source_files(self, pattern: str, limit: int) -> list[Path]:
-        """Collect source files matching *pattern*, skipping common vendor dirs.
-
-        Returns at most *limit* paths.  Hidden directories, ``node_modules``,
-        ``vendor``, ``venv``, and ``__pycache__`` are excluded to avoid noise.
-        """
-        full_pattern = os.path.join(str(self._root), "**", pattern)
-        skip_dirs = {"node_modules", "vendor", "venv", ".venv", "__pycache__", ".git", "dist", "build"}
+        """Collect source files while pruning large dependency/build trees."""
         results: list[Path] = []
-        for match in glob.iglob(full_pattern, recursive=True):
-            parts = Path(match).relative_to(self._root).parts
-            if any(p in skip_dirs for p in parts):
-                continue
-            results.append(Path(match))
-            if len(results) >= limit:
-                break
+        for dirpath, dirnames, filenames in os.walk(self._root, topdown=True):
+            dirnames[:] = [d for d in dirnames if d not in _SKIP_DIRS]
+            for filename in filenames:
+                if not fnmatch.fnmatch(filename, pattern):
+                    continue
+                results.append(Path(dirpath) / filename)
+                if len(results) >= limit:
+                    return results
         return results
+
 
 
 # ---------------------------------------------------------------------------
