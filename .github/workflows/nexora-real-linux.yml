@@ -252,6 +252,13 @@ jobs:
       - name: Check Argus configuration
         run: |
           set -euo pipefail
+          # The audit entry point imports tenacity and other declared Argus
+          # runtime dependencies. Install the project's declared dependency set
+          # before executing the configuration check so the check validates the
+          # real application environment instead of a pytest-only environment.
+          python3 -m pip install -r requirements.txt
+          python3 -m pip check
+          python3 -c "import tenacity; print('ARGUS_TENACITY_OK')"
           python3 scripts/run_ai_audit.py --help
           echo "NEXORA_ARGUS_CONFIG_OK"
 
