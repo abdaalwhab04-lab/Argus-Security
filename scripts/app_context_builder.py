@@ -584,13 +584,27 @@ class AppContextBuilder:
         ]
         results: list[str] = []
         seen: set[str] = set()
-        for pattern in patterns:
-            full_pattern = os.path.join(str(self._root), pattern)
-            for match in glob.iglob(full_pattern, recursive=True):
-                real = os.path.realpath(match)
+
+        # Walk once and prune heavy dependency/build trees.  The old
+        # implementation recursively globbed the entire repository once per
+        # pattern, which could make context construction unbounded on monorepos.
+        for dirpath, dirnames, filenames in os.walk(self._root, topdown=True):
+            dirnames[:] = [d for d in dirnames if d not in _SKIP_DIRS]
+            rel_dir = os.path.relpath(dirpath, self._root)
+            if rel_dir == ".":
+                rel_dir = ""
+
+            for filename in filenames:
+                rel_path = os.path.join(rel_dir, filename) if rel_dir else filename
+                rel_path = rel_path.replace(os.sep, "/")
+                if not any(fnmatch.fnmatch(rel_path, pattern) for pattern in patterns):
+                    continue
+
+                real = os.path.realpath(os.path.join(dirpath, filename))
                 if real not in seen:
                     seen.add(real)
-                    results.append(os.path.relpath(match, self._root))
+                    results.append(rel_path)
+
         return sorted(results)
 
     def _has_k8s(self) -> bool:
@@ -600,15 +614,15 @@ class AppContextBuilder:
             if (self._root / dir_name).is_dir():
                 return True
 
-        # Look for k8s-indicative YAML content in .yml/.yaml at the root or
-        # in common sub-directories.  Cap the search to stay fast.
-        yaml_patterns = ["*.yml", "*.yaml", "deploy/**/*.yml", "deploy/**/*.yaml"]
+        # Inspect at most 50 YAML files while pruning dependency/build trees.
         checked = 0
-        for pattern in yaml_patterns:
-            full = os.path.join(str(self._root), pattern)
-            for match in glob.iglob(full, recursive=True):
+        for dirpath, dirnames, filenames in os.walk(self._root, topdown=True):
+            dirnames[:] = [d for d in dirnames if d not in _SKIP_DIRS]
+            for filename in filenames:
+                if not filename.lower().endswith((".yml", ".yaml")):
+                    continue
                 try:
-                    head = Path(match).read_text(errors="replace")[:2048]
+                    head = (Path(dirpath) / filename).read_text(errors="replace")[:2048]
                 except OSError:
                     continue
                 if re.search(r"apiVersion:\s|kind:\s+(Deployment|Service|Pod|StatefulSet|Ingress)", head):
@@ -670,7 +684,8 @@ class AppContextBuilder:
             if full.is_file():
                 found.append(os.path.relpath(str(full), self._root))
 
-        # Route / controller directories.
+        # Route / controller modules.  Use one pruned walk instead of a
+        # recursive glob for every pattern.
         route_patterns = [
             "routes/**/*.py",
             "routes/**/*.js",
@@ -684,12 +699,17 @@ class AppContextBuilder:
             "**/router.js",
             "**/router.ts",
         ]
-        for pattern in route_patterns:
-            full_pattern = os.path.join(str(self._root), pattern)
-            for match in glob.iglob(full_pattern, recursive=True):
-                rel = os.path.relpath(match, self._root)
-                if rel not in found:
-                    found.append(rel)
+        for dirpath, dirnames, filenames in os.walk(self._root, topdown=True):
+            dirnames[:] = [d for d in dirnames if d not in _SKIP_DIRS]
+            rel_dir = os.path.relpath(dirpath, self._root)
+            if rel_dir == ".":
+                rel_dir = ""
+            for filename in filenames:
+                rel = os.path.join(rel_dir, filename) if rel_dir else filename
+                rel = rel.replace(os.sep, "/")
+                if any(fnmatch.fnmatch(rel, pattern) for pattern in route_patterns):
+                    if rel not in found:
+                        found.append(rel)
 
         return sorted(found)
 
