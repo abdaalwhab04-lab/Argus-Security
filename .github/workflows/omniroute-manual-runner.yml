@@ -96,7 +96,7 @@ jobs:
           echo 'Generated OmniRoute API key successfully (value not printed).'
           echo "OMNIROUTE_CI_API_KEY=$key" >> "$GITHUB_ENV"
       - name: Validate generated key on /v1/models
-        run: curl -fsS http://127.0.0.1:20128/v1/models -H "Authorization: Bearer $OMNIROUTE_CI_API_KEY"
+        run: |\n          curl -fsS http://127.0.0.1:20128/v1/models -H "Authorization: Bearer $OMNIROUTE_CI_API_KEY"
       - name: Confirm invalid token is rejected
         shell: bash
         run: |
