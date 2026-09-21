@@ -28,8 +28,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 try:
-    from mcp.server import Server
-    from mcp.types import TextContent, Tool  # noqa: F401
+    # MCP v2 exposes the high-level server as MCPServer. The legacy\n    # FastMCP import is retained as a compatibility fallback for v1.\n    try:\n        from mcp.server import MCPServer as Server\n    except ImportError:\n        from mcp.server.fastmcp import FastMCP as Server\n    from mcp.types import TextContent, Tool  # noqa: F401
 
     MCP_AVAILABLE = True
 except ImportError:
@@ -346,7 +345,7 @@ def create_argus_mcp_server(repo_path: str, config: dict[str, Any] | None = None
 
     # -- Tool: save_finding ------------------------------------------------
 
-    @server.tool("save_finding")
+    @server.tool(name="save_finding")
     async def save_finding(
         severity: str,
         title: str,
@@ -395,7 +394,7 @@ def create_argus_mcp_server(repo_path: str, config: dict[str, Any] | None = None
 
     # -- Tool: get_scan_status ---------------------------------------------
 
-    @server.tool("get_scan_status")
+    @server.tool(name="get_scan_status")
     async def get_scan_status() -> str:
         """Get current scan status and metrics.
 
@@ -413,7 +412,7 @@ def create_argus_mcp_server(repo_path: str, config: dict[str, Any] | None = None
 
     # -- Tool: check_policy_gate -------------------------------------------
 
-    @server.tool("check_policy_gate")
+    @server.tool(name="check_policy_gate")
     async def check_policy_gate(stage: str, findings_json: str) -> str:
         """Check if findings pass the policy gate for a given stage.
 
@@ -437,7 +436,7 @@ def create_argus_mcp_server(repo_path: str, config: dict[str, Any] | None = None
 
     # -- Tool: trigger_remediation -----------------------------------------
 
-    @server.tool("trigger_remediation")
+    @server.tool(name="trigger_remediation")
     async def trigger_remediation(finding_id: str) -> str:
         """Generate remediation suggestion for a specific finding.
 
