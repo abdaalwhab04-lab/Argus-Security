@@ -67,7 +67,7 @@ class LLMManager:
     # Default models for each provider
     DEFAULT_MODELS = {
         "anthropic": "claude-sonnet-4-5-20250929",
-        "openai": "gpt-4-turbo-preview",
+        "openai": "gpt-5.6-luna",
         "openrouter": "deepseek/deepseek-v3.2",
         "ollama": "llama3.2:3b",
         "claude-cli": "opus",
