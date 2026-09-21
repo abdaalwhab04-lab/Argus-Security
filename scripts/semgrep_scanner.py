@@ -162,7 +162,11 @@ class SemgrepScanner:
         if self.semgrep_rules != "auto":
             rule_configs = [self.semgrep_rules]
         else:
-            # Use a single stable registry pack for the automatic mode.\n            # Combining many registry aliases makes scans brittle when a pack is\n            # renamed or unavailable in the installed Semgrep registry cache.\n            # Project-specific rules are still added below.\n            rule_configs = ["p/security-audit"]
+            # Use a single stable registry pack for the automatic mode.
+            # Combining many registry aliases makes scans brittle when a pack is
+            # renamed or unavailable in the installed Semgrep registry cache.
+            # Project-specific rules are still added below.
+            rule_configs = ["p/security-audit"]
 
         cmd = self._semgrep_cmd_prefix() + ["--json", "--quiet", "--metrics=off"]
         for rc in rule_configs:
