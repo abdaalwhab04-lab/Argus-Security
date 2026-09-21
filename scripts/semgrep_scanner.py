@@ -162,17 +162,7 @@ class SemgrepScanner:
         if self.semgrep_rules != "auto":
             rule_configs = [self.semgrep_rules]
         else:
-            rule_configs = [
-                "p/security-audit",           # Core security rules (2000+)
-                "p/python",                   # Python-specific rules
-                "p/owasp-top-ten",            # OWASP Top 10
-                "p/cwe-top-25",               # CWE Top 25 Most Dangerous
-                "p/command-injection",         # Command injection patterns
-                "p/insecure-transport",        # Missing TLS/HTTPS
-                "p/secrets",                   # Hardcoded secrets/credentials
-                "p/supply-chain",             # Supply chain risks (trust_remote_code, etc.)
-                "p/deserialization",           # Pickle, torch.load, yaml.load
-            ]
+            # Use a single stable registry pack for the automatic mode.\n            # Combining many registry aliases makes scans brittle when a pack is\n            # renamed or unavailable in the installed Semgrep registry cache.\n            # Project-specific rules are still added below.\n            rule_configs = ["p/security-audit"]
 
         cmd = self._semgrep_cmd_prefix() + ["--json", "--quiet", "--metrics=off"]
         for rc in rule_configs:
