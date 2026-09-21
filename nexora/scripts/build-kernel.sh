@@ -8,6 +8,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NEXORA_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 BUILD_DIR="${NEXORA_DIR}/build"
 
+KERNEL_ARCHIVE="${BUILD_DIR}/linux-${KERNEL_VERSION}.tar.xz"
+KERNEL_SOURCE="${BUILD_DIR}/linux-${KERNEL_VERSION}"
+KERNEL_IMAGE="${KERNEL_SOURCE}/arch/x86/boot/bzImage"
+
 mkdir -p "${BUILD_DIR}"
 
 echo "=== NEXORA Kernel Build ==="
@@ -16,11 +20,14 @@ echo "Architecture: x86_64"
 
 cd "${BUILD_DIR}"
 
+echo "=== Check Disk Space ==="
+df -h "${BUILD_DIR}"
+
 echo "=== Download Linux Kernel ==="
 
-if [ ! -f "linux-${KERNEL_VERSION}.tar.xz" ]; then
+if [ ! -f "${KERNEL_ARCHIVE}" ]; then
     curl -fL --retry 3 \
-        -o "linux-${KERNEL_VERSION}.tar.xz" \
+        -o "${KERNEL_ARCHIVE}" \
         "${KERNEL_URL}"
 else
     echo "Kernel archive already exists."
@@ -28,14 +35,22 @@ fi
 
 echo "=== Extract Linux Kernel ==="
 
-rm -rf "linux-${KERNEL_VERSION}"
-tar -xf "linux-${KERNEL_VERSION}.tar.xz"
+rm -rf "${KERNEL_SOURCE}"
 
-cd "linux-${KERNEL_VERSION}"
+tar -xf "${KERNEL_ARCHIVE}"
+
+# The compressed archive is no longer required after extraction.
+# Removing it saves disk space before compilation.
+rm -f "${KERNEL_ARCHIVE}"
+
+echo "=== Disk Space After Extraction ==="
+df -h "${BUILD_DIR}"
+
+cd "${KERNEL_SOURCE}"
 
 echo "=== Prepare Kernel Configuration ==="
 
-make x86_64_defconfig
+ARCH=x86 make x86_64_defconfig
 
 NEXORA_CONFIG="${NEXORA_DIR}/config/kernel.conf"
 
@@ -53,19 +68,19 @@ if [ -f "${NEXORA_CONFIG}" ]; then
     done < "${NEXORA_CONFIG}"
 fi
 
-make olddefconfig
+ARCH=x86 make olddefconfig
 
 echo "=== Build Linux Kernel ==="
 
-JOBS="${NEXORA_KERNEL_JOBS:-$(nproc)}"
+# Default to one job on constrained environments.
+# Override with NEXORA_KERNEL_JOBS when more resources are available.
+JOBS="${NEXORA_KERNEL_JOBS:-1}"
 
 echo "Parallel jobs: ${JOBS}"
 
-make -j"${JOBS}" bzImage
+ARCH=x86 make -j"${JOBS}" bzImage
 
 echo "=== Verify Kernel ==="
-
-KERNEL_IMAGE="${BUILD_DIR}/linux-${KERNEL_VERSION}/arch/x86/boot/bzImage"
 
 if [ ! -f "${KERNEL_IMAGE}" ]; then
     echo "ERROR: Kernel build completed but bzImage was not found."
@@ -73,7 +88,11 @@ if [ ! -f "${KERNEL_IMAGE}" ]; then
 fi
 
 echo "=== NEXORA KERNEL CREATED ==="
+
 ls -lh "${KERNEL_IMAGE}"
 file "${KERNEL_IMAGE}"
+
+echo "=== Disk Space After Kernel Build ==="
+df -h "${BUILD_DIR}"
 
 echo "NEXORA_KERNEL_OK"
