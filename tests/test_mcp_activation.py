@@ -54,7 +54,7 @@ def _build_analyzer(config: dict | None = None, **kwargs):
         "enable_iris": False,
         "enable_nuclei_templates": False,
         "enable_zap_baseline": False,
-        "config": config or {},
+        "config": {**(config or {}), "allow_no_tools": True},
     }
     defaults.update(kwargs)
     return mod.HybridSecurityAnalyzer(**defaults)
