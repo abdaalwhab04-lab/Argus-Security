@@ -54,7 +54,7 @@ class TestAIProviders:
     def test_get_model_name_defaults(self, mock_config):
         """Test default model names for each provider"""
         assert get_model_name("anthropic", {"model": "auto"}) == "claude-sonnet-4-5-20250929"
-        assert get_model_name("openai", {"model": "auto"}) == "gpt-4-turbo-preview"
+        assert get_model_name("openai", {"model": "auto"}) == "gpt-5.6-luna"
         assert get_model_name("ollama", {"model": "auto"}) == "llama3.2:3b"
 
     def test_get_model_name_custom(self, mock_config):
