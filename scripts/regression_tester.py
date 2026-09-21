@@ -548,16 +548,6 @@ func TestNormalInput{function_name.title()}(t *testing.T) {{
                 with open(test_file, encoding="utf-8") as f:
                     test_code = f.read()
 
-                # Skip stale/example regression tests whose target file
-                # no longer exists in the current project.
-                target_path = Path(metadata["file_path"])
-                if not target_path.exists():
-                    logger.warning(
-                        f"Skipping regression test {test_id}: "
-                        f"target file not found: {target_path}"
-                    )
-                    continue
-
                 test = RegressionTest(
                     test_id=test_id,
                     vulnerability_type=metadata["vulnerability_type"],
