@@ -20,7 +20,7 @@ Usage:
 
 from __future__ import annotations
 
-import glob
+import fnmatch
 import json
 import logging
 import os
@@ -38,6 +38,17 @@ logger = logging.getLogger(__name__)
 
 _MAX_FILES_FOR_IMPORTS = 100
 _MAX_FILES_FOR_AUTH = 200
+
+_SKIP_DIRS = {
+    ".git",
+    ".venv",
+    "venv",
+    "node_modules",
+    "__pycache__",
+    "dist",
+    "build",
+    "vendor",
+}
 
 # ---------------------------------------------------------------------------
 # File-extension-to-language mapping
@@ -221,17 +232,18 @@ class AppContextBuilder:
     def _detect_language(self) -> str:
         """Count source files by extension and return the dominant language."""
         counts: dict[str, int] = {}
-        for ext, lang in _EXTENSION_LANGUAGE.items():
-            pattern = os.path.join(str(self._root), "**", f"*{ext}")
-            # Use glob.iglob to avoid materialising huge lists; cap at a
-            # reasonable number so we don't spend minutes on mono-repos.
-            count = 0
-            for _ in glob.iglob(pattern, recursive=True):
-                count += 1
-                if count >= 5000:
-                    break
-            if count:
-                counts[lang] = counts.get(lang, 0) + count
+        per_language_cap = 5000
+
+        # Walk once and prune heavy directories before descending. The old
+        # implementation ran one recursive glob per extension, repeatedly
+        # traversing the entire repository.
+        for dirpath, dirnames, filenames in os.walk(self._root, topdown=True):
+            dirnames[:] = [d for d in dirnames if d not in _SKIP_DIRS]
+            for filename in filenames:
+                lang = _EXTENSION_LANGUAGE.get(Path(filename).suffix.lower())
+                if not lang or counts.get(lang, 0) >= per_language_cap:
+                    continue
+                counts[lang] = counts.get(lang, 0) + 1
 
         if not counts:
             logger.debug("No recognised source files found")
