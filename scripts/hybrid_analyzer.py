@@ -759,7 +759,11 @@ class HybridSecurityAnalyzer:
             )
             if getattr(self, f"enable_{name}", False)
         ]
-        if not active_features:
+        # MCP lifecycle tests may intentionally construct the analyzer without scanners.
+        # Keep the production guard enabled by default, with an explicit opt-out for
+        # infrastructure/lifecycle callers that do not execute a scan.
+        allow_no_tools = self.config.get("allow_no_tools", False)
+        if not active_features and not allow_no_tools:
             raise ValueError("At least one tool must be enabled! Use --help to see available scanner flags.")
 
     def analyze(
