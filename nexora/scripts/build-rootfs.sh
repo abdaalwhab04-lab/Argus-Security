@@ -84,6 +84,21 @@ fi
 chroot "${ROOTFS_DIR}" apt-get update
 chroot "${ROOTFS_DIR}" apt-get install -y --no-install-recommends "${TERMUX_DEBIAN_PACKAGES[@]}"
 
+echo "=== Verify mirrored Termux CLI tools ==="
+TERMUX_REQUIRED_COMMANDS=(
+    7z bash bc clang cpio curl ffmpeg file fish flex gawk gh git jq
+    lsof lua5.4 make nano nmap ssh openssl parallel patch perl php psql
+    qemu-system-x86_64 redis-server rg rsync ruby rustc cargo strace sudo
+    tar tmux tor tree unzip vim w3m wget xorriso zip cmake ninja tshark
+)
+for cmd in "${TERMUX_REQUIRED_COMMANDS[@]}"; do
+    if ! chroot "${ROOTFS_DIR}" sh -c "command -v '$cmd' >/dev/null 2>&1"; then
+        echo "ERROR: mirrored Termux command is missing in NEXORA: $cmd"
+        exit 1
+    fi
+done
+echo "NEXORA_TERMUX_COMMANDS_OK"
+
 if [ -x "${ROOTFS_DIR}/usr/bin/fdfind" ] && [ ! -e "${ROOTFS_DIR}/usr/local/bin/fd" ]; then
     ln -s /usr/bin/fdfind "${ROOTFS_DIR}/usr/local/bin/fd"
 fi
