@@ -1,0 +1,5 @@
+corepack@0.35.0
+npm@11.19.1
+omniroute@3.8.50
+pnpm@10.20.0
+prisma@5.17.0
