@@ -55,7 +55,6 @@ APTCONF
 echo "=== Mirror portable Termux development tools into Debian ==="
 
 TERMUX_DEBIAN_PACKAGES=(
-    7zip
     bc bison clang cpio curl dos2unix
     ffmpeg file fish flex gawk git
     jq less lld llvm lsof lua5.4
@@ -72,8 +71,9 @@ TERMUX_DEBIAN_PACKAGES=(
     cmake ninja-build
 )
 
-if ! chroot "${ROOTFS_DIR}" apt-cache show 7zip >/dev/null 2>&1; then
-    TERMUX_DEBIAN_PACKAGES=("${TERMUX_DEBIAN_PACKAGES[@]/7zip/}")
+if chroot "${ROOTFS_DIR}" apt-cache show 7zip >/dev/null 2>&1; then
+    TERMUX_DEBIAN_PACKAGES+=(7zip)
+else
     TERMUX_DEBIAN_PACKAGES+=(p7zip-full)
 fi
 
