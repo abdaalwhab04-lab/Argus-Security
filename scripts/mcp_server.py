@@ -28,12 +28,9 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 try:
-    # MCP Python SDK exposes the low-level Server from mcp.server.
-    # FastMCP is retained as a compatibility fallback.
-    try:
-        from mcp.server import Server
-    except ImportError:
-        from mcp.server.fastmcp import FastMCP as Server
+    # This module uses the decorator-based API, so it must use FastMCP.
+    # The low-level mcp.server.Server does not provide .tool().
+    from mcp.server.fastmcp import FastMCP as Server
     from mcp.types import TextContent, Tool  # noqa: F401
 
     MCP_AVAILABLE = True
