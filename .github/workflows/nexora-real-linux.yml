@@ -38,6 +38,20 @@ jobs:
           free -h
           df -h
 
+      - name: Prepare host Docker for NEXORA image bundling
+        run: |
+          set -euo pipefail
+          if ! docker info >/dev/null 2>&1; then
+            sudo systemctl start docker
+          fi
+          for _ in $(seq 1 30); do
+            if docker info >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          docker info >/dev/null 2>&1
+          docker version --format 'NEXORA_HOST_DOCKER={{.Server.Version}}'
+          echo "NEXORA_HOST_DOCKER_READY"
+
       - name: Check NEXORA build tools
         run: |
           set -euo pipefail
@@ -65,8 +79,31 @@ jobs:
           KERNEL_VERSION="${KERNEL_VERSION:-6.12.50}"
           KERNEL_IMAGE="nexora/build/linux-${KERNEL_VERSION}/arch/x86/boot/bzImage"
           test -f "${KERNEL_IMAGE}"
+          KERNEL_CONFIG="nexora/build/linux-${KERNEL_VERSION}/.config"
+          test -f "${KERNEL_CONFIG}"
+          for cfg in \
+            CONFIG_EXT4_FS=y \
+            CONFIG_ISO9660_FS=y \
+            CONFIG_BLK_DEV_SR=y \
+            CONFIG_VIRTIO=y \
+            CONFIG_VIRTIO_PCI=y \
+            CONFIG_VIRTIO_BLK=y \
+            CONFIG_OVERLAY_FS=y \
+            CONFIG_NAMESPACES=y \
+            CONFIG_CGROUPS=y \
+            CONFIG_CGROUP_DEVICE=y \
+            CONFIG_CGROUP_PIDS=y \
+            CONFIG_MEMCG=y \
+            CONFIG_BRIDGE=y \
+            CONFIG_VETH=y \
+            CONFIG_NETFILTER=y \
+            CONFIG_NF_CONNTRACK=y \
+            CONFIG_NF_NAT=y; do
+            grep -qx "$cfg" "${KERNEL_CONFIG}"
+          done
           ls -lh "${KERNEL_IMAGE}"
           file "${KERNEL_IMAGE}"
+          echo "NEXORA_KERNEL_CONFIG_OK"
           echo "NEXORA_KERNEL_OK"
 
       - name: Build NEXORA Initramfs
@@ -234,6 +271,8 @@ jobs:
           SECOND_BOOT_LOG="${OUTPUT_DIR}/nexora-qemu-persistence-reboot.log"
           run_nexora_boot "${SECOND_BOOT_LOG}"
           grep -q "NEXORA_PERSISTENCE_RESTORED" "${SECOND_BOOT_LOG}"
+          grep -q "NEXORA_PERSISTENCE_TEST_DONE" "${SECOND_BOOT_LOG}"
+          grep -q "NEXORA_DOCKER_OK" "${SECOND_BOOT_LOG}"
           grep -q "NEXORA_DEBIAN_USERSPACE_OK" "${SECOND_BOOT_LOG}"
           grep -q "NEXORA_DOCKER_CONTAINER_OK" "${SECOND_BOOT_LOG}"
           # QMP shutdown remains best-effort on the reboot validation.
