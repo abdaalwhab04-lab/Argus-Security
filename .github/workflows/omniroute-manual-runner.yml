@@ -83,11 +83,26 @@ jobs:
         run: curl -fsS http://127.0.0.1:20128/api/providers
       - name: Verify models endpoint
         run: curl -fsS http://127.0.0.1:20128/v1/models
+      - name: Authenticate management session
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f "$RUNNER_TEMP/omniroute.cookies"
+          curl -fsS -o "$RUNNER_TEMP/omniroute.login.json" \
+            -c "$RUNNER_TEMP/omniroute.cookies" \
+            -H 'Content-Type: application/json' \
+            -X POST http://127.0.0.1:20128/api/auth/login \
+            --data "$(node -e 'process.stdout.write(JSON.stringify({password:process.env.INITIAL_PASSWORD}))')"
+          grep -q '"success":true' "$RUNNER_TEMP/omniroute.login.json"
+          test -s "$RUNNER_TEMP/omniroute.cookies"
+          echo 'Management session authenticated successfully.'
+
       - name: Generate API key through OmniRoute API
         shell: bash
         run: |
           set -euo pipefail
           response=$(curl -fsS -X POST http://127.0.0.1:20128/api/keys \
+            -b "$RUNNER_TEMP/omniroute.cookies" \
             -H 'Content-Type: application/json' \
             --data '{"name":"github-ci-token","scopes":["chat"]}')
           key=$(printf '%s' "$response" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);process.stdout.write(j.key||j.apiKey||'')})")
