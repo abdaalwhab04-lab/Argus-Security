@@ -52,6 +52,50 @@ APT::Install-Recommends "false";
 APT::Install-Suggests "false";
 APTCONF
 
+echo "=== Mirror portable Termux development tools into Debian ==="
+
+TERMUX_DEBIAN_PACKAGES=(
+    7zip
+    bc bison clang cpio curl dos2unix
+    ffmpeg file fish flex gawk git
+    jq less lld llvm lsof lua5.4
+    m4 make nano net-tools nmap
+    openssh-client openssh-server openssl
+    parallel patch perl php-cli pkg-config
+    postgresql-client procps psmisc
+    qemu-system-x86 qemu-utils
+    redis-server ripgrep rsync ruby
+    rustc cargo
+    screen sed strace sudo
+    tar tmux tor tree unzip util-linux
+    vim-nox w3m wget xorriso zip
+    cmake ninja-build
+)
+
+if ! chroot "${ROOTFS_DIR}" apt-cache show 7zip >/dev/null 2>&1; then
+    TERMUX_DEBIAN_PACKAGES=("${TERMUX_DEBIAN_PACKAGES[@]/7zip/}")
+    TERMUX_DEBIAN_PACKAGES+=(p7zip-full)
+fi
+
+if [ -f /etc/resolv.conf ]; then
+    cp -L /etc/resolv.conf "${ROOTFS_DIR}/etc/resolv.conf"
+fi
+chroot "${ROOTFS_DIR}" apt-get update
+chroot "${ROOTFS_DIR}" apt-get install -y --no-install-recommends "${TERMUX_DEBIAN_PACKAGES[@]}"
+
+if [ -x "${ROOTFS_DIR}/usr/bin/fdfind" ] && [ ! -e "${ROOTFS_DIR}/usr/local/bin/fd" ]; then
+    ln -s /usr/bin/fdfind "${ROOTFS_DIR}/usr/local/bin/fd"
+fi
+
+mkdir -p "${ROOTFS_DIR}/opt/nexora/manifests"
+cp "${NEXORA_DIR}/config/termux-packages.txt" "${ROOTFS_DIR}/opt/nexora/manifests/"
+cp "${NEXORA_DIR}/config/termux-python-packages.txt" "${ROOTFS_DIR}/opt/nexora/manifests/"
+cp "${NEXORA_DIR}/config/termux-npm-global.txt" "${ROOTFS_DIR}/opt/nexora/manifests/"
+cp "${NEXORA_DIR}/config/termux-mirror-policy.md" "${ROOTFS_DIR}/opt/nexora/manifests/"
+
+echo "NEXORA_TERMUX_INVENTORY_SAVED"
+echo "NEXORA_TERMUX_DEBIAN_TOOLSET_OK"
+
 echo "=== Install verified Node.js ${NODE_VERSION} LTS ==="
 
 NODE_TARBALL="node-v${NODE_VERSION}-linux-x64.tar.xz"
