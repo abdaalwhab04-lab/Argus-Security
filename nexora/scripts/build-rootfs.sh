@@ -81,8 +81,8 @@ fi
 if [ -f /etc/resolv.conf ]; then
     cp -L /etc/resolv.conf "${ROOTFS_DIR}/etc/resolv.conf"
 fi
-chroot "${ROOTFS_DIR}" apt-get update
-chroot "${ROOTFS_DIR}" apt-get install -y --no-install-recommends "${TERMUX_DEBIAN_PACKAGES[@]}"
+DEBIAN_FRONTEND=noninteractive chroot "${ROOTFS_DIR}" apt-get update
+DEBIAN_FRONTEND=noninteractive chroot "${ROOTFS_DIR}" apt-get install -y --no-install-recommends "${TERMUX_DEBIAN_PACKAGES[@]}"
 
 echo "=== Verify mirrored Termux CLI tools ==="
 TERMUX_REQUIRED_COMMANDS=(
