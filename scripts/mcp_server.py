@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 try:
-    # MCP v2 exposes the high-level server as MCPServer. The legacy\n    # FastMCP import is retained as a compatibility fallback for v1.\n    try:\n        from mcp.server import MCPServer as Server\n    except ImportError:\n        from mcp.server.fastmcp import FastMCP as Server\n    from mcp.types import TextContent, Tool  # noqa: F401
+    # MCP Python SDK exposes the low-level Server from mcp.server.\n    # FastMCP is retained as a compatibility fallback.\n    try:\n        from mcp.server import Server\n    except ImportError:\n        from mcp.server.fastmcp import FastMCP as Server\n    from mcp.types import TextContent, Tool  # noqa: F401
 
     MCP_AVAILABLE = True
 except ImportError:
