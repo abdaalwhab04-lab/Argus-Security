@@ -64,6 +64,7 @@ TERMUX_DEBIAN_PACKAGES=(
     postgresql-client procps psmisc
     qemu-system-x86 qemu-utils
     redis-server ripgrep rsync ruby
+    gh tshark docker-compose qemu-user
     rustc cargo
     screen sed strace sudo
     tar tmux tor tree unzip util-linux
