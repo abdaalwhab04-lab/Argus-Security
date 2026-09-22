@@ -9,6 +9,8 @@ TEMP_INIT="/tmp/nexora-init-template"
 
 DEBIAN_SUITE="${DEBIAN_SUITE:-bookworm}"
 DEBIAN_MIRROR="${DEBIAN_MIRROR:-http://deb.debian.org/debian}"
+NODE_VERSION="${NODE_VERSION:-24.21.0}"
+PNPM_VERSION="${PNPM_VERSION:-10.20.0}"
 
 echo "=== NEXORA ROOTFS BUILD ==="
 echo "Distribution: Debian ${DEBIAN_SUITE}"
@@ -40,10 +42,46 @@ echo "=== Bootstrap Debian ==="
 sudo debootstrap \
     --arch=amd64 \
     --variant=minbase \
-    --include=systemd,systemd-sysv,docker.io,containerd,runc,kmod \
+    --include=systemd,systemd-sysv,docker.io,containerd,runc,kmod,build-essential,pkg-config,git,curl,ca-certificates,unzip,xz-utils,python3,python3-pip,python3-venv,python3-dev,libffi-dev,libssl-dev,libsqlite3-dev,libpq-dev,iproute2,iptables \
     "${DEBIAN_SUITE}" \
     "${ROOTFS_DIR}" \
     "${DEBIAN_MIRROR}"
+
+cat > "${ROOTFS_DIR}/etc/apt/apt.conf.d/80-nexora-dev" <<'APTCONF'
+APT::Install-Recommends "false";
+APT::Install-Suggests "false";
+APTCONF
+
+echo "=== Install verified Node.js ${NODE_VERSION} LTS ==="
+
+NODE_TARBALL="node-v${NODE_VERSION}-linux-x64.tar.xz"
+NODE_BASE_URL="https://nodejs.org/dist/v${NODE_VERSION}"
+NODE_TMP="/tmp/${NODE_TARBALL}"
+NODE_SUMS="/tmp/SHASUMS256.txt"
+
+curl -fsSL "${NODE_BASE_URL}/SHASUMS256.txt" -o "${NODE_SUMS}"
+curl -fsSL "${NODE_BASE_URL}/${NODE_TARBALL}" -o "${NODE_TMP}"
+
+(
+    cd /tmp
+    grep " ${NODE_TARBALL}$" "${NODE_SUMS}" | sha256sum -c -
+)
+
+rm -rf "${ROOTFS_DIR}/usr/local/lib/nodejs"
+mkdir -p "${ROOTFS_DIR}/usr/local/lib/nodejs"
+tar -xJf "${NODE_TMP}" -C "${ROOTFS_DIR}/usr/local/lib/nodejs"
+
+ln -sfn "/usr/local/lib/nodejs/node-v${NODE_VERSION}-linux-x64/bin/node" "${ROOTFS_DIR}/usr/local/bin/node"
+ln -sfn "/usr/local/lib/nodejs/node-v${NODE_VERSION}-linux-x64/bin/npm" "${ROOTFS_DIR}/usr/local/bin/npm"
+ln -sfn "/usr/local/lib/nodejs/node-v${NODE_VERSION}-linux-x64/bin/npx" "${ROOTFS_DIR}/usr/local/bin/npx"
+
+if [ -x "${ROOTFS_DIR}/usr/local/lib/nodejs/node-v${NODE_VERSION}-linux-x64/bin/corepack" ]; then
+    ln -sfn "/usr/local/lib/nodejs/node-v${NODE_VERSION}-linux-x64/bin/corepack" "${ROOTFS_DIR}/usr/local/bin/corepack"
+fi
+
+rm -f "${NODE_TMP}" "${NODE_SUMS}"
+
+echo "NEXORA_NODE_OK"
 
 echo "=== Verify Debian init ==="
 
@@ -77,6 +115,34 @@ mkdir -p "${ROOTFS_DIR}/initramfs"
 cp "${TEMP_INIT}" "${ROOTFS_DIR}/initramfs/init"
 chmod +x "${ROOTFS_DIR}/initramfs/init"
 rm -f "${TEMP_INIT}"
+
+echo "=== Configure Debian development toolchain ==="
+
+if ! chroot "${ROOTFS_DIR}" /usr/local/bin/node --version | grep -q '^v${NODE_VERSION%%.*}\\.'; then
+    echo "ERROR: Node.js ${NODE_VERSION} was not installed correctly."
+    chroot "${ROOTFS_DIR}" /usr/local/bin/node --version || true
+    exit 1
+fi
+
+if ! chroot "${ROOTFS_DIR}" /usr/local/bin/npm --version >/dev/null 2>&1; then
+    echo "ERROR: npm was not installed correctly."
+    exit 1
+fi
+
+if [ -x "${ROOTFS_DIR}/usr/local/bin/corepack" ]; then
+    chroot "${ROOTFS_DIR}" /usr/local/bin/corepack enable
+    chroot "${ROOTFS_DIR}" /usr/local/bin/corepack prepare "pnpm@${PNPM_VERSION}" --activate
+else
+    chroot "${ROOTFS_DIR}" /usr/local/bin/npm install --global "pnpm@${PNPM_VERSION}"
+fi
+
+chroot "${ROOTFS_DIR}" /usr/local/bin/node --version
+chroot "${ROOTFS_DIR}" /usr/local/bin/npm --version
+chroot "${ROOTFS_DIR}" /usr/local/bin/pnpm --version
+
+echo "NEXORA_NODE_TOOLCHAIN_OK"
+echo "NEXORA_PYTHON_TOOLCHAIN_OK"
+echo "NEXORA_BUILD_TOOLCHAIN_OK"
 
 echo "=== Configure RootFS ==="
 echo "=== Configure iptables compatibility ==="
