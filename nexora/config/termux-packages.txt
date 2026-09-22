@@ -263,7 +263,6 @@ redis
 resolv-conf
 ripgrep
 rsync
-rub
 ruby
 rust
 rust-std-aarch64-linux-android
