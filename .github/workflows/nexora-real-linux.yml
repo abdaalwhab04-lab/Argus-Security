@@ -96,6 +96,67 @@ jobs:
           docker buildx version
           echo "NEXORA_AUTOGPT_COMPOSE_PREFLIGHT_OK"
 
+      - name: Inspect AutoGPT Compose runtime requirements
+        run: |
+          set -euo pipefail
+          CONFIG_JSON="$(mktemp)"
+          docker compose -f autogpt/autogpt_platform/docker-compose.yml config --format json > "$CONFIG_JSON"
+          python3 - "$CONFIG_JSON" <<'PY'
+          import json
+          import sys
+
+          data = json.load(open(sys.argv[1]))
+          services = data.get("services", {})
+          if not services:
+              raise SystemExit("ERROR: AutoGPT Compose resolved to zero services")
+
+          print(f"NEXORA_AUTOGPT_SERVICE_COUNT={len(services)}")
+          for name, service in services.items():
+              build = service.get("build")
+              image = service.get("image")
+              if build:
+                  context = build.get("context") if isinstance(build, dict) else build
+                  print(f"AUTOGPT_BUILD_SERVICE={name} CONTEXT={context}")
+              elif image:
+                  print(f"AUTOGPT_IMAGE_SERVICE={name} IMAGE={image}")
+
+              unsupported = []
+              if service.get("privileged"):
+                  unsupported.append("privileged")
+              if service.get("network_mode") == "host":
+                  unsupported.append("network_mode=host")
+              if service.get("pid") == "host":
+                  unsupported.append("pid=host")
+              if service.get("ipc") == "host":
+                  unsupported.append("ipc=host")
+              if service.get("devices"):
+                  unsupported.append("devices")
+              if unsupported:
+                  raise SystemExit(
+                      f"ERROR: {name} requires unsupported NEXORA Docker mode(s): "
+                      + ", ".join(unsupported)
+                  )
+
+              tmpfs = service.get("tmpfs", [])
+              for mount in tmpfs if isinstance(tmpfs, list) else []:
+                  if "size=" in str(mount):
+                      print(f"AUTOGPT_TMPFS_SERVICE={name} {mount}")
+
+          required = {
+              "db", "rabbitmq", "redis-0", "redis-1", "redis-2",
+              "redis-init", "falkordb", "migrate", "rest_server",
+              "executor", "copilot_executor", "websocket_server",
+              "database_manager", "scheduler_server", "notification_server",
+              "frontend", "clamav",
+          }
+          missing = sorted(required - services.keys())
+          if missing:
+              raise SystemExit("ERROR: missing required resolved services: " + ", ".join(missing))
+
+          print("NEXORA_AUTOGPT_RUNTIME_REQUIREMENTS_OK")
+          PY
+          rm -f "$CONFIG_JSON"
+
       - name: Check NEXORA build tools
         run: |
           set -euo pipefail
