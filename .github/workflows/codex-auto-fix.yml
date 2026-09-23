@@ -1,0 +1,137 @@
+name: Codex Auto-Fix Failed Runs
+
+on:
+  workflow_run:
+    workflows: ["*"]
+    types: [completed]
+    branches:
+      - omniroute-v3.8.50-integration
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Failed GitHub Actions run ID to repair"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  actions: read
+  pull-requests: write
+
+concurrency:
+  group: codex-auto-fix-${{ github.event.workflow_run.id || inputs.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  auto-fix:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'failure' &&
+       github.event.workflow_run.head_branch == 'omniroute-v3.8.50-integration')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Resolve failed run
+        id: run
+        env:
+          EVENT_RUN_ID: ${{ github.event.workflow_run.id }}
+          MANUAL_RUN_ID: ${{ inputs.run_id }}
+        run: |
+          set -euo pipefail
+          RUN_ID="${EVENT_RUN_ID:-$MANUAL_RUN_ID}"
+          test -n "$RUN_ID"
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Inspect failed run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ steps.run.outputs.run_id }}
+        run: |
+          set -euo pipefail
+          mkdir -p .codex-autofix
+          gh run view "$RUN_ID" --json databaseId,name,displayTitle,status,conclusion,headBranch,headSha,url > .codex-autofix/run.json
+          gh run view "$RUN_ID" --log-failed > .codex-autofix/failed.log || true
+          if [ ! -s .codex-autofix/failed.log ]; then
+            gh run view "$RUN_ID" --log > .codex-autofix/failed.log || true
+          fi
+          tail -n 12000 .codex-autofix/failed.log > .codex-autofix/failed-tail.log || true
+          cat .codex-autofix/run.json
+
+      - name: Checkout exact failed revision
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Copy diagnostic evidence
+        env:
+          RUN_ID: ${{ steps.run.outputs.run_id }}
+        run: |
+          mkdir -p .codex-autofix
+          cp "${GITHUB_WORKSPACE}/.codex-autofix/run.json" .codex-autofix/run.json
+          cp "${GITHUB_WORKSPACE}/.codex-autofix/failed-tail.log" .codex-autofix/failed-tail.log
+
+      - name: Run Codex diagnosis and repair
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          permission-profile: ":workspace"
+          model: gpt-5.3-codex
+          effort: high
+          prompt: |
+            You are the automated repair agent for the Argus-Security repository.
+
+            A GitHub Actions workflow on branch omniroute-v3.8.50-integration failed.
+            The exact failed-run metadata is in .codex-autofix/run.json.
+            The failed log evidence is in .codex-autofix/failed-tail.log.
+
+            Your task:
+            1. Read the run metadata and failure log first.
+            2. Identify the concrete root cause; do not guess.
+            3. Inspect the relevant workflow, scripts, configuration, and surrounding code.
+            4. Make the smallest safe repository changes that address the root cause.
+            5. Preserve existing Argus-Security behavior and do not rewrite unrelated files.
+            6. Pay special attention to ARM64/self-hosted/Termux, OmniRoute, NEXORA, Docker,
+               Node/npm native modules, and GitHub Actions behavior when the evidence points there.
+            7. Run focused validation that is possible on ubuntu-latest without requiring secrets.
+            8. Do NOT modify secrets, authentication tokens, repository settings, or protected branches.
+            9. Do NOT push or create a pull request yourself; the surrounding workflow handles that.
+            10. If the evidence is insufficient or the fix would be speculative, make no code change
+                and clearly explain the blocker in your final message.
+
+            The desired outcome is a minimal, evidence-based fix ready for review.
+          safety-strategy: drop-sudo
+
+      - name: Check for changes
+        id: changes
+        run: |
+          set -euo pipefail
+          git status --short
+          if git diff --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create repair branch and pull request
+        if: steps.changes.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ steps.run.outputs.run_id }}
+          SOURCE_BRANCH: ${{ github.event.workflow_run.head_branch || 'omniroute-v3.8.50-integration' }}
+        run: |
+          set -euo pipefail
+          FIX_BRANCH="codex-auto-fix/run-${RUN_ID}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$FIX_BRANCH"
+          git add -A
+          git commit -m "fix: automated repair for failed run ${RUN_ID}"
+          git push --set-upstream origin "$FIX_BRANCH"
+          gh pr create             --base "$SOURCE_BRANCH"             --head "$FIX_BRANCH"             --title "fix: Codex repair for failed run ${RUN_ID}"             --body "Automated repair generated by Codex after failed GitHub Actions run ${RUN_ID}.\n\nCodex was instructed to make the smallest evidence-based change and run focused validation. Review the diff and CI results before merging."
+
+      - name: Report no safe change
+        if: steps.changes.outputs.changed == 'false'
+        run: |
+          echo "Codex made no repository changes. No pull request was created."
