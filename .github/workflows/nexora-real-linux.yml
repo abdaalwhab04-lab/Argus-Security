@@ -77,6 +77,19 @@ jobs:
           docker version --format 'NEXORA_HOST_DOCKER={{.Server.Version}}'
           echo "NEXORA_HOST_DOCKER_READY"
 
+      - name: Preflight AutoGPT Docker Compose
+        run: |
+          set -euo pipefail
+          test -f autogpt/autogpt_platform/docker-compose.yml
+          test -f autogpt/autogpt_platform/docker-compose.platform.yml
+          test -f autogpt/autogpt_platform/backend/Dockerfile
+          test -f autogpt/autogpt_platform/frontend/Dockerfile
+          test -f autogpt/autogpt_platform/backend/.env.default
+          test -f autogpt/autogpt_platform/frontend/.env.default
+          test -f autogpt/autogpt_platform/db/init/00-init.sql
+          docker compose -f autogpt/autogpt_platform/docker-compose.yml -f autogpt/autogpt_platform/docker-compose.platform.yml config --quiet
+          echo "NEXORA_AUTOGPT_COMPOSE_PREFLIGHT_OK"
+
       - name: Check NEXORA build tools
         run: |
           set -euo pipefail
@@ -116,6 +129,9 @@ jobs:
             CONFIG_OVERLAY_FS=y \
             CONFIG_NAMESPACES=y \
             CONFIG_CGROUPS=y \
+            CONFIG_CGROUP2_FS=y \
+            CONFIG_SECCOMP=y \
+            CONFIG_SECCOMP_FILTER=y \
             CONFIG_CGROUP_DEVICE=y \
             CONFIG_CGROUP_PIDS=y \
             CONFIG_MEMCG=y \
