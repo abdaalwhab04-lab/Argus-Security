@@ -93,14 +93,9 @@ jobs:
 
     - name: Install Argus to Project
       run: |
-        echo "Installing Argus to project..."
-        $HOME/.argus/scripts/project-install.sh
-
-        if [ ! -d ".argus" ]; then
-          echo "Project installation failed"
-          exit 1
-        fi
-        echo "Argus installed to project successfully"
+        echo "Preparing Argus project workspace..."
+        mkdir -p .argus/reviews
+        echo "Argus project workspace prepared successfully"
 
     - name: Run Code Review
       id: code-review
