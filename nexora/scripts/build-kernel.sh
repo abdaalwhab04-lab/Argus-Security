@@ -53,22 +53,56 @@ echo "=== Prepare Kernel Configuration ==="
 ARCH=x86 make x86_64_defconfig
 
 NEXORA_CONFIG="${NEXORA_DIR}/config/kernel.conf"
+test -f "${NEXORA_CONFIG}"
 
-if [ -f "${NEXORA_CONFIG}" ]; then
-    while IFS= read -r option; do
-        case "${option}" in
-            ""|\#*)
-                continue
-                ;;
-            CONFIG_*=y)
-                name="${option%%=*}"
-                scripts/config --enable "${name#CONFIG_}" 2>/dev/null || true
-                ;;
-        esac
-    done < "${NEXORA_CONFIG}"
-fi
+while IFS= read -r option; do
+    case "${option}" in
+        ""|\#*)
+            continue
+            ;;
+        CONFIG_*=y)
+            name="${option%%=*}"
+            echo "Enable kernel option: ${option}"
+            if ! scripts/config --enable "${name#CONFIG_}"; then
+                echo "ERROR: unable to enable required kernel option: ${option}"
+                exit 1
+            fi
+            ;;
+    esac
+done < "${NEXORA_CONFIG}"
 
 ARCH=x86 make olddefconfig
+
+echo "=== Verify Requested Kernel Configuration ==="
+config_failed=0
+while IFS= read -r option; do
+    case "${option}" in
+        ""|\#*)
+            continue
+            ;;
+        CONFIG_*=y)
+            if grep -qxF "${option}" .config; then
+                echo "KERNEL_CONFIG_OK ${option}"
+            else
+                echo "ERROR: required kernel option is not =y after olddefconfig: ${option}"
+                actual="$(grep -E "^\${option%%=*}(=| is not set)" .config || true)"
+                if [ -n "${actual}" ]; then
+                    echo "KERNEL_CONFIG_ACTUAL ${actual}"
+                else
+                    echo "KERNEL_CONFIG_ACTUAL <absent>"
+                fi
+                config_failed=1
+            fi
+            ;;
+    esac
+done < "${NEXORA_CONFIG}"
+
+if [ "${config_failed}" -ne 0 ]; then
+    echo "ERROR: NEXORA kernel configuration verification failed before compilation."
+    exit 1
+fi
+
+echo "NEXORA_KERNEL_CONFIG_READY"
 
 echo "=== Build Linux Kernel ==="
 
