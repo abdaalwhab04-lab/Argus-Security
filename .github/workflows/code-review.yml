@@ -39,7 +39,6 @@ jobs:
       uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8  # v4.0.2
       with:
         node-version: '18'
-
     - name: Install Argus
       run: |
         echo "Setting up Argus base installation..."
@@ -230,8 +229,7 @@ jobs:
             echo "Repository: ${{ github.repository }}" >> .argus/reviews/review-report.md
             echo "Branch: ${{ github.ref_name }}" >> .argus/reviews/review-report.md
             echo "Commit: ${{ github.sha }}" >> .argus/reviews/review-report.md
-            echo "" >> .argus/reviews/reviews-report.md
-            echo "## Review Summary" >> .argus/reviews/review-report.md
+                        echo "## Review Summary" >> .argus/reviews/review-report.md
             echo "**Review Date:** $(date)" >> .argus/reviews/review-report.md
             echo "**Repository:** ${{ github.repository }}" >> .argus/reviews/review-report.md
             echo "**Branch:** ${{ github.ref_name }}" >> .argus/reviews/review-report.md
@@ -356,4 +354,4 @@ jobs:
         echo "- 💡 **Suggestions:** 8 (Good to have improvements)" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "📁 **Detailed reports available in artifacts**" >> $GITHUB_STEP_SUMMARY
-        echo "👉 **Review the uploaded reports for detailed findings and action items** >> $GITHUB_STEP_SUMMARY
+        echo "👉 **Review the uploaded reports for detailed findings and action items**" >> $GITHUB_STEP_SUMMARY
