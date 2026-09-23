@@ -372,6 +372,18 @@ mkdir -p "${ROOTFS_DIR}/var/lib/docker"
 mkdir -p "${ROOTFS_DIR}/var/lib/containerd"
 mkdir -p "${ROOTFS_DIR}/persist"
 
+# Docker must store its graph on the persistent ext4 filesystem mounted at
+# /persist. /var/lib/docker is bind-mounted there by the initramfs before
+# systemd starts Docker; without this explicit config Docker may initialize
+# a fresh graph under the outer NEXORA overlay and select vfs.
+mkdir -p "${ROOTFS_DIR}/etc/docker"
+cat > "${ROOTFS_DIR}/etc/docker/daemon.json" <<'DAEMON'
+{
+  "data-root": "/var/lib/docker",
+  "storage-driver": "overlay2"
+}
+DAEMON
+
 cat > "${ROOTFS_DIR}/usr/local/bin/nexora-persistence-test.sh" <<'PERSISTTEST'
 #!/bin/sh
 set -eu
