@@ -40,7 +40,7 @@ jobs:
           grep -qx 'CONFIG_NF_NAT=y' nexora/config/kernel.conf
           grep -q 'TERMUX_DEBIAN_PACKAGES+=(p7zip-full)' nexora/scripts/build-rootfs.sh
           grep -q '\[7z\]=p7zip-full' nexora/scripts/build-rootfs.sh
-grep -q '\[docker-compose\]=docker.io' nexora/scripts/build-rootfs.sh
+          grep -q '\[docker-compose\]=docker.io' nexora/scripts/build-rootfs.sh
           grep -q 'NEXORA_TERMUX_MAPPING_PREFLIGHT_OK' nexora/scripts/build-rootfs.sh
           grep -q 'NEXORA_DOCKER_COMPOSE_V2_OK' nexora/scripts/build-rootfs.sh
           grep -q 'NEXORA_DOCKER_BUILDX_OK' nexora/scripts/build-rootfs.sh
@@ -55,10 +55,7 @@ grep -q '\[docker-compose\]=docker.io' nexora/scripts/build-rootfs.sh
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y \
-            build-essential bc bison flex libssl-dev libelf-dev libdw-dev \
-            cpio gzip xorriso grub-pc-bin grub-efi-amd64-bin grub-efi-amd64 \
-            mtools rsync busybox-static qemu-system-x86 debootstrap e2fsprogs
+          sudo apt-get install -y             build-essential bc bison flex libssl-dev libelf-dev libdw-dev             cpio gzip xorriso grub-pc-bin grub-efi-amd64-bin grub-efi-amd64             mtools rsync busybox-static qemu-system-x86 debootstrap e2fsprogs
 
       - name: Show system information
         run: |
@@ -187,27 +184,7 @@ grep -q '\[docker-compose\]=docker.io' nexora/scripts/build-rootfs.sh
           test -f "${KERNEL_IMAGE}"
           KERNEL_CONFIG="nexora/build/linux-${KERNEL_VERSION}/.config"
           test -f "${KERNEL_CONFIG}"
-          for cfg in \
-            CONFIG_EXT4_FS=y \
-            CONFIG_ISO9660_FS=y \
-            CONFIG_BLK_DEV_SR=y \
-            CONFIG_VIRTIO=y \
-            CONFIG_VIRTIO_PCI=y \
-            CONFIG_VIRTIO_BLK=y \
-            CONFIG_OVERLAY_FS=y \
-            CONFIG_NAMESPACES=y \
-            CONFIG_CGROUPS=y \
-            CONFIG_CGROUP2_FS=y \
-            CONFIG_SECCOMP=y \
-            CONFIG_SECCOMP_FILTER=y \
-            CONFIG_CGROUP_DEVICE=y \
-            CONFIG_CGROUP_PIDS=y \
-            CONFIG_MEMCG=y \
-            CONFIG_BRIDGE=y \
-            CONFIG_VETH=y \
-            CONFIG_NETFILTER=y \
-            CONFIG_NF_CONNTRACK=y \
-            CONFIG_NF_NAT=y; do
+          for cfg in             CONFIG_EXT4_FS=y CONFIG_ISO9660_FS=y CONFIG_BLK_DEV_SR=y CONFIG_VIRTIO=y             CONFIG_VIRTIO_PCI=y CONFIG_VIRTIO_BLK=y CONFIG_OVERLAY_FS=y CONFIG_NAMESPACES=y             CONFIG_CGROUPS=y CONFIG_CGROUP2_FS=y CONFIG_SECCOMP=y CONFIG_SECCOMP_FILTER=y             CONFIG_CGROUP_DEVICE=y CONFIG_CGROUP_PIDS=y CONFIG_MEMCG=y CONFIG_BRIDGE=y             CONFIG_VETH=y CONFIG_NETFILTER=y CONFIG_NF_CONNTRACK=y CONFIG_NF_NAT=y; do
             grep -qx "$cfg" "${KERNEL_CONFIG}"
           done
           ls -lh "${KERNEL_IMAGE}"
@@ -269,7 +246,6 @@ grep -q '\[docker-compose\]=docker.io' nexora/scripts/build-rootfs.sh
         shell: bash
         run: |
           set -euo pipefail
-
           ISO_IMAGE="nexora/build/output/nexora.iso"
           PERSISTENT_DISK="nexora/build/persistent-data.img"
           OUTPUT_DIR="output"
@@ -279,12 +255,7 @@ grep -q '\[docker-compose\]=docker.io' nexora/scripts/build-rootfs.sh
           run_nexora_boot() {
             local LOG_FILE="${1}"
             rm -f "${QMP_SOCKET}" "${LOG_FILE}"
-
-            qemu-system-x86_64 \
-              -m 1024 -machine q35 -display none -serial stdio \
-              -cdrom "${ISO_IMAGE}" \
-              -drive file="${PERSISTENT_DISK}",format=raw,if=virtio \
-              -qmp "unix:${QMP_SOCKET},server=on,wait=off" -no-reboot >"${LOG_FILE}" 2>&1 &
+            qemu-system-x86_64               -m 1024 -machine q35 -display none -serial stdio               -cdrom "${ISO_IMAGE}"               -drive file="${PERSISTENT_DISK}",format=raw,if=virtio               -qmp "unix:${QMP_SOCKET},server=on,wait=off" -no-reboot >"${LOG_FILE}" 2>&1 &
             local QEMU_PID=$!
 
             qemu_running() {
@@ -295,13 +266,8 @@ grep -q '\[docker-compose\]=docker.io' nexora/scripts/build-rootfs.sh
             }
 
             for _ in $(seq 1 90); do
-              if grep -qE "NEXORA_PERSISTENCE_INITIALIZED|NEXORA_PERSISTENCE_RESTORED" "${LOG_FILE}"; then
-                break
-              fi
-              if ! qemu_running; then
-                cat "${LOG_FILE}"
-                return 1
-              fi
+              if grep -qE "NEXORA_PERSISTENCE_INITIALIZED|NEXORA_PERSISTENCE_RESTORED" "${LOG_FILE}"; then break; fi
+              if ! qemu_running; then cat "${LOG_FILE}"; return 1; fi
               sleep 1
             done
 
@@ -313,10 +279,8 @@ grep -q '\[docker-compose\]=docker.io' nexora/scripts/build-rootfs.sh
               return 1
             fi
 
-            # QMP is only a graceful-shutdown optimization. It is deliberately
-            # NOT a correctness gate: guest markers and disk sync are the gates.
             if [ -S "${QMP_SOCKET}" ]; then
-              if python3 -c 'import json,socket,sys,time; p=sys.argv[1]; s=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM); s.settimeout(3); s.connect(p); s.recv(65536); s.sendall((json.dumps({"execute":"qmp_capabilities","id":"caps"})+"\\r\\n").encode()); time.sleep(0.1); s.recv(65536); s.sendall((json.dumps({"execute":"quit","id":"quit"})+"\\r\\n").encode()); s.close()' "${QMP_SOCKET}"; then
+              if python3 -c 'import json,socket,sys,time; p=sys.argv[1]; s=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM); s.settimeout(3); s.connect(p); s.recv(65536); s.sendall((json.dumps({"execute":"qmp_capabilities","id":"caps"})+"\r\n").encode()); time.sleep(0.1); s.recv(65536); s.sendall((json.dumps({"execute":"quit","id":"quit"})+"\r\n").encode()); s.close()' "${QMP_SOCKET}"; then
                 echo "NEXORA_QMP_QUIT_SENT" >> "${LOG_FILE}"
               else
                 echo "NEXORA_QMP_QUIT_FAILED" >> "${LOG_FILE}"
@@ -325,27 +289,16 @@ grep -q '\[docker-compose\]=docker.io' nexora/scripts/build-rootfs.sh
               echo "NEXORA_QMP_SOCKET_ABSENT" >> "${LOG_FILE}"
             fi
 
-            # Always reclaim QEMU and flush the persistent image, even if QMP
-            # is unavailable or the guest has already exited.
-            for _ in $(seq 1 10); do
-              if ! qemu_running; then break; fi
-              sleep 1
-            done
-
+            for _ in $(seq 1 10); do if ! qemu_running; then break; fi; sleep 1; done
             if qemu_running; then
               echo "NEXORA_QEMU_TERM_SENT" >> "${LOG_FILE}"
               kill -TERM "${QEMU_PID}" 2>/dev/null || true
-              for _ in $(seq 1 5); do
-                if ! qemu_running; then break; fi
-                sleep 1
-              done
+              for _ in $(seq 1 5); do if ! qemu_running; then break; fi; sleep 1; done
             fi
-
             if qemu_running; then
               echo "NEXORA_QEMU_KILL_SENT" >> "${LOG_FILE}"
               kill -KILL "${QEMU_PID}" 2>/dev/null || true
             fi
-
             wait "${QEMU_PID}" 2>/dev/null || true
             sync
             echo "NEXORA_HOST_DISK_SYNC_DONE"
@@ -355,7 +308,6 @@ grep -q '\[docker-compose\]=docker.io' nexora/scripts/build-rootfs.sh
 
           BOOT_LOG="${OUTPUT_DIR}/nexora-qemu-boot.log"
           run_nexora_boot "${BOOT_LOG}"
-
           grep -q "NEXORA_BOOT_OK" "${BOOT_LOG}"
           grep -q "NEXORA_DEBIAN_ROOTFS_FOUND" "${BOOT_LOG}"
           grep -q "NEXORA_PERSISTENT_STORAGE_OK" "${BOOT_LOG}"
@@ -364,15 +316,9 @@ grep -q '\[docker-compose\]=docker.io' nexora/scripts/build-rootfs.sh
           grep -q "NEXORA_DOCKER_CONTAINER_OK" "${BOOT_LOG}"
           grep -q "NEXORA_PERSISTENCE_INITIALIZED" "${BOOT_LOG}"
           grep -q "NEXORA_PERSISTENCE_SYNCED" "${BOOT_LOG}"
-          # QMP quit is best-effort; QEMU may already exit after the guest completes
-          # its persistence sync. The function above guarantees cleanup and host sync.
           grep -q "NEXORA_HOST_DISK_SYNC_DONE" "${BOOT_LOG}"
           echo "NEXORA_QEMU_BOOT_OK"
 
-          # GitHub-hosted Linux runners do not guarantee usable /dev/loop devices.
-          # Do not mount the image on the host: QEMU already validated the guest-side
-          # filesystem, and debugfs can verify the persisted ext4 marker directly
-          # without requiring a loop device or replaying the journal.
           sudo debugfs -R "stat /nexora-persistence-marker" "${PERSISTENT_DISK}" 2>/dev/null | grep -q "Type: regular"
           sudo debugfs -R "cat /nexora-persistence-marker" "${PERSISTENT_DISK}" 2>/dev/null | grep -q "NEXORA"
           echo "NEXORA_HOST_PERSISTENCE_MARKER_OK"
@@ -384,7 +330,6 @@ grep -q '\[docker-compose\]=docker.io' nexora/scripts/build-rootfs.sh
           grep -q "NEXORA_DOCKER_OK" "${SECOND_BOOT_LOG}"
           grep -q "NEXORA_DEBIAN_USERSPACE_OK" "${SECOND_BOOT_LOG}"
           grep -q "NEXORA_DOCKER_CONTAINER_OK" "${SECOND_BOOT_LOG}"
-          # QMP shutdown remains best-effort on the reboot validation.
           grep -q "NEXORA_HOST_DISK_SYNC_DONE" "${SECOND_BOOT_LOG}"
           echo "NEXORA_PERSISTENCE_REBOOT_OK"
 
@@ -400,10 +345,6 @@ grep -q '\[docker-compose\]=docker.io' nexora/scripts/build-rootfs.sh
       - name: Check Argus configuration
         run: |
           set -euo pipefail
-          # The audit entry point imports tenacity and other declared Argus
-          # runtime dependencies. Install the project's declared dependency set
-          # before executing the configuration check so the check validates the
-          # real application environment instead of a pytest-only environment.
           python3 -m pip install -r requirements.txt
           python3 -m pip check
           python3 -c "import tenacity; print('ARGUS_TENACITY_OK')"
