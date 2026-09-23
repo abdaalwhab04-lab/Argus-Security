@@ -57,7 +57,7 @@ APTCONF
 echo "=== Mirror portable Termux development tools into Debian ==="
 
 TERMUX_DEBIAN_PACKAGES=(
-    bc bison clang cpio curl dos2unix
+    bash bc bison clang cpio curl dos2unix
     ffmpeg file fish flex gawk git
     jq less lld llvm lsof lua5.4
     m4 make nano net-tools nmap
@@ -97,7 +97,7 @@ declare -A TERMUX_COMMAND_PACKAGES=(
 )
 
 TERMUX_REQUIRED_COMMANDS=(
-    7z bash bc docker docker-compose clang cpio curl ffmpeg file fish flex gawk gh git jq
+    7z bash bc docker clang cpio curl ffmpeg file fish flex gawk gh git jq
     lsof lua5.4 make nano nmap ssh openssl parallel patch perl php psql
     qemu-system-x86_64 redis-server rg rsync ruby rustc cargo strace sudo
     tar tmux tor tree unzip vim w3m wget xorriso zip cmake ninja tshark
