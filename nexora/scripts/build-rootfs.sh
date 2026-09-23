@@ -66,7 +66,7 @@ TERMUX_DEBIAN_PACKAGES=(
     postgresql-client procps psmisc
     qemu-system-x86 qemu-utils
     redis-server ripgrep rsync ruby
-    gh tshark docker-compose qemu-user
+    gh tshark qemu-user
     rustc cargo
     screen sed strace sudo
     tar tmux tor tree unzip util-linux
@@ -83,7 +83,7 @@ TERMUX_DEBIAN_PACKAGES+=(p7zip-full)
 # Keep command-to-package mappings explicit. This preflight catches missing
 # package mappings before the expensive package installation step.
 declare -A TERMUX_COMMAND_PACKAGES=(
-    [7z]=p7zip-full [bash]=bash [docker]=docker.io [docker-compose]=docker-compose [bc]=bc [clang]=clang [cpio]=cpio
+    [7z]=p7zip-full [bash]=bash [docker]=docker.io [docker-compose]=docker.io [bc]=bc [clang]=clang [cpio]=cpio
     [curl]=curl [ffmpeg]=ffmpeg [file]=file [fish]=fish [flex]=flex
     [gawk]=gawk [gh]=gh [git]=git [jq]=jq [lsof]=lsof [lua5.4]=lua5.4
     [make]=make [nano]=nano [nmap]=nmap [ssh]=openssh-client
@@ -197,12 +197,25 @@ mkdir -p "$(dirname "${COMPOSE_PLUGIN}")"
 install -m 0755 "${COMPOSE_TMP}" "${COMPOSE_PLUGIN}"
 rm -f "${COMPOSE_TMP}"
 
+# Keep the historical docker-compose command available without installing
+# Debian legacy Compose v1. The wrapper executes the Compose v2 plugin.
+cat > "${ROOTFS_DIR}/usr/local/bin/docker-compose" <<'COMPOSE_WRAPPER'
+#!/bin/sh
+exec /usr/bin/docker compose "$@"
+COMPOSE_WRAPPER
+chmod 0755 "${ROOTFS_DIR}/usr/local/bin/docker-compose"
+
 if ! chroot "${ROOTFS_DIR}" /usr/bin/docker compose version >/dev/null 2>&1; then
     echo "ERROR: Docker Compose v2 plugin is not available."
     chroot "${ROOTFS_DIR}" /usr/bin/docker version || true
     exit 1
 fi
 chroot "${ROOTFS_DIR}" /usr/bin/docker compose version
+if ! chroot "${ROOTFS_DIR}" /usr/local/bin/docker-compose version >/dev/null 2>&1; then
+    echo "ERROR: docker-compose compatibility wrapper is not available."
+    exit 1
+fi
+chroot "${ROOTFS_DIR}" /usr/local/bin/docker-compose version
 echo "NEXORA_DOCKER_COMPOSE_V2_OK"
 
 echo "=== Install Docker Buildx plugin for Compose image builds ==="
