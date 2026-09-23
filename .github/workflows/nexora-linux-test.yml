@@ -55,8 +55,15 @@ jobs:
           test -x "$ROOTFS/usr/local/bin/pnpm"
           test -x "$ROOTFS/usr/local/bin/docker-compose"
           test -x "$ROOTFS/usr/local/bin/nexora-userspace-start.sh"
-          sudo chroot "$ROOTFS" /usr/bin/docker compose version
-          sudo chroot "$ROOTFS" /usr/bin/docker buildx version
+          test -x "$ROOTFS/usr/local/lib/docker/cli-plugins/docker-compose"
+          test -x "$ROOTFS/usr/local/lib/docker/cli-plugins/docker-buildx"
+
+          # Use a clean Debian environment. This prevents host Docker context,
+          # DOCKER_HOST, DOCKER_CONFIG, PATH, or HOME values from leaking into
+          # the RootFS validation.
+          sudo chroot "$ROOTFS" /usr/bin/env -i HOME=/root PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin /usr/bin/docker --version
+          sudo chroot "$ROOTFS" /usr/bin/env -i HOME=/root PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin /usr/local/lib/docker/cli-plugins/docker-compose version
+          sudo chroot "$ROOTFS" /usr/bin/env -i HOME=/root PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin /usr/local/lib/docker/cli-plugins/docker-buildx version
           sudo chroot "$ROOTFS" /usr/local/bin/node --version
           sudo chroot "$ROOTFS" /usr/local/bin/npm --version
           sudo chroot "$ROOTFS" /usr/local/bin/pnpm --version
@@ -84,7 +91,7 @@ jobs:
           done
           sudo chroot "$ROOTFS" /usr/local/bin/node --version
           sudo chroot "$ROOTFS" /usr/bin/python3 --version
-          sudo chroot "$ROOTFS" /usr/bin/docker compose version
+          sudo chroot "$ROOTFS" /usr/bin/env -i HOME=/root PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin /usr/local/lib/docker/cli-plugins/docker-compose version
           sudo chroot "$ROOTFS" /usr/bin/git --version
           echo "NEXORA_TERMUX_TO_DEBIAN_OK"
 
