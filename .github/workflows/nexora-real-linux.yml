@@ -20,6 +20,29 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
 
+      - name: Preflight NEXORA build scripts
+        run: |
+          set -euo pipefail
+          echo "=== NEXORA SCRIPT PREFLIGHT ==="
+          for script in             nexora/scripts/build-rootfs.sh             nexora/scripts/build-kernel.sh             nexora/scripts/build-initramfs.sh             nexora/scripts/build-iso.sh             nexora/scripts/build-persistent-storage.sh             nexora/scripts/integrate-argus.sh; do
+            test -f "$script"
+            bash -n "$script"
+            echo "SYNTAX_OK $script"
+          done
+          test -f nexora/rootfs/initramfs/init
+          test -x nexora/rootfs/initramfs/init
+          test -f nexora/config/kernel.conf
+          grep -qx 'CONFIG_EXT4_FS=y' nexora/config/kernel.conf
+          grep -qx 'CONFIG_OVERLAY_FS=y' nexora/config/kernel.conf
+          grep -qx 'CONFIG_VIRTIO_BLK=y' nexora/config/kernel.conf
+          grep -qx 'CONFIG_BRIDGE=y' nexora/config/kernel.conf
+          grep -qx 'CONFIG_VETH=y' nexora/config/kernel.conf
+          grep -qx 'CONFIG_NF_NAT=y' nexora/config/kernel.conf
+          grep -q 'TERMUX_DEBIAN_PACKAGES+=(p7zip-full)' nexora/scripts/build-rootfs.sh
+          grep -q '\[7z\]=p7zip-full' nexora/scripts/build-rootfs.sh
+          grep -q 'NEXORA_TERMUX_MAPPING_PREFLIGHT_OK' nexora/scripts/build-rootfs.sh
+          echo "NEXORA_SCRIPT_PREFLIGHT_OK"
+
       - name: Install NEXORA build tools
         run: |
           set -euo pipefail
