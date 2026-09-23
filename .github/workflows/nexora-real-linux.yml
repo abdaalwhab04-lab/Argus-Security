@@ -198,7 +198,19 @@ jobs:
 
           check_exec() {
             local p="$1"
-            if [ -x "$p" ]; then
+            # Absolute symlink targets inside a chroot are rooted at nexora/rootfs,
+            # but host-side test -x follows them from the runner root. Validate
+            # symlinks from inside the RootFS instead of falsely reporting them
+            # missing on the host.
+            if [ -L "$p" ]; then
+              local inside="/${p#nexora/rootfs/}"
+              if sudo chroot nexora/rootfs sh -c 'test -x "$1"' sh "$inside"; then
+                echo "ROOTFS_EXEC_SYMLINK_OK $p -> $(readlink "$p")"
+              else
+                echo "::error::ROOTFS_EXEC_SYMLINK_BROKEN $p -> $(readlink "$p")"
+                failures=$((failures + 1))
+              fi
+            elif [ -x "$p" ]; then
               echo "ROOTFS_EXEC_OK $p"
             elif [ -e "$p" ]; then
               echo "::error::ROOTFS_EXEC_NOT_EXECUTABLE $p"
