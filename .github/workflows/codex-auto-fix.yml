@@ -2,7 +2,6 @@ name: Codex Auto-Fix Failed Runs
 
 on:
   workflow_run:
-    workflows: ["*"]
     types: [completed]
     branches:
       - omniroute-v3.8.50-integration
@@ -63,14 +62,14 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           fetch-depth: 0
+          clean: false
 
-      - name: Copy diagnostic evidence
-        env:
-          RUN_ID: ${{ steps.run.outputs.run_id }}
+      - name: Verify diagnostic evidence
         run: |
-          mkdir -p .codex-autofix
-          cp "${GITHUB_WORKSPACE}/.codex-autofix/run.json" .codex-autofix/run.json
-          cp "${GITHUB_WORKSPACE}/.codex-autofix/failed-tail.log" .codex-autofix/failed-tail.log
+          set -euo pipefail
+          test -s .codex-autofix/run.json
+          test -s .codex-autofix/failed-tail.log
+          echo "Diagnostic evidence restored successfully."
 
       - name: Run Codex diagnosis and repair
         uses: openai/codex-action@v1
