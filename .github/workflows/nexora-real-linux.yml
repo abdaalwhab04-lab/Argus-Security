@@ -40,6 +40,7 @@ jobs:
           grep -qx 'CONFIG_NF_NAT=y' nexora/config/kernel.conf
           grep -q 'TERMUX_DEBIAN_PACKAGES+=(p7zip-full)' nexora/scripts/build-rootfs.sh
           grep -q '\[7z\]=p7zip-full' nexora/scripts/build-rootfs.sh
+grep -q '\[docker-compose\]=docker.io' nexora/scripts/build-rootfs.sh
           grep -q 'NEXORA_TERMUX_MAPPING_PREFLIGHT_OK' nexora/scripts/build-rootfs.sh
           grep -q 'NEXORA_DOCKER_COMPOSE_V2_OK' nexora/scripts/build-rootfs.sh
           grep -q 'NEXORA_DOCKER_BUILDX_OK' nexora/scripts/build-rootfs.sh
