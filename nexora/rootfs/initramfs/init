@@ -61,6 +61,10 @@ if ! mount -t ext4 -o rw /dev/vda /persist; then
 fi
 
 mkdir -p /persist/overlay/upper /persist/overlay/work
+# Docker's overlay2 storage must live directly on the ext4 persistent disk.
+# Keeping /var/lib/docker inside the outer NEXORA overlayfs makes Docker see
+# an overlay-backed filesystem and fall back to the vfs storage driver.
+mkdir -p /persist/docker /persist/containerd
 mkdir -p /newroot
 
 echo "=== Mount writable Debian overlay ==="
@@ -76,6 +80,10 @@ mount --bind /proc /newroot/proc
 mount --bind /sys /newroot/sys
 mount --bind /run /newroot/run
 mount --bind /persist /newroot/persist
+
+mkdir -p /newroot/var/lib/docker /newroot/var/lib/containerd
+mount --bind /persist/docker /newroot/var/lib/docker
+mount --bind /persist/containerd /newroot/var/lib/containerd
 
 echo "NEXORA_PERSISTENT_STORAGE_OK"
 echo "NEXORA_DOCKER_CONFIG_OK"
