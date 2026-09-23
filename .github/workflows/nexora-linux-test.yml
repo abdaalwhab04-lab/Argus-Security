@@ -42,7 +42,7 @@ jobs:
               exit 1
             fi
           done
-          sudo chroot "$ROOTFS" /usr/bin/node --version
+          sudo chroot "$ROOTFS" /usr/local/bin/node --version
           sudo chroot "$ROOTFS" /usr/bin/python3 --version
           sudo chroot "$ROOTFS" /usr/bin/docker --version
           sudo chroot "$ROOTFS" /usr/bin/git --version
