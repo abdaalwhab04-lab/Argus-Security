@@ -86,7 +86,7 @@ while IFS= read -r option; do
             else
                 echo "ERROR: required kernel option is not =y after olddefconfig: ${option}"
                 symbol="${option%%=*}"
-                actual="$(grep -E "^\${symbol}(=| is not set)" .config || true)"
+                actual="$(grep -E "^${symbol}(=| is not set)" .config || true)"
                 if [ -n "${actual}" ]; then
                     echo "KERNEL_CONFIG_ACTUAL ${actual}"
                 else
