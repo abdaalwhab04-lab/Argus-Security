@@ -205,6 +205,30 @@ fi
 chroot "${ROOTFS_DIR}" /usr/bin/docker compose version
 echo "NEXORA_DOCKER_COMPOSE_V2_OK"
 
+echo "=== Install Docker Buildx plugin for Compose image builds ==="
+# Debian Bookworm's docker.io package is Docker 20.10.x and does not ship
+# the separate docker-buildx package. AutoGPT's Compose services contain
+# build definitions and modern Docker builds use Buildx/BuildKit, so install
+# a checksum-pinned Buildx release compatible with this Docker CLI.
+BUILDX_VERSION="${BUILDX_VERSION:-0.13.1}"
+BUILDX_SHA256="${BUILDX_SHA256:-3e2bc8ed25a9125d6aeec07df4e0211edea6288e075b524160ef3fd305d3d74c}"
+BUILDX_TMP="/tmp/docker-buildx"
+BUILDX_URL="https://github.com/docker/buildx/releases/download/v${BUILDX_VERSION}/buildx-v${BUILDX_VERSION}.linux-amd64"
+curl -fsSL "${BUILDX_URL}" -o "${BUILDX_TMP}"
+echo "${BUILDX_SHA256}  ${BUILDX_TMP}" | sha256sum -c -
+BUILDX_PLUGIN="${ROOTFS_DIR}/usr/local/lib/docker/cli-plugins/docker-buildx"
+mkdir -p "$(dirname "${BUILDX_PLUGIN}")"
+install -m 0755 "${BUILDX_TMP}" "${BUILDX_PLUGIN}"
+rm -f "${BUILDX_TMP}"
+
+if ! chroot "${ROOTFS_DIR}" /usr/bin/docker buildx version >/dev/null 2>&1; then
+    echo "ERROR: Docker Buildx plugin is not available."
+    chroot "${ROOTFS_DIR}" /usr/bin/docker version || true
+    exit 1
+fi
+chroot "${ROOTFS_DIR}" /usr/bin/docker buildx version
+echo "NEXORA_DOCKER_BUILDX_OK"
+
 
 echo "=== Verify Debian init ==="
 
