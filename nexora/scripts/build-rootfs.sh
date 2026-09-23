@@ -11,6 +11,8 @@ DEBIAN_SUITE="${DEBIAN_SUITE:-bookworm}"
 DEBIAN_MIRROR="${DEBIAN_MIRROR:-http://deb.debian.org/debian}"
 NODE_VERSION="${NODE_VERSION:-24.21.0}"
 PNPM_VERSION="${PNPM_VERSION:-10.20.0}"
+COMPOSE_VERSION="${COMPOSE_VERSION:-5.5.1}"
+COMPOSE_SHA256="${COMPOSE_SHA256:-db1889184726840f75c4f9c001048430d4f25b3be3cb084d3ddd762bc0aed576}"
 
 echo "=== NEXORA ROOTFS BUILD ==="
 echo "Distribution: Debian ${DEBIAN_SUITE}"
@@ -70,6 +72,7 @@ TERMUX_DEBIAN_PACKAGES=(
     tar tmux tor tree unzip util-linux
     vim-nox w3m wget xorriso zip
     cmake ninja-build
+    docker.io containerd runc
 )
 
 # Debian's modern 7zip package exposes the `7zz` command, while the
@@ -80,7 +83,7 @@ TERMUX_DEBIAN_PACKAGES+=(p7zip-full)
 # Keep command-to-package mappings explicit. This preflight catches missing
 # package mappings before the expensive package installation step.
 declare -A TERMUX_COMMAND_PACKAGES=(
-    [7z]=p7zip-full [bash]=bash [bc]=bc [clang]=clang [cpio]=cpio
+    [7z]=p7zip-full [bash]=bash [docker]=docker.io [docker-compose]=docker-compose [bc]=bc [clang]=clang [cpio]=cpio
     [curl]=curl [ffmpeg]=ffmpeg [file]=file [fish]=fish [flex]=flex
     [gawk]=gawk [gh]=gh [git]=git [jq]=jq [lsof]=lsof [lua5.4]=lua5.4
     [make]=make [nano]=nano [nmap]=nmap [ssh]=openssh-client
@@ -94,7 +97,7 @@ declare -A TERMUX_COMMAND_PACKAGES=(
 )
 
 TERMUX_REQUIRED_COMMANDS=(
-    7z bash bc clang cpio curl ffmpeg file fish flex gawk gh git jq
+    7z bash bc docker docker-compose clang cpio curl ffmpeg file fish flex gawk gh git jq
     lsof lua5.4 make nano nmap ssh openssl parallel patch perl php psql
     qemu-system-x86_64 redis-server rg rsync ruby rustc cargo strace sudo
     tar tmux tor tree unzip vim w3m wget xorriso zip cmake ninja tshark
@@ -184,6 +187,24 @@ fi
 rm -f "${NODE_TMP}" "${NODE_SUMS}"
 
 echo "NEXORA_NODE_OK"
+echo "=== Install Docker Compose v${COMPOSE_VERSION} plugin ==="
+COMPOSE_TMP="/tmp/docker-compose"
+COMPOSE_URL="https://github.com/docker/compose/releases/download/v${COMPOSE_VERSION}/docker-compose-linux-x86_64"
+curl -fsSL "${COMPOSE_URL}" -o "${COMPOSE_TMP}"
+echo "${COMPOSE_SHA256}  ${COMPOSE_TMP}" | sha256sum -c -
+COMPOSE_PLUGIN="${ROOTFS_DIR}/usr/local/lib/docker/cli-plugins/docker-compose"
+mkdir -p "$(dirname "${COMPOSE_PLUGIN}")"
+install -m 0755 "${COMPOSE_TMP}" "${COMPOSE_PLUGIN}"
+rm -f "${COMPOSE_TMP}"
+
+if ! chroot "${ROOTFS_DIR}" /usr/bin/docker compose version >/dev/null 2>&1; then
+    echo "ERROR: Docker Compose v2 plugin is not available."
+    chroot "${ROOTFS_DIR}" /usr/bin/docker version || true
+    exit 1
+fi
+chroot "${ROOTFS_DIR}" /usr/bin/docker compose version
+echo "NEXORA_DOCKER_COMPOSE_V2_OK"
+
 
 echo "=== Verify Debian init ==="
 
