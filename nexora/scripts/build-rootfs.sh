@@ -278,7 +278,7 @@ rm -f "${TEMP_INIT}"
 
 echo "=== Configure Debian development toolchain ==="
 
-if ! chroot "${ROOTFS_DIR}" /usr/local/bin/node --version | grep -q '^v${NODE_VERSION%%.*}\\.'; then
+if ! chroot "${ROOTFS_DIR}" /usr/local/bin/node --version | grep -q "^v${NODE_VERSION%%.*}\."; then
     echo "ERROR: Node.js ${NODE_VERSION} was not installed correctly."
     chroot "${ROOTFS_DIR}" /usr/local/bin/node --version || true
     exit 1
