@@ -167,7 +167,7 @@ jobs:
 
       - name: Restore Debian RootFS from repository-scoped Actions cache
         id: debian-rootfs-cache
-        uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4
         with:
           path: nexora/rootfs
           key: nexora-debian-rootfs-v1-${{ runner.os }}-${{ hashFiles('nexora/scripts/build-rootfs.sh', 'nexora/config/termux-packages.txt', 'nexora/config/termux-python-packages.txt', 'nexora/config/termux-npm-global.txt', 'nexora/config/termux-mirror-policy.md') }}
