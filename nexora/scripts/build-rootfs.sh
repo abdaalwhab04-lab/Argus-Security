@@ -77,6 +77,49 @@ TERMUX_DEBIAN_PACKAGES=(
 # the compatibility command is actually present and verify it below.
 TERMUX_DEBIAN_PACKAGES+=(p7zip-full)
 
+# Keep command-to-package mappings explicit. This preflight catches missing
+# package mappings before the expensive package installation step.
+declare -A TERMUX_COMMAND_PACKAGES=(
+    [7z]=p7zip-full [bash]=bash [bc]=bc [clang]=clang [cpio]=cpio
+    [curl]=curl [ffmpeg]=ffmpeg [file]=file [fish]=fish [flex]=flex
+    [gawk]=gawk [gh]=gh [git]=git [jq]=jq [lsof]=lsof [lua5.4]=lua5.4
+    [make]=make [nano]=nano [nmap]=nmap [ssh]=openssh-client
+    [openssl]=openssl [parallel]=parallel [patch]=patch [perl]=perl
+    [php]=php-cli [psql]=postgresql-client [qemu-system-x86_64]=qemu-system-x86
+    [redis-server]=redis-server [rg]=ripgrep [rsync]=rsync [ruby]=ruby
+    [rustc]=rustc [cargo]=cargo [strace]=strace [sudo]=sudo [tar]=tar
+    [tmux]=tmux [tor]=tor [tree]=tree [unzip]=unzip [vim]=vim-nox
+    [w3m]=w3m [wget]=wget [xorriso]=xorriso [zip]=zip [cmake]=cmake
+    [ninja]=ninja-build [tshark]=tshark
+)
+
+TERMUX_REQUIRED_COMMANDS=(
+    7z bash bc clang cpio curl ffmpeg file fish flex gawk gh git jq
+    lsof lua5.4 make nano nmap ssh openssl parallel patch perl php psql
+    qemu-system-x86_64 redis-server rg rsync ruby rustc cargo strace sudo
+    tar tmux tor tree unzip vim w3m wget xorriso zip cmake ninja tshark
+)
+
+echo "=== Preflight Debian package/command mappings ==="
+PREFLIGHT_FAILED=0
+for cmd in "${TERMUX_REQUIRED_COMMANDS[@]}"; do
+    package="${TERMUX_COMMAND_PACKAGES[$cmd]:-}"
+    if [ -z "${package}" ]; then
+        echo "ERROR: no Debian package mapping declared for command: ${cmd}"
+        PREFLIGHT_FAILED=1
+        continue
+    fi
+    if ! printf '%s\n' "${TERMUX_DEBIAN_PACKAGES[@]}" | grep -Fxq "${package}"; then
+        echo "ERROR: mapped package is not installed by the package list: ${cmd} -> ${package}"
+        PREFLIGHT_FAILED=1
+    fi
+done
+if [ "${PREFLIGHT_FAILED}" -ne 0 ]; then
+    echo "ERROR: NEXORA Debian command mapping preflight failed."
+    exit 1
+fi
+echo "NEXORA_TERMUX_MAPPING_PREFLIGHT_OK"
+
 if [ -f /etc/resolv.conf ]; then
     cp -L /etc/resolv.conf "${ROOTFS_DIR}/etc/resolv.conf"
 fi
