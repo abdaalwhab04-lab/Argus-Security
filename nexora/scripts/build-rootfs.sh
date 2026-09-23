@@ -72,11 +72,10 @@ TERMUX_DEBIAN_PACKAGES=(
     cmake ninja-build
 )
 
-if chroot "${ROOTFS_DIR}" apt-cache show 7zip >/dev/null 2>&1; then
-    TERMUX_DEBIAN_PACKAGES+=(7zip)
-else
-    TERMUX_DEBIAN_PACKAGES+=(p7zip-full)
-fi
+# Debian's modern 7zip package exposes the `7zz` command, while the
+# Termux inventory expects the traditional `7z` CLI. Use p7zip-full so
+# the compatibility command is actually present and verify it below.
+TERMUX_DEBIAN_PACKAGES+=(p7zip-full)
 
 if [ -f /etc/resolv.conf ]; then
     cp -L /etc/resolv.conf "${ROOTFS_DIR}/etc/resolv.conf"
