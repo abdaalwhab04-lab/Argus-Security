@@ -85,7 +85,8 @@ while IFS= read -r option; do
                 echo "KERNEL_CONFIG_OK ${option}"
             else
                 echo "ERROR: required kernel option is not =y after olddefconfig: ${option}"
-                actual="$(grep -E "^\${option%%=*}(=| is not set)" .config || true)"
+                symbol="${option%%=*}"
+                actual="$(grep -E "^\${symbol}(=| is not set)" .config || true)"
                 if [ -n "${actual}" ]; then
                     echo "KERNEL_CONFIG_ACTUAL ${actual}"
                 else
@@ -113,7 +114,6 @@ JOBS="${NEXORA_KERNEL_JOBS:-1}"
 echo "Parallel jobs: ${JOBS}"
 
 ARCH=x86 make -j"${JOBS}" bzImage
-
 echo "=== Verify Kernel ==="
 
 if [ ! -f "${KERNEL_IMAGE}" ]; then
