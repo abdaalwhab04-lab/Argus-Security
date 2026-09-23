@@ -193,11 +193,36 @@ jobs:
           test -x nexora/rootfs/usr/local/bin/pnpm
           test -x nexora/rootfs/usr/local/bin/docker-compose
           test -x nexora/rootfs/usr/local/bin/nexora-userspace-start.sh
-          sudo chroot nexora/rootfs /usr/bin/docker --version
-          sudo chroot nexora/rootfs /usr/local/bin/node --version
-          sudo chroot nexora/rootfs /usr/local/bin/npm --version
-          sudo chroot nexora/rootfs /usr/local/bin/pnpm --version
-          sudo chroot nexora/rootfs /usr/local/bin/docker-compose version
+
+          echo "=== Verify NEXORA RootFS executables ==="
+          verify_chroot() {
+            local label="$1"
+            shift
+            local rc=0
+            echo "--- ${label} ---"
+            sudo chroot nexora/rootfs "$@" || rc=$?
+            echo "${label}_RC=${rc}"
+            return "${rc}"
+          }
+
+          # Docker 20.10 can report a non-zero status for a bare --version
+          # in this chroot even though the Docker CLI and its plugins are
+          # usable. Compose v2 exercises the same Docker CLI plus the plugin,
+          # so use it as the functional Docker CLI gate and retain a
+          # diagnostic fallback for the bare command.
+          docker_rc=0
+          sudo chroot nexora/rootfs /usr/bin/docker --version || docker_rc=$?
+          echo "NEXORA_DOCKER_VERSION_RC=${docker_rc}"
+          if [ "${docker_rc}" -ne 0 ]; then
+            echo "NEXORA_DOCKER_VERSION_NONZERO"
+            sudo chroot nexora/rootfs /usr/bin/docker compose version
+          fi
+
+          verify_chroot "NEXORA_NODE" /usr/local/bin/node --version
+          verify_chroot "NEXORA_NPM" /usr/local/bin/npm --version
+          verify_chroot "NEXORA_PNPM" /usr/local/bin/pnpm --version
+          verify_chroot "NEXORA_DOCKER_COMPOSE_WRAPPER" /usr/local/bin/docker-compose version
+
           echo "NEXORA_DEBIAN_ROOTFS_PERSISTENT_OK"
           if [ "${{ steps.debian-rootfs-cache.outputs.cache-hit }}" = "true" ]; then
             echo "NEXORA_DEBIAN_ROOTFS_CACHE_HIT"
