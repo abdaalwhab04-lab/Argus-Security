@@ -87,7 +87,7 @@ jobs:
           test -f autogpt/autogpt_platform/backend/.env.default
           test -f autogpt/autogpt_platform/frontend/.env.default
           test -f autogpt/autogpt_platform/db/init/00-init.sql
-          docker compose -f autogpt/autogpt_platform/docker-compose.yml -f autogpt/autogpt_platform/docker-compose.platform.yml config --quiet
+          docker compose -f autogpt/autogpt_platform/docker-compose.yml config --quiet
           echo "NEXORA_AUTOGPT_COMPOSE_PREFLIGHT_OK"
 
       - name: Check NEXORA build tools
