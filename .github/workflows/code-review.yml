@@ -28,36 +28,33 @@ permissions:
 jobs:
   code-review:
     runs-on: ubuntu-latest
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332  # v4.1.7
       with:
-        fetch-depth: 0  # Fetch full history for better analysis
+        fetch-depth: 0
 
     - name: Setup Node.js
       uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8  # v4.0.2
       with:
         node-version: '18'
-        cache: 'npm'
-    
+
     - name: Install Argus
       run: |
         echo "Setting up Argus base installation..."
         mkdir -p $HOME/.argus/{scripts,profiles,standards}
-        
-        # Verify installation
+
         if [ ! -d "$HOME/.argus" ]; then
           echo "Argus installation failed"
           exit 1
         fi
         echo "Argus installed successfully"
-    
+
     - name: Install Code Reviewer System
       run: |
         echo "Installing code reviewer system..."
-        
-        # Create directories
+
         mkdir -p $HOME/.argus/profiles/default/agents
         mkdir -p $HOME/.argus/profiles/default/workflows/review
         mkdir -p $HOME/.argus/profiles/default/standards/review
@@ -65,54 +62,52 @@ jobs:
         mkdir -p $HOME/.argus/profiles/default/commands/review-changes/multi-agent
         mkdir -p $HOME/.argus/profiles/default/commands/security-scan/multi-agent
         mkdir -p $HOME/.argus/profiles/default/roles
-        
-        # Copy code reviewer files from this repository
+
         if [ -d "profiles/default/agents" ]; then
           cp -r profiles/default/agents/* $HOME/.argus/profiles/default/agents/
           echo "Agents copied successfully"
         fi
-        
+
         if [ -d "profiles/default/workflows/review" ]; then
           cp -r profiles/default/workflows/review $HOME/.argus/profiles/default/workflows/
           echo "Workflows copied successfully"
         fi
-        
+
         if [ -d "profiles/default/standards/review" ]; then
           cp -r profiles/default/standards/review $HOME/.argus/profiles/default/standards/
           echo "Standards copied successfully"
         fi
-        
+
         if [ -d "profiles/default/commands" ]; then
           cp -r profiles/default/commands/audit-codebase $HOME/.argus/profiles/default/commands/
           cp -r profiles/default/commands/review-changes $HOME/.argus/profiles/default/commands/
           cp -r profiles/default/commands/security-scan $HOME/.argus/profiles/default/commands/
           echo "Commands copied successfully"
         fi
-        
+
         if [ -f "profiles/default/roles/reviewers.yml" ]; then
           cp profiles/default/roles/reviewers.yml $HOME/.argus/profiles/default/roles/
           echo "Roles copied successfully"
         fi
-        
+
         echo "Code reviewer system installed successfully"
-    
+
     - name: Install Argus to Project
       run: |
         echo "Installing Argus to project..."
         $HOME/.argus/scripts/project-install.sh
-        
+
         if [ ! -d ".argus" ]; then
           echo "Project installation failed"
           exit 1
         fi
         echo "Argus installed to project successfully"
-    
+
     - name: Run Code Review
       id: code-review
       run: |
         echo "Running code review..."
-        
-        # Determine review type
+
         if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
           REVIEW_TYPE="${{ github.event.inputs.review_type }}"
         elif [ "${{ github.event_name }}" = "pull_request" ]; then
@@ -120,13 +115,10 @@ jobs:
         else
           REVIEW_TYPE="audit"
         fi
-        
+
         echo "Review type: $REVIEW_TYPE"
-        
-        # Create reviews directory
         mkdir -p .argus/reviews
-        
-        # Run the appropriate review
+
         case "$REVIEW_TYPE" in
           "audit")
             echo "Running full codebase audit..."
@@ -153,13 +145,13 @@ jobs:
             echo "## Merge Blockers (Must Fix Before Merge)" >> .argus/reviews/audit-report.md
             echo "" >> .argus/reviews/audit-report.md
             echo "### Security Issues" >> .argus/reviews/audit-report.md
-            echo "- **[BLOCKER]** Hardcoded API key detected in \`config.js:15\`" >> .argus/reviews/audit-report.md
-            echo "- **[BLOCKER]** SQL injection vulnerability in \`userService.js:42\`" >> .argus/reviews/audit-report.md
-            echo "- **[BLOCKER]** Missing authentication on \`/api/users\` endpoint" >> .argus/reviews/audit-report.md
+            echo "- **[BLOCKER]** Hardcoded API key detected in `config.js:15`" >> .argus/reviews/audit-report.md
+            echo "- **[BLOCKER]** SQL injection vulnerability in `userService.js:42`" >> .argus/reviews/audit-report.md
+            echo "- **[BLOCKER]** Missing authentication on `/api/users` endpoint" >> .argus/reviews/audit-report.md
             echo "" >> .argus/reviews/audit-report.md
             echo "### Performance Issues" >> .argus/reviews/audit-report.md
-            echo "- **[BLOCKER]** N+1 query pattern in \`userController.js:67\`" >> .argus/reviews/audit-report.md
-            echo "- **[BLOCKER]** Memory leak detected in \`service.js:23\`" >> .argus/reviews/audit-report.md
+            echo "- **[BLOCKER]** N+1 query pattern in `userController.js:67`" >> .argus/reviews/audit-report.md
+            echo "- **[BLOCKER]** Memory leak detected in `service.js:23`" >> .argus/reviews/audit-report.md
             echo "" >> .argus/reviews/audit-report.md
             echo "### Testing Issues" >> .argus/reviews/audit-report.md
             echo "- **[BLOCKER]** Missing tests for critical business logic" >> .argus/reviews/audit-report.md
@@ -207,15 +199,15 @@ jobs:
             echo "## Critical Security Issues (Merge Blockers)" >> .argus/reviews/security-report.md
             echo "" >> .argus/reviews/security-report.md
             echo "### Secrets Detection" >> .argus/reviews/security-report.md
-            echo "- **[BLOCKER]** Hardcoded API key in \`config.js:15\`" >> .argus/reviews/security-report.md
-            echo "- **[BLOCKER]** Database credentials in \`database.js:8\`" >> .argus/reviews/security-report.md
+            echo "- **[BLOCKER]** Hardcoded API key in `config.js:15`" >> .argus/reviews/security-report.md
+            echo "- **[BLOCKER]** Database credentials in `database.js:8`" >> .argus/reviews/security-report.md
             echo "" >> .argus/reviews/security-report.md
             echo "### Injection Vulnerabilities" >> .argus/reviews/security-report.md
-            echo "- **[BLOCKER]** SQL injection in \`userService.js:42\`" >> .argus/reviews/security-report.md
+            echo "- **[BLOCKER]** SQL injection in `userService.js:42`" >> .argus/reviews/security-report.md
             echo "" >> .argus/reviews/security-report.md
             echo "### Authentication Issues" >> .argus/reviews/security-report.md
-            echo "- **[BLOCKER]** Missing authentication on \`/api/users\` endpoint" >> .argus/reviews/security-report.md
-            echo "- **[BLOCKER]** Weak session management in \`auth.js:23\`" >> .argus/reviews/security-report.md
+            echo "- **[BLOCKER]** Missing authentication on `/api/users` endpoint" >> .argus/reviews/security-report.md
+            echo "- **[BLOCKER]** Weak session management in `auth.js:23`" >> .argus/reviews/security-report.md
             echo "" >> .argus/reviews/security-report.md
             echo "## Security Recommendations" >> .argus/reviews/security-report.md
             echo "" >> .argus/reviews/security-report.md
@@ -238,7 +230,7 @@ jobs:
             echo "Repository: ${{ github.repository }}" >> .argus/reviews/review-report.md
             echo "Branch: ${{ github.ref_name }}" >> .argus/reviews/review-report.md
             echo "Commit: ${{ github.sha }}" >> .argus/reviews/review-report.md
-            echo "" >> .argus/reviews/review-report.md
+            echo "" >> .argus/reviews/reviews-report.md
             echo "## Review Summary" >> .argus/reviews/review-report.md
             echo "**Review Date:** $(date)" >> .argus/reviews/review-report.md
             echo "**Repository:** ${{ github.repository }}" >> .argus/reviews/review-report.md
@@ -257,25 +249,25 @@ jobs:
             echo "" >> .argus/reviews/review-report.md
             echo "### [BLOCKER] Critical Issues (Must Fix)" >> .argus/reviews/review-report.md
             echo "" >> .argus/reviews/review-report.md
-            echo "#### File: \`src/config.js\`" >> .argus/reviews/review-report.md
-            echo "\`\`\`javascript" >> .argus/reviews/review-report.md
+            echo "#### File: `src/config.js`" >> .argus/reviews/review-report.md
+            echo "```javascript" >> .argus/reviews/review-report.md
             echo "// Line 15: [BLOCKER] Hardcoded API key detected" >> .argus/reviews/review-report.md
-            echo "const apiKey = \"sk-1234567890abcdef\"; // ❌ SECURITY RISK" >> .argus/reviews/review-report.md
-            echo "\`\`\`" >> .argus/reviews/review-report.md
+            echo "const apiKey = "sk-1234567890abcdef"; // ❌ SECURITY RISK" >> .argus/reviews/review-report.md
+            echo "```" >> .argus/reviews/review-report.md
             echo "" >> .argus/reviews/review-report.md
             echo "**Issue:** Hardcoded API key in source code" >> .argus/reviews/review-report.md
             echo "**Risk:** High - API key could be exposed in version control" >> .argus/reviews/review-report.md
-            echo "**Fix:** Use environment variable: \`process.env.API_KEY\`" >> .argus/reviews/review-report.md
+            echo "**Fix:** Use environment variable: `process.env.API_KEY`" >> .argus/reviews/review-report.md
             echo "" >> .argus/reviews/review-report.md
-            echo "#### File: \`src/services/userService.js\`" >> .argus/reviews/review-report.md
-            echo "\`\`\`javascript" >> .argus/reviews/review-report.md
+            echo "#### File: `src/services/userService.js`" >> .argus/reviews/review-report.md
+            echo "```javascript" >> .argus/reviews/review-report.md
             echo "// Line 42: [BLOCKER] SQL injection vulnerability detected" >> .argus/reviews/review-report.md
-            echo "const query = \`SELECT * FROM users WHERE id = \${userId}\`; // ❌ SECURITY RISK" >> .argus/reviews/review-report.md
-            echo "\`\`\`" >> .argus/reviews/review-report.md
+            echo "const query = `SELECT * FROM users WHERE id = ${userId}`; // ❌ SECURITY RISK" >> .argus/reviews/review-report.md
+            echo "```" >> .argus/reviews/review-report.md
             echo "" >> .argus/reviews/review-report.md
             echo "**Issue:** SQL injection vulnerability in user query" >> .argus/reviews/review-report.md
             echo "**Risk:** High - Could lead to data breach" >> .argus/reviews/review-report.md
-            echo "**Fix:** Use parameterized queries: \`SELECT * FROM users WHERE id = ?\`" >> .argus/reviews/review-report.md
+            echo "**Fix:** Use parameterized queries: `SELECT * FROM users WHERE id = ?`" >> .argus/reviews/review-report.md
             echo "" >> .argus/reviews/review-report.md
             echo "## Review Decision" >> .argus/reviews/review-report.md
             echo "" >> .argus/reviews/review-report.md
@@ -294,17 +286,17 @@ jobs:
             echo "3. **Re-review** - Request re-review after fixes" >> .argus/reviews/review-report.md
             ;;
         esac
-        
+
         echo "Code review completed successfully"
         echo "review_type=$REVIEW_TYPE" >> $GITHUB_OUTPUT
-    
+
     - name: Upload Review Reports
       uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874  # v4.4.0
       with:
         name: code-review-reports-${{ github.run_number }}
         path: .argus/reviews/
         retention-days: 30
-    
+
     - name: Comment on PR
       if: github.event_name == 'pull_request'
       uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea  # v7.0.1
@@ -312,40 +304,37 @@ jobs:
         script: |
           const fs = require('fs');
           const path = require('path');
-          
-          // Read the review report
+
           const reportPath = '.argus/reviews/review-report.md';
           let reportContent = '';
-          
+
           if (fs.existsSync(reportPath)) {
             reportContent = fs.readFileSync(reportPath, 'utf8');
           } else {
             reportContent = '## Code Review Report\n\nReview completed successfully. Please check the artifacts for detailed reports.';
           }
-          
-          // Create PR comment
+
           const comment = `## 🔍 Code Review Report
-          
+
           ${reportContent}
-          
+
           ---
-          
+
           **Review completed by:** Code Reviewer System
           **Review date:** ${new Date().toISOString()}
           **Repository:** ${context.repo.owner}/${context.repo.repo}
           **Branch:** ${context.ref.replace('refs/heads/', '')}
           **Commit:** ${context.sha}
-          
+
           📁 **Detailed reports available in artifacts:** code-review-reports-${context.runNumber}`;
-          
-          // Post comment
+
           await github.rest.issues.createComment({
             issue_number: context.issue.number,
             owner: context.repo.owner,
             repo: context.repo.repo,
             body: comment
           });
-    
+
     - name: Create Review Summary
       run: |
         echo "## Code Review Summary" >> $GITHUB_STEP_SUMMARY
@@ -367,9 +356,4 @@ jobs:
         echo "- 💡 **Suggestions:** 8 (Good to have improvements)" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "📁 **Detailed reports available in artifacts**" >> $GITHUB_STEP_SUMMARY
-        echo "👉 **Review the uploaded reports for detailed findings and action items**" >> $GITHUB_STEP_SUMMARY
-
-
-
-
-
+        echo "👉 **Review the uploaded reports for detailed findings and action items** >> $GITHUB_STEP_SUMMARY
