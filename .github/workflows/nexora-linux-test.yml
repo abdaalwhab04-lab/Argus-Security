@@ -55,7 +55,8 @@ jobs:
           test -x "$ROOTFS/usr/local/bin/pnpm"
           test -x "$ROOTFS/usr/local/bin/docker-compose"
           test -x "$ROOTFS/usr/local/bin/nexora-userspace-start.sh"
-          sudo chroot "$ROOTFS" /usr/bin/docker --version
+          sudo chroot "$ROOTFS" /usr/bin/docker compose version
+          sudo chroot "$ROOTFS" /usr/bin/docker buildx version
           sudo chroot "$ROOTFS" /usr/local/bin/node --version
           sudo chroot "$ROOTFS" /usr/local/bin/npm --version
           sudo chroot "$ROOTFS" /usr/local/bin/pnpm --version
@@ -66,6 +67,7 @@ jobs:
           else
             echo "NEXORA_DEBIAN_ROOTFS_CACHE_WILL_BE_SAVED"
           fi
+
       - name: Verify Termux → Debian mirrored toolset
         run: |
           set -euo pipefail
@@ -82,7 +84,7 @@ jobs:
           done
           sudo chroot "$ROOTFS" /usr/local/bin/node --version
           sudo chroot "$ROOTFS" /usr/bin/python3 --version
-          sudo chroot "$ROOTFS" /usr/bin/docker --version
+          sudo chroot "$ROOTFS" /usr/bin/docker compose version
           sudo chroot "$ROOTFS" /usr/bin/git --version
           echo "NEXORA_TERMUX_TO_DEBIAN_OK"
 
