@@ -24,6 +24,8 @@ jobs:
           sudo apt-get install -y build-essential bc bison flex libssl-dev libelf-dev libdw-dev cpio gzip xorriso grub-pc-bin grub-efi-amd64-bin grub-efi-amd64 mtools rsync busybox-static qemu-system-x86 debootstrap
       - name: Check host Docker
         run: |
+          uname -m
+          file /usr/bin/docker
           docker --version
           docker info
           echo NEXORA_HOST_DOCKER_OK
@@ -44,30 +46,63 @@ jobs:
 
       - name: Verify Debian RootFS persistence
         run: |
-          set -euo pipefail
+          set -u
           ROOTFS="nexora/rootfs"
-          test -d "$ROOTFS"
-          test -x "$ROOTFS/sbin/init"
-          test -x "$ROOTFS/lib/systemd/systemd"
-          test -x "$ROOTFS/usr/bin/docker"
-          test -x "$ROOTFS/usr/local/bin/node"
-          test -x "$ROOTFS/usr/local/bin/npm"
-          test -x "$ROOTFS/usr/local/bin/pnpm"
-          test -x "$ROOTFS/usr/local/bin/docker-compose"
-          test -x "$ROOTFS/usr/local/bin/nexora-userspace-start.sh"
-          test -x "$ROOTFS/usr/local/lib/docker/cli-plugins/docker-compose"
-          test -x "$ROOTFS/usr/local/lib/docker/cli-plugins/docker-buildx"
 
-          # Use a clean Debian environment. This prevents host Docker context,
-          # DOCKER_HOST, DOCKER_CONFIG, PATH, or HOME values from leaking into
-          # the RootFS validation.
-          sudo chroot "$ROOTFS" /usr/bin/env -i HOME=/root PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin /usr/bin/docker --version
-          sudo chroot "$ROOTFS" /usr/bin/env -i HOME=/root PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin /usr/local/lib/docker/cli-plugins/docker-compose version
-          sudo chroot "$ROOTFS" /usr/bin/env -i HOME=/root PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin /usr/local/lib/docker/cli-plugins/docker-buildx version
+          echo "=== NEXORA ROOTFS VALIDATION ==="
+          echo "HOST_ARCH=$(uname -m)"
+          file "$ROOTFS/usr/bin/docker" || true
+          file "$ROOTFS/usr/local/lib/docker/cli-plugins/docker-compose" || true
+          file "$ROOTFS/usr/local/lib/docker/cli-plugins/docker-buildx" || true
+
+          for path in             "$ROOTFS/sbin/init"             "$ROOTFS/lib/systemd/systemd"             "$ROOTFS/usr/bin/docker"             "$ROOTFS/usr/local/bin/node"             "$ROOTFS/usr/local/bin/npm"             "$ROOTFS/usr/local/bin/pnpm"             "$ROOTFS/usr/local/bin/docker-compose"             "$ROOTFS/usr/local/bin/nexora-userspace-start.sh"             "$ROOTFS/usr/local/lib/docker/cli-plugins/docker-compose"             "$ROOTFS/usr/local/lib/docker/cli-plugins/docker-buildx"; do
+            if [ -x "$path" ]; then
+              echo "PRESENT_EXECUTABLE: $path"
+            else
+              echo "MISSING_EXECUTABLE: $path"
+              exit 1
+            fi
+          done
+
+          echo "=== ROOTFS DOCKER PLUGINS ==="
+          ls -la "$ROOTFS/usr/local/lib/docker/cli-plugins/"
+          echo "=== ROOTFS DOCKER VERSION (PLAIN CHROOT, SAME AS BUILD SCRIPT) ==="
+          set +e
+          sudo chroot "$ROOTFS" /usr/bin/docker --version
+          rc=$?
+          echo "DOCKER_VERSION_RC=$rc"
+          if [ "$rc" -ne 0 ]; then exit "$rc"; fi
+
+          echo "=== ROOTFS COMPOSE VERSION (PLAIN CHROOT) ==="
+          sudo chroot "$ROOTFS" /usr/bin/docker compose version
+          rc=$?
+          echo "DOCKER_COMPOSE_RC=$rc"
+          if [ "$rc" -ne 0 ]; then exit "$rc"; fi
+
+          echo "=== ROOTFS BUILDX VERSION (PLAIN CHROOT) ==="
+          sudo chroot "$ROOTFS" /usr/bin/docker buildx version
+          rc=$?
+          echo "DOCKER_BUILDX_RC=$rc"
+          if [ "$rc" -ne 0 ]; then exit "$rc"; fi
+
+          echo "=== ROOTFS TOOLCHAIN ==="
           sudo chroot "$ROOTFS" /usr/local/bin/node --version
+          rc=$?
+          echo "NODE_RC=$rc"
+          if [ "$rc" -ne 0 ]; then exit "$rc"; fi
           sudo chroot "$ROOTFS" /usr/local/bin/npm --version
+          rc=$?
+          echo "NPM_RC=$rc"
+          if [ "$rc" -ne 0 ]; then exit "$rc"; fi
           sudo chroot "$ROOTFS" /usr/local/bin/pnpm --version
+          rc=$?
+          echo "PNPM_RC=$rc"
+          if [ "$rc" -ne 0 ]; then exit "$rc"; fi
           sudo chroot "$ROOTFS" /usr/local/bin/docker-compose version
+          rc=$?
+          echo "DOCKER_COMPOSE_WRAPPER_RC=$rc"
+          if [ "$rc" -ne 0 ]; then exit "$rc"; fi
+
           echo "NEXORA_DEBIAN_ROOTFS_PERSISTENT_OK"
           if [ "${{ steps.debian-rootfs-cache.outputs.cache-hit }}" = "true" ]; then
             echo "NEXORA_DEBIAN_ROOTFS_CACHE_HIT"
