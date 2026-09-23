@@ -412,6 +412,59 @@ if ! systemctl is-active --quiet docker || ! docker info >/dev/null 2>&1; then
     exit 1
 fi
 log "NEXORA_DOCKER_OK"
+
+log "=== VERIFY DOCKER RUNTIME CAPABILITIES ==="
+DOCKER_DRIVER="$(docker info --format '{{.Driver}}' 2>/dev/null || true)"
+DOCKER_CGROUP_VERSION="$(docker info --format '{{.CgroupVersion}}' 2>/dev/null || true)"
+DOCKER_CGROUP_DRIVER="$(docker info --format '{{.CgroupDriver}}' 2>/dev/null || true)"
+DOCKER_SECURITY_OPTIONS="$(docker info --format '{{json .SecurityOptions}}' 2>/dev/null || true)"
+DOCKER_LOG_DRIVER="$(docker info --format '{{.LoggingDriver}}' 2>/dev/null || true)"
+
+log "NEXORA_DOCKER_DRIVER=${DOCKER_DRIVER}"
+log "NEXORA_DOCKER_CGROUP_VERSION=${DOCKER_CGROUP_VERSION}"
+log "NEXORA_DOCKER_CGROUP_DRIVER=${DOCKER_CGROUP_DRIVER}"
+log "NEXORA_DOCKER_LOG_DRIVER=${DOCKER_LOG_DRIVER}"
+
+if [ "${DOCKER_DRIVER}" != "overlay2" ]; then
+    log "NEXORA_DOCKER_RUNTIME_FAILED: expected overlay2 storage driver"
+    docker info > "${CONSOLE}" 2>&1 || true
+    exit 1
+fi
+
+if [ "${DOCKER_CGROUP_VERSION}" != "2" ]; then
+    log "NEXORA_DOCKER_RUNTIME_FAILED: expected cgroup v2"
+    docker info > "${CONSOLE}" 2>&1 || true
+    exit 1
+fi
+
+case "${DOCKER_SECURITY_OPTIONS}" in
+    *seccomp*) ;;
+    *)
+        log "NEXORA_DOCKER_RUNTIME_FAILED: seccomp is not active"
+        docker info > "${CONSOLE}" 2>&1 || true
+        exit 1
+        ;;
+esac
+
+# Verify Docker networking before launching the container test. This catches
+# bridge/veth/netfilter failures that a cached image load can otherwise hide.
+NETWORK_NAME="nexora-runtime-smoke"
+docker network rm "${NETWORK_NAME}" >/dev/null 2>&1 || true
+if ! docker network create "${NETWORK_NAME}" >/dev/null 2>&1; then
+    log "NEXORA_DOCKER_NETWORK_FAILED"
+    docker network ls > "${CONSOLE}" 2>&1 || true
+    exit 1
+fi
+docker network inspect "${NETWORK_NAME}" > /dev/null
+docker network rm "${NETWORK_NAME}" >/dev/null
+log "NEXORA_DOCKER_NETWORK_OK"
+
+if ! docker compose version > "${CONSOLE}" 2>&1; then
+    log "NEXORA_DOCKER_COMPOSE_FAILED"
+    exit 1
+fi
+log "NEXORA_DOCKER_COMPOSE_OK"
+
 /usr/local/bin/nexora-docker-container-test.sh
 /usr/local/bin/nexora-persistence-test.sh
 log "NEXORA_DEBIAN_USERSPACE_OK"
