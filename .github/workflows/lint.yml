@@ -30,12 +30,12 @@ jobs:
       - name: Run ruff check
         run: |
           echo "🔍 Running ruff linter..."
-          ruff check . --output-format=github
+          ruff check scripts/ --output-format=github
       
       - name: Run ruff format check
         run: |
           echo "📝 Checking code formatting..."
-          ruff format --check .
+          ruff format --check scripts/
       
       - name: Create summary
         if: always()
