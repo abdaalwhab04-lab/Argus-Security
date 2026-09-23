@@ -2,7 +2,9 @@ name: Argus NEXORA Linux Test
 
 on:
   workflow_dispatch:
-  # Push trigger disabled: nexora-real-linux.yml is the canonical NEXORA validation workflow.
+  push:
+    branches:
+      - omniroute-v3.8.50-integration
 
 permissions:
   contents: read
@@ -26,6 +28,26 @@ jobs:
           echo NEXORA_HOST_DOCKER_OK
       - name: Build RootFS
         run: sudo bash nexora/scripts/build-rootfs.sh
+      - name: Verify Termux → Debian mirrored toolset
+        run: |
+          set -euo pipefail
+          ROOTFS="nexora/rootfs"
+          test -d "$ROOTFS"
+          test -f "$ROOTFS/opt/nexora/manifests/termux-packages.txt"
+          echo "=== VERIFY TERMUX → DEBIAN MIRROR ==="
+          commands="bash bc clang cpio curl ffmpeg file fish flex gawk gh git jq lsof make nano nmap ssh openssl parallel patch perl php psql qemu-system-x86_64 redis-server rg rsync ruby rustc cargo strace sudo tar tmux tor tree unzip vim w3m wget xorriso zip cmake ninja tshark"
+          for cmd in $commands; do
+            if ! sudo chroot "$ROOTFS" sh -c "command -v '$cmd' >/dev/null 2>&1"; then
+              echo "TERMUX_TO_DEBIAN_FAILED: missing $cmd"
+              exit 1
+            fi
+          done
+          sudo chroot "$ROOTFS" /usr/bin/node --version
+          sudo chroot "$ROOTFS" /usr/bin/python3 --version
+          sudo chroot "$ROOTFS" /usr/bin/docker --version
+          sudo chroot "$ROOTFS" /usr/bin/git --version
+          echo "NEXORA_TERMUX_TO_DEBIAN_OK"
+
       - name: Build Kernel
         run: sudo bash nexora/scripts/build-kernel.sh
       - name: Build Initramfs
