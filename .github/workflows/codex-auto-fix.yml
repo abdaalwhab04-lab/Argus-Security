@@ -106,11 +106,12 @@ jobs:
         id: changes
         run: |
           set -euo pipefail
+          rm -rf .codex-autofix
           git status --short
-          if git diff --quiet; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          else
+          if [ -n "$(git status --porcelain)" ]; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Create repair branch and pull request
