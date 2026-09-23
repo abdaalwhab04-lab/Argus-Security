@@ -184,9 +184,35 @@ jobs:
           test -f "${KERNEL_IMAGE}"
           KERNEL_CONFIG="nexora/build/linux-${KERNEL_VERSION}/.config"
           test -f "${KERNEL_CONFIG}"
-          for cfg in             CONFIG_EXT4_FS=y CONFIG_ISO9660_FS=y CONFIG_BLK_DEV_SR=y CONFIG_VIRTIO=y             CONFIG_VIRTIO_PCI=y CONFIG_VIRTIO_BLK=y CONFIG_OVERLAY_FS=y CONFIG_NAMESPACES=y             CONFIG_CGROUPS=y CONFIG_CGROUP2_FS=y CONFIG_SECCOMP=y CONFIG_SECCOMP_FILTER=y             CONFIG_CGROUP_DEVICE=y CONFIG_CGROUP_PIDS=y CONFIG_MEMCG=y CONFIG_BRIDGE=y             CONFIG_VETH=y CONFIG_NETFILTER=y CONFIG_NF_CONNTRACK=y CONFIG_NF_NAT=y; do
-            grep -qx "$cfg" "${KERNEL_CONFIG}"
-          done
+          echo "=== Verify Required NEXORA Kernel Configuration ==="
+          config_failed=0
+          while IFS= read -r cfg; do
+            case "${cfg}" in
+              ""|\#*)
+                continue
+                ;;
+              CONFIG_*=y)
+                if grep -qxF "${cfg}" "${KERNEL_CONFIG}"; then
+                  echo "KERNEL_CONFIG_OK ${cfg}"
+                else
+                  echo "::error::Required kernel option is not =y: ${cfg}"
+                  actual="$(grep -E "^${cfg%%=*}(=| is not set)" "${KERNEL_CONFIG}" || true)"
+                  if [ -n "${actual}" ]; then
+                    echo "KERNEL_CONFIG_ACTUAL ${actual}"
+                  else
+                    echo "KERNEL_CONFIG_ACTUAL <absent>"
+                  fi
+                  config_failed=1
+                fi
+                ;;
+            esac
+          done < nexora/config/kernel.conf
+
+          if [ "${config_failed}" -ne 0 ]; then
+            echo "::error::NEXORA kernel configuration verification failed."
+            exit 1
+          fi
+
           ls -lh "${KERNEL_IMAGE}"
           file "${KERNEL_IMAGE}"
           echo "NEXORA_KERNEL_CONFIG_OK"
