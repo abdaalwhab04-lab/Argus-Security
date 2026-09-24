@@ -525,6 +525,7 @@ PERSIST_ROOT="/persist/debian-workspace"
 SOURCE_ROOT="/opt/nexora/debian-workspace/source"
 MARKER="/persist/nexora-persistence-marker"
 mkdir -p "${PERSIST_ROOT}/software" "${PERSIST_ROOT}/data" "${PERSIST_ROOT}/source"
+echo "NEXORA_PERSISTENCE_SEED_START" > /dev/console
 for project in autogpt omniroute; do
   if [ -d "${SOURCE_ROOT}/${project}" ] && [ ! -e "${PERSIST_ROOT}/source/${project}/.nexora-seeded" ]; then
     rm -rf "${PERSIST_ROOT}/source/${project}"
@@ -533,6 +534,7 @@ for project in autogpt omniroute; do
     touch "${PERSIST_ROOT}/source/${project}/.nexora-seeded"
   fi
 done
+echo "NEXORA_PERSISTENCE_SEED_DONE" > /dev/console
 ln -sfn "${PERSIST_ROOT}/source" /opt/nexora/workspace
 ln -sfn "${PERSIST_ROOT}/software" /opt/nexora/software
 ln -sfn "${PERSIST_ROOT}/data" /opt/nexora/data
