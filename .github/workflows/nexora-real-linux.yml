@@ -549,3 +549,5 @@ jobs:
           if-no-files-found: warn
 
 # Verification trigger: run the corrected RootFS symlink validation on the integration branch.
+
+# Trigger NEXORA validation from the integration branch.
