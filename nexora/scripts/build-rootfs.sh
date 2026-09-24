@@ -163,8 +163,18 @@ if [ "${PREFLIGHT_FAILED}" -ne 0 ]; then
 fi
 echo "NEXORA_TERMUX_MAPPING_PREFLIGHT_OK"
 
+# Normalize loopback DNS stubs before entering the Debian chroot. A host
+# resolver such as 127.0.0.53 is not reachable from the chroot namespace.
 if [ -f /etc/resolv.conf ]; then
     cp -L /etc/resolv.conf "${ROOTFS_DIR}/etc/resolv.conf"
+fi
+if grep -Eq "^[[:space:]]*nameserver[[:space:]]+(127\\.|::1)" "${ROOTFS_DIR}/etc/resolv.conf" 2>/dev/null; then
+    printf "%s\\n" "nameserver 1.1.1.1" "nameserver 8.8.8.8" > "${ROOTFS_DIR}/etc/resolv.conf"
+fi
+if ! chroot "${ROOTFS_DIR}" getent hosts deb.debian.org >/dev/null 2>&1; then
+    echo "ERROR: Debian chroot DNS resolution failed before apt-get update."
+    cat "${ROOTFS_DIR}/etc/resolv.conf" || true
+    exit 1
 fi
 DEBIAN_FRONTEND=noninteractive chroot "${ROOTFS_DIR}" apt-get update
 DEBIAN_FRONTEND=noninteractive chroot "${ROOTFS_DIR}" apt-get install -y --no-install-recommends "${TERMUX_DEBIAN_PACKAGES[@]}"
