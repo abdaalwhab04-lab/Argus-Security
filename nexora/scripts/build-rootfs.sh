@@ -538,10 +538,11 @@ echo "NEXORA_PERSISTENCE_SEED_DONE" > /dev/console
 ln -sfn "${PERSIST_ROOT}/source" /opt/nexora/workspace
 ln -sfn "${PERSIST_ROOT}/software" /opt/nexora/software
 ln -sfn "${PERSIST_ROOT}/data" /opt/nexora/data
-WORKSPACE_FS="$(df -PT "${PERSIST_ROOT}" 2>/dev/null | awk 'NR==2 {print $2}')"
-WORKSPACE_SOURCE="$(df -P "${PERSIST_ROOT}" 2>/dev/null | awk 'NR==2 {print $1}')"
-if ! mountpoint -q "${PERSIST_ROOT}" 2>/dev/null || [ "${WORKSPACE_FS}" != "ext4" ]; then
-  echo "NEXORA_PERSISTENT_WORKSPACE_FAILED: source=${WORKSPACE_SOURCE} fstype=${WORKSPACE_FS}" > /dev/console
+PERSIST_MOUNT_ROOT="/persist"
+WORKSPACE_FS="$(df -PT "${PERSIST_MOUNT_ROOT}" 2>/dev/null | awk 'NR==2 {print $2}')"
+WORKSPACE_SOURCE="$(df -P "${PERSIST_MOUNT_ROOT}" 2>/dev/null | awk 'NR==2 {print $1}')"
+if ! mountpoint -q "${PERSIST_MOUNT_ROOT}" 2>/dev/null || [ "${WORKSPACE_FS}" != "ext4" ]; then
+  echo "NEXORA_PERSISTENT_WORKSPACE_FAILED: mount=${PERSIST_MOUNT_ROOT} source=${WORKSPACE_SOURCE} fstype=${WORKSPACE_FS}" > /dev/console
   exit 1
 fi
 echo "NEXORA_PERSISTENT_WORKSPACE_SOURCE=${WORKSPACE_SOURCE}" > /dev/console
