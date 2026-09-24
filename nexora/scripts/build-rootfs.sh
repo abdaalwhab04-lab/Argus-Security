@@ -49,17 +49,23 @@ if [ -f "${DEBIAN_ARCHIVE}" ]; then
     RAW_TMP="/tmp/nexora-debian-disk.raw"
     LOOP_DEVICE=""
     MOUNT_DIR="/tmp/nexora-debian-mount"
+    EXTRACT_DIR="/tmp/nexora-debian-extract"
 
     cleanup_debian_image() {
         set +e
         if mountpoint -q "${MOUNT_DIR}" 2>/dev/null; then sudo umount "${MOUNT_DIR}"; fi
         if [ -n "${LOOP_DEVICE}" ]; then sudo losetup -d "${LOOP_DEVICE}" 2>/dev/null || true; fi
-        rm -rf "${MOUNT_DIR}" "${RAW_TMP}" "${ARCHIVE_TMP}"
+        rm -rf "${MOUNT_DIR}" "${EXTRACT_DIR}" "${RAW_TMP}" "${ARCHIVE_TMP}"
     }
     trap cleanup_debian_image EXIT
 
     cp "${DEBIAN_ARCHIVE}" "${ARCHIVE_TMP}"
-    tar -xJf "${ARCHIVE_TMP}" -C /tmp
+    rm -rf "${EXTRACT_DIR}"
+    mkdir -p "${EXTRACT_DIR}"
+    tar -xJf "${ARCHIVE_TMP}" -C "${EXTRACT_DIR}"
+    EXTRACTED_RAW="$(find "${EXTRACT_DIR}" -type f -name "disk.raw" -print -quit)"
+    test -n "${EXTRACTED_RAW}"
+    mv "${EXTRACTED_RAW}" "${RAW_TMP}"
     test -f "${RAW_TMP}"
     LOOP_DEVICE="$(sudo losetup --find --show --partscan "${RAW_TMP}")"
     PARTITION_DEVICE="${LOOP_DEVICE}p1"
