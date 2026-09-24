@@ -102,7 +102,7 @@ if [ -f "${FSTAB}" ]; then
     awk '
         /^[[:space:]]*#/ { print; next }
         /^[[:space:]]*$/ { print; next }
-        $1 ~ /^(PARTUUID=|UUID=|LABEL=|\/dev\//) { print "# NEXORA disabled cloud/device fstab entry: " $0; next }
+        $1 ~ /^(PARTUUID=|UUID=|LABEL=|\/dev\/)/ { print "# NEXORA disabled cloud/device fstab entry: " $0; next }
         { print }
     ' "${FSTAB}.nexora-original" > "${FSTAB}"
 fi
