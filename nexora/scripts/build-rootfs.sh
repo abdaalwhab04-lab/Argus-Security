@@ -41,14 +41,54 @@ mkdir -p "${ROOTFS_DIR}"
 
 echo "=== Bootstrap Debian ==="
 
-sudo debootstrap \
-    --arch=amd64 \
-    --variant=minbase \
-    --include=systemd,systemd-sysv,docker.io,containerd,runc,kmod,build-essential,pkg-config,git,curl,ca-certificates,unzip,xz-utils,python3,python3-pip,python3-venv,python3-dev,libffi-dev,libssl-dev,libsqlite3-dev,libpq-dev,iproute2,iptables \
-    "${DEBIAN_SUITE}" \
-    "${ROOTFS_DIR}" \
-    "${DEBIAN_MIRROR}"
+DEBIAN_ARCHIVE="${DEBIAN_ARCHIVE:-${NEXORA_DIR}/debian/debian-12-generic-amd64.tar.xz}"
 
+if [ -f "${DEBIAN_ARCHIVE}" ]; then
+    echo "Using repository Debian base image: ${DEBIAN_ARCHIVE}"
+    ARCHIVE_TMP="/tmp/nexora-debian-base.tar.xz"
+    RAW_TMP="/tmp/nexora-debian-disk.raw"
+    LOOP_DEVICE=""
+    MOUNT_DIR="/tmp/nexora-debian-mount"
+    EXTRACT_DIR="/tmp/nexora-debian-extract"
+
+    cleanup_debian_image() {
+        set +e
+        if mountpoint -q "${MOUNT_DIR}" 2>/dev/null; then sudo umount "${MOUNT_DIR}"; fi
+        if [ -n "${LOOP_DEVICE}" ]; then sudo losetup -d "${LOOP_DEVICE}" 2>/dev/null || true; fi
+        rm -rf "${MOUNT_DIR}" "${EXTRACT_DIR}" "${RAW_TMP}" "${ARCHIVE_TMP}"
+    }
+    trap cleanup_debian_image EXIT
+
+    cp "${DEBIAN_ARCHIVE}" "${ARCHIVE_TMP}"
+    rm -rf "${EXTRACT_DIR}"
+    mkdir -p "${EXTRACT_DIR}"
+    tar -xJf "${ARCHIVE_TMP}" -C "${EXTRACT_DIR}"
+    EXTRACTED_RAW="$(find "${EXTRACT_DIR}" -type f -name "disk.raw" -print -quit)"
+    test -n "${EXTRACTED_RAW}"
+    mv "${EXTRACTED_RAW}" "${RAW_TMP}"
+    test -f "${RAW_TMP}"
+    LOOP_DEVICE="$(sudo losetup --find --show --partscan "${RAW_TMP}")"
+    PARTITION_DEVICE="${LOOP_DEVICE}p1"
+    for _ in $(seq 1 20); do [ -b "${PARTITION_DEVICE}" ] && break; sleep 1; done
+    test -b "${PARTITION_DEVICE}"
+    mkdir -p "${MOUNT_DIR}"
+    sudo mount -o ro "${PARTITION_DEVICE}" "${MOUNT_DIR}"
+    test -x "${MOUNT_DIR}/lib/systemd/systemd"
+    test -f "${MOUNT_DIR}/etc/os-release"
+    echo "=== Copy Debian base RootFS ==="
+    sudo rsync -aHAX --numeric-ids "${MOUNT_DIR}/" "${ROOTFS_DIR}/"
+    sudo chown -R "$(id -u):$(id -g)" "${ROOTFS_DIR}"
+    echo "NEXORA_DEBIAN_REPOSITORY_IMAGE_OK"
+else
+    echo "Repository Debian image not found; falling back to debootstrap."
+    sudo debootstrap \
+        --arch=amd64 \
+        --variant=minbase \
+        --include=systemd,systemd-sysv,docker.io,containerd,runc,kmod,build-essential,pkg-config,git,curl,ca-certificates,unzip,xz-utils,python3,python3-pip,python3-venv,python3-dev,libffi-dev,libssl-dev,libsqlite3-dev,libpq-dev,iproute2,iptables \
+        "${DEBIAN_SUITE}" \
+        "${ROOTFS_DIR}" \
+        "${DEBIAN_MIRROR}"
+fi
 cat > "${ROOTFS_DIR}/etc/apt/apt.conf.d/80-nexora-dev" <<'APTCONF'
 APT::Install-Recommends "false";
 APT::Install-Suggests "false";

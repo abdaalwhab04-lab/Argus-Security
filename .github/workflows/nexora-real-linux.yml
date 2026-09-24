@@ -18,8 +18,10 @@ jobs:
     timeout-minutes: 60
 
     steps:
-      - name: Checkout repository
+      - name: Checkout repository with Git LFS
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+        with:
+          lfs: true
 
       - name: Preflight NEXORA build scripts
         run: |
@@ -170,7 +172,7 @@ jobs:
         uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4
         with:
           path: nexora/rootfs
-          key: nexora-debian-rootfs-v1-${{ runner.os }}-${{ hashFiles('nexora/scripts/build-rootfs.sh', 'nexora/config/termux-packages.txt', 'nexora/config/termux-python-packages.txt', 'nexora/config/termux-npm-global.txt', 'nexora/config/termux-mirror-policy.md') }}
+          key: nexora-debian-rootfs-v1-${{ runner.os }}-${{ hashFiles('nexora/scripts/build-rootfs.sh', 'nexora/config/termux-packages.txt', 'nexora/config/termux-python-packages.txt', 'nexora/config/termux-npm-global.txt', 'nexora/config/termux-mirror-policy.md', 'nexora/debian/debian-12-generic-amd64.tar.xz') }}
 
       - name: Build NEXORA RootFS from Debian only when cache is missing
         if: steps.debian-rootfs-cache.outputs.cache-hit != 'true'
