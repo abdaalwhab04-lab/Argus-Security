@@ -165,32 +165,34 @@ echo "NEXORA_TERMUX_MAPPING_PREFLIGHT_OK"
 
 # Normalize DNS before entering the Debian chroot. The host resolver may
 # be a loopback stub (for example 127.0.0.53), which is unreachable from
-# the chroot namespace. Prefer the runner's real upstream resolver first;
-# public resolvers are only a last-resort fallback.
-if [ -f /etc/resolv.conf ]; then
-    cp -L /etc/resolv.conf "${ROOTFS_DIR}/etc/resolv.conf"
+# the chroot namespace. Always replace the rootfs resolver symlink/file with
+# concrete upstream nameservers that are reachable from the runner.
+DNS_SERVERS=""
+for resolver_file in \
+    /run/systemd/resolve/resolv.conf \
+    /run/NetworkManager/resolv.conf; do
+    if [ -f "${resolver_file}" ]; then
+        DNS_SERVERS="$(awk '/^[[:space:]]*nameserver[[:space:]]+/ && $2 !~ /^(127\\.|::1$)/ {print $2}' "${resolver_file}" | tr '\\n' ' ' || true)"
+        [ -n "${DNS_SERVERS}" ] && break
+    fi
+done
+if [ -z "${DNS_SERVERS}" ] && command -v resolvectl >/dev/null 2>&1; then
+    DNS_SERVERS="$(resolvectl dns 2>/dev/null | awk '{for (i=2; i<=NF; i++) if ($i !~ /^(127\\.|::1$)/) print $i}' | tr '\\n' ' ' || true)"
 fi
+if [ -z "${DNS_SERVERS}" ] && [ -f /etc/resolv.conf ]; then
+    DNS_SERVERS="$(awk '/^[[:space:]]*nameserver[[:space:]]+/ && $2 !~ /^(127\\.|::1$)/ {print $2}' /etc/resolv.conf | tr '\\n' ' ' || true)"
+fi
+if [ -z "${DNS_SERVERS}" ]; then
+    DNS_SERVERS="1.1.1.1 8.8.8.8"
+fi
+rm -f "${ROOTFS_DIR}/etc/resolv.conf"
+for dns_server in ${DNS_SERVERS}; do
+    printf "nameserver %s\\n" "${dns_server}" >> "${ROOTFS_DIR}/etc/resolv.conf"
+done
 if grep -Eq "^[[:space:]]*nameserver[[:space:]]+(127\\.|::1)" "${ROOTFS_DIR}/etc/resolv.conf" 2>/dev/null; then
-    DNS_SERVERS=""
-    for resolver_file in \
-        /run/systemd/resolve/resolv.conf \
-        /run/NetworkManager/resolv.conf \
-        /run/systemd/resolve/stub-resolv.conf; do
-        if [ -f "${resolver_file}" ]; then
-            DNS_SERVERS="$(awk '/^[[:space:]]*nameserver[[:space:]]+/ && $2 !~ /^(127\\.|::1$)/ {print $2}' "${resolver_file}" | tr '\n' ' ' || true)"
-            [ -n "${DNS_SERVERS}" ] && break
-        fi
-    done
-    if [ -z "${DNS_SERVERS}" ] && command -v resolvectl >/dev/null 2>&1; then
-        DNS_SERVERS="$(resolvectl dns 2>/dev/null | awk '{for (i=2; i<=NF; i++) if ($i !~ /^(127\\.|::1$)/) print $i}' | tr '\n' ' ' || true)"
-    fi
-    if [ -z "${DNS_SERVERS}" ]; then
-        DNS_SERVERS="1.1.1.1 8.8.8.8"
-    fi
-    : > "${ROOTFS_DIR}/etc/resolv.conf"
-    for dns_server in ${DNS_SERVERS}; do
-        printf "nameserver %s\n" "${dns_server}" >> "${ROOTFS_DIR}/etc/resolv.conf"
-    done
+    echo "ERROR: generated Debian chroot resolv.conf still contains a loopback nameserver."
+    cat "${ROOTFS_DIR}/etc/resolv.conf" || true
+    exit 1
 fi
 if ! chroot "${ROOTFS_DIR}" getent hosts deb.debian.org >/dev/null 2>&1; then
     echo "ERROR: Debian chroot DNS resolution failed before apt-get update."
