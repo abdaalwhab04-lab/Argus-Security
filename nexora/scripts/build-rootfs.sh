@@ -424,6 +424,9 @@ set -eu
 CONSOLE=/dev/console
 log() { echo "$*" > "$CONSOLE"; }
 
+log "=== NEXORA DEBIAN/TERMUX ISOLATION ==="
+/usr/local/bin/nexora-debian-isolation-test.sh
+
 log "=== NEXORA DOCKER STORAGE ==="
 test -d /var/lib/docker
 test -d /var/lib/containerd
@@ -520,6 +523,54 @@ log "NEXORA_DEBIAN_USERSPACE_OK"
 USERSpace
 
 chmod +x "${ROOTFS_DIR}/usr/local/bin/nexora-userspace-start.sh"
+
+cat > "${ROOTFS_DIR}/usr/local/bin/nexora-debian-isolation-test.sh" <<'ISOLATIONTEST'
+#!/bin/sh
+set -eu
+
+fail() {
+    echo "NEXORA_DEBIAN_ISOLATION_FAILED: $*" > /dev/console
+    exit 1
+}
+
+echo "=== NEXORA DEBIAN/TERMUX ISOLATION TEST ===" > /dev/console
+
+[ -f /etc/debian_version ] || fail "Debian release marker missing"
+[ -x /lib/systemd/systemd ] || fail "Debian systemd missing"
+
+PID1_EXE="$(readlink -f /proc/1/exe 2>/dev/null || true)"
+[ "$PID1_EXE" = "/usr/lib/systemd/systemd" ] || [ "$PID1_EXE" = "/lib/systemd/systemd" ] || fail "PID 1 is not Debian systemd: $PID1_EXE"
+
+ROOT_DEV="$(readlink -f /proc/1/root 2>/dev/null || true)"
+[ "$ROOT_DEV" = "/" ] || fail "PID 1 root is not guest root: $ROOT_DEV"
+
+for p in /data/data/com.termux /data/data /system /system_ext /vendor /apex; do
+    if [ -e "$p" ]; then
+        fail "Android/Termux host path is visible: $p"
+    fi
+done
+
+if grep -Eiq '(^|[[:space:]])/data/data/com\.termux([[:space:]]|/)|(^|[[:space:]])/data/data([[:space:]]|/)' /proc/self/mountinfo 2>/dev/null; then
+    fail "Android/Termux path appears in guest mount namespace"
+fi
+
+if env | grep -Eiq '(^|=)(TERMUX|TERMUX_VERSION|PREFIX=/data/data/com\.termux|HOME=/data/data/com\.termux)'; then
+    fail "Termux environment leaked into Debian"
+fi
+
+for cmd in sh ps mount cat; do
+    path="$(command -v "$cmd" 2>/dev/null || true)"
+    [ -n "$path" ] || fail "required Debian command missing: $cmd"
+    case "$path" in
+        /data/*|/system/*|/apex/*) fail "Android executable resolved for $cmd: $path" ;;
+    esac
+done
+
+echo "NEXORA_DEBIAN_TERMUX_ISOLATION_OK" > /dev/console
+echo "NEXORA_DEBIAN_INDEPENDENT_USERSPACE_OK" > /dev/console
+ISOLATIONTEST
+
+chmod +x "${ROOTFS_DIR}/usr/local/bin/nexora-debian-isolation-test.sh"
 
 cat > "${ROOTFS_DIR}/etc/systemd/system/nexora-userspace.service" <<'SERVICE'
 [Unit]
