@@ -102,8 +102,7 @@ if [ -f "${FSTAB}" ]; then
     awk '
         /^[[:space:]]*#/ { print; next }
         /^[[:space:]]*$/ { print; next }
-        /PARTUUID=/ { print "# NEXORA disabled cloud PARTUUID mount: " $0; next }
-        /[[:space:]]+\/boot[[:space:]]+/ { print "# NEXORA disabled cloud /boot mount: " $0; next }
+        $1 ~ /^(PARTUUID=|UUID=|LABEL=|\/dev\//) { print "# NEXORA disabled cloud/device fstab entry: " $0; next }
         { print }
     ' "${FSTAB}.nexora-original" > "${FSTAB}"
 fi
