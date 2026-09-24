@@ -1,0 +1,553 @@
+name: Argus NEXORA Linux Test
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - omniroute-v3.8.50-integration
+      - nexora-real-test
+
+permissions:
+  contents: read
+
+jobs:
+  argus-nexora:
+    name: Argus + NEXORA Linux Environment
+    cache-mode: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository with Git LFS
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+        with:
+          lfs: true
+
+      - name: Preflight NEXORA build scripts
+        run: |
+          set -euo pipefail
+          echo "=== NEXORA SCRIPT PREFLIGHT ==="
+          for script in             nexora/scripts/build-rootfs.sh             nexora/scripts/build-kernel.sh             nexora/scripts/build-initramfs.sh             nexora/scripts/build-iso.sh             nexora/scripts/build-persistent-storage.sh             nexora/scripts/integrate-argus.sh; do
+            test -f "$script"
+            bash -n "$script"
+            echo "SYNTAX_OK $script"
+          done
+          test -f nexora/rootfs/initramfs/init
+          test -x nexora/rootfs/initramfs/init
+          test -f nexora/config/kernel.conf
+          grep -qx 'CONFIG_EXT4_FS=y' nexora/config/kernel.conf
+          grep -qx 'CONFIG_OVERLAY_FS=y' nexora/config/kernel.conf
+          grep -qx 'CONFIG_VIRTIO_BLK=y' nexora/config/kernel.conf
+          grep -qx 'CONFIG_BRIDGE=y' nexora/config/kernel.conf
+          grep -qx 'CONFIG_VETH=y' nexora/config/kernel.conf
+          grep -qx 'CONFIG_NF_NAT=y' nexora/config/kernel.conf
+          grep -q 'TERMUX_DEBIAN_PACKAGES+=(p7zip-full)' nexora/scripts/build-rootfs.sh
+          grep -q '\[7z\]=p7zip-full' nexora/scripts/build-rootfs.sh
+          grep -q '\[docker-compose\]=docker.io' nexora/scripts/build-rootfs.sh
+          grep -q 'NEXORA_TERMUX_MAPPING_PREFLIGHT_OK' nexora/scripts/build-rootfs.sh
+          grep -q 'NEXORA_DOCKER_COMPOSE_V2_OK' nexora/scripts/build-rootfs.sh
+          grep -q 'NEXORA_DOCKER_BUILDX_OK' nexora/scripts/build-rootfs.sh
+          grep -q 'BUILDX_VERSION="${BUILDX_VERSION:-0.13.1}"' nexora/scripts/build-rootfs.sh
+          grep -q 'NEXORA_DOCKER_RUNTIME_FAILED' nexora/scripts/build-rootfs.sh
+          grep -q 'NEXORA_DOCKER_NETWORK_OK' nexora/scripts/build-rootfs.sh
+          grep -q 'NEXORA_DOCKER_COMPOSE_OK' nexora/scripts/build-rootfs.sh
+          grep -q 'COMPOSE_VERSION="${COMPOSE_VERSION:-5.5.1}"' nexora/scripts/build-rootfs.sh
+          echo "NEXORA_SCRIPT_PREFLIGHT_OK"
+
+      - name: Install NEXORA build tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y             build-essential bc bison flex libssl-dev libelf-dev libdw-dev             cpio gzip xorriso grub-pc-bin grub-efi-amd64-bin grub-efi-amd64             mtools rsync busybox-static qemu-system-x86 debootstrap e2fsprogs
+
+      - name: Show system information
+        run: |
+          set -euo pipefail
+          uname -a
+          cat /etc/os-release
+          echo "CPU=$(nproc)"
+          free -h
+          df -h
+
+      - name: Prepare host Docker for NEXORA image bundling
+        run: |
+          set -euo pipefail
+          if ! docker info >/dev/null 2>&1; then
+            sudo systemctl start docker
+          fi
+          for _ in $(seq 1 30); do
+            if docker info >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          docker info >/dev/null 2>&1
+          docker version --format 'NEXORA_HOST_DOCKER={{.Server.Version}}'
+          echo "NEXORA_HOST_DOCKER_READY"
+
+      - name: Preflight AutoGPT Docker Compose
+        run: |
+          set -euo pipefail
+          test -f autogpt/autogpt_platform/docker-compose.yml
+          test -f autogpt/autogpt_platform/docker-compose.platform.yml
+          test -f autogpt/autogpt_platform/backend/Dockerfile
+          test -f autogpt/autogpt_platform/frontend/Dockerfile
+          test -f autogpt/autogpt_platform/backend/.env.default
+          test -f autogpt/autogpt_platform/frontend/.env.default
+          test -f autogpt/autogpt_platform/db/init/00-init.sql
+          docker compose -f autogpt/autogpt_platform/docker-compose.yml config --quiet
+          docker buildx version
+          echo "NEXORA_AUTOGPT_COMPOSE_PREFLIGHT_OK"
+
+      - name: Inspect AutoGPT Compose runtime requirements
+        run: |
+          set -euo pipefail
+          CONFIG_JSON="$(mktemp)"
+          docker compose -f autogpt/autogpt_platform/docker-compose.yml config --format json > "$CONFIG_JSON"
+          python3 - "$CONFIG_JSON" <<'PY'
+          import json
+          import sys
+
+          data = json.load(open(sys.argv[1]))
+          services = data.get("services", {})
+          if not services:
+              raise SystemExit("ERROR: AutoGPT Compose resolved to zero services")
+
+          print(f"NEXORA_AUTOGPT_SERVICE_COUNT={len(services)}")
+          for name, service in services.items():
+              build = service.get("build")
+              image = service.get("image")
+              if build:
+                  context = build.get("context") if isinstance(build, dict) else build
+                  print(f"AUTOGPT_BUILD_SERVICE={name} CONTEXT={context}")
+              elif image:
+                  print(f"AUTOGPT_IMAGE_SERVICE={name} IMAGE={image}")
+
+              unsupported = []
+              if service.get("privileged"):
+                  unsupported.append("privileged")
+              if service.get("network_mode") == "host":
+                  unsupported.append("network_mode=host")
+              if service.get("pid") == "host":
+                  unsupported.append("pid=host")
+              if service.get("ipc") == "host":
+                  unsupported.append("ipc=host")
+              if service.get("devices"):
+                  unsupported.append("devices")
+              if unsupported:
+                  raise SystemExit(
+                      f"ERROR: {name} requires unsupported NEXORA Docker mode(s): "
+                      + ", ".join(unsupported)
+                  )
+
+              tmpfs = service.get("tmpfs", [])
+              for mount in tmpfs if isinstance(tmpfs, list) else []:
+                  if "size=" in str(mount):
+                      print(f"AUTOGPT_TMPFS_SERVICE={name} {mount}")
+
+          required = {
+              "db", "rabbitmq", "redis-0", "redis-1", "redis-2",
+              "redis-init", "falkordb", "migrate", "rest_server",
+              "executor", "copilot_executor", "websocket_server",
+              "database_manager", "scheduler_server", "notification_server",
+              "frontend", "clamav",
+          }
+          missing = sorted(required - services.keys())
+          if missing:
+              raise SystemExit("ERROR: missing required resolved services: " + ", ".join(missing))
+
+          print("NEXORA_AUTOGPT_RUNTIME_REQUIREMENTS_OK")
+          PY
+          rm -f "$CONFIG_JSON"
+
+      - name: Check NEXORA build tools
+        run: |
+          set -euo pipefail
+          for tool in gcc make bc bison flex cpio gzip xorriso grub-mkrescue rsync busybox qemu-system-x86_64; do
+            command -v "$tool"
+          done
+          qemu-system-x86_64 --version
+          echo "NEXORA_BUILD_TOOLS_OK"
+
+      - name: Restore Debian RootFS from repository-scoped Actions cache
+        id: debian-rootfs-cache
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4
+        with:
+          path: nexora/rootfs
+          key: nexora-debian-rootfs-v1-${{ runner.os }}-${{ hashFiles('nexora/scripts/build-rootfs.sh', 'nexora/config/termux-packages.txt', 'nexora/config/termux-python-packages.txt', 'nexora/config/termux-npm-global.txt', 'nexora/config/termux-mirror-policy.md', 'nexora/debian/debian-12-generic-amd64.tar.xz') }}
+
+      - name: Build NEXORA RootFS from Debian only when cache is missing
+        if: steps.debian-rootfs-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          sudo bash nexora/scripts/build-rootfs.sh
+          test -d nexora/rootfs
+          echo "NEXORA_ROOTFS_BUILD_OK"
+          echo "NEXORA_DEBIAN_ROOTFS_CACHE_MISS_BUILT"
+
+      - name: Verify Debian RootFS from repository cache
+        run: |
+          set -u
+          failures=0
+
+          check_dir() {
+            local p="$1"
+            if [ -d "$p" ]; then
+              echo "ROOTFS_DIR_OK $p"
+            else
+              echo "::error::ROOTFS_DIR_MISSING $p"
+              failures=$((failures + 1))
+            fi
+          }
+
+          check_exec() {
+            local p="$1"
+            # Absolute symlink targets inside a chroot are rooted at nexora/rootfs,
+            # but host-side test -x follows them from the runner root. Validate
+            # symlinks from inside the RootFS instead of falsely reporting them
+            # missing on the host.
+            if [ -L "$p" ]; then
+              local inside="/${p#nexora/rootfs/}"
+              if sudo chroot nexora/rootfs sh -c 'test -x "$1"' sh "$inside"; then
+                echo "ROOTFS_EXEC_SYMLINK_OK $p -> $(readlink "$p")"
+              else
+                echo "::error::ROOTFS_EXEC_SYMLINK_BROKEN $p -> $(readlink "$p")"
+                failures=$((failures + 1))
+              fi
+            elif [ -x "$p" ]; then
+              echo "ROOTFS_EXEC_OK $p"
+            elif [ -e "$p" ]; then
+              echo "::error::ROOTFS_EXEC_NOT_EXECUTABLE $p"
+              ls -l "$p" || true
+              failures=$((failures + 1))
+            else
+              echo "::error::ROOTFS_EXEC_MISSING $p"
+              failures=$((failures + 1))
+            fi
+          }
+
+          echo "=== NEXORA ROOTFS STRUCTURE ==="
+          check_dir nexora/rootfs
+          check_exec nexora/rootfs/sbin/init
+          check_exec nexora/rootfs/lib/systemd/systemd
+          check_exec nexora/rootfs/usr/bin/docker
+          check_exec nexora/rootfs/usr/local/bin/node
+          check_exec nexora/rootfs/usr/local/bin/npm
+          check_exec nexora/rootfs/usr/local/bin/pnpm
+          check_exec nexora/rootfs/usr/local/bin/nexora-userspace-start.sh
+          check_exec nexora/rootfs/usr/local/bin/docker-compose
+
+          echo "=== NEXORA NODE TOOLCHAIN LINKS ==="
+          for p in \
+            nexora/rootfs/usr/local/bin/node \
+            nexora/rootfs/usr/local/bin/npm \
+            nexora/rootfs/usr/local/bin/npx \
+            nexora/rootfs/usr/local/bin/corepack \
+            nexora/rootfs/usr/local/bin/pnpm; do
+            if [ -L "$p" ]; then
+              echo "ROOTFS_SYMLINK $p -> $(readlink "$p")"
+            elif [ -e "$p" ]; then
+              echo "ROOTFS_FILE $p"
+              ls -l "$p" || true
+            else
+              echo "::error::ROOTFS_NODE_PATH_MISSING $p"
+              failures=$((failures + 1))
+            fi
+          done
+
+          echo "=== NEXORA DOCKER CLI PLUGINS ==="
+          for p in \
+            nexora/rootfs/usr/local/lib/docker/cli-plugins/docker-compose \
+            nexora/rootfs/usr/local/lib/docker/cli-plugins/docker-buildx; do
+            if [ -e "$p" ]; then
+              ls -l "$p"
+              if [ -x "$p" ]; then
+                echo "ROOTFS_DOCKER_PLUGIN_OK $p"
+              else
+                echo "::error::ROOTFS_DOCKER_PLUGIN_NOT_EXECUTABLE $p"
+                failures=$((failures + 1))
+              fi
+            else
+              echo "::error::ROOTFS_DOCKER_PLUGIN_MISSING $p"
+              failures=$((failures + 1))
+            fi
+          done
+
+          echo "=== NEXORA ROOTFS DIRECTORY SNAPSHOT ==="
+          for d in \
+            nexora/rootfs/usr/bin \
+            nexora/rootfs/usr/local/bin \
+            nexora/rootfs/usr/local/lib/docker/cli-plugins \
+            nexora/rootfs/etc; do
+            echo "--- $d ---"
+            if [ -d "$d" ]; then
+              ls -la "$d" | sed -n '1,120p'
+            else
+              echo "<missing>"
+            fi
+          done
+
+          echo "=== NEXORA ROOTFS VERSION FILES ==="
+          for p in nexora/rootfs/etc/debian_version nexora/rootfs/etc/os-release; do
+            if [ -f "$p" ]; then
+              echo "--- $p ---"
+              sed -n '1,40p' "$p"
+            fi
+          done
+
+          echo "=== NEXORA CHROOT RUNTIME DIAGNOSTICS ==="
+          run_chroot() {
+            local label="$1"
+            shift
+            local rc=0
+            echo "--- $label ---"
+            sudo chroot nexora/rootfs "$@" || rc=$?
+            echo "${label}_RC=${rc}"
+            return 0
+          }
+
+          run_chroot NEXORA_DOCKER_VERSION /usr/bin/docker --version
+          run_chroot NEXORA_NODE_VERSION /usr/local/bin/node --version
+          run_chroot NEXORA_NPM_VERSION /usr/local/bin/npm --version
+          run_chroot NEXORA_PNPM_VERSION /usr/local/bin/pnpm --version
+          run_chroot NEXORA_DOCKER_COMPOSE /usr/local/bin/docker-compose version
+
+          echo "=== NEXORA ROOTFS CACHE STATUS ==="
+          if [ "${{ steps.debian-rootfs-cache.outputs.cache-hit }}" = "true" ]; then
+            echo "NEXORA_DEBIAN_ROOTFS_CACHE_HIT"
+          else
+            echo "NEXORA_DEBIAN_ROOTFS_CACHE_MISS_BUILT"
+          fi
+
+          if [ "$failures" -ne 0 ]; then
+            echo "::error::NEXORA_ROOTFS_VERIFICATION_FAILED failures=$failures"
+            exit 1
+          fi
+
+          echo "NEXORA_DEBIAN_ROOTFS_PERSISTENT_OK"
+      - name: Build NEXORA Kernel
+        run: |
+          set -euo pipefail
+          bash nexora/scripts/build-kernel.sh
+
+      - name: Verify NEXORA Kernel
+        run: |
+          set -euo pipefail
+          KERNEL_VERSION="${KERNEL_VERSION:-6.12.50}"
+          KERNEL_IMAGE="nexora/build/linux-${KERNEL_VERSION}/arch/x86/boot/bzImage"
+          test -f "${KERNEL_IMAGE}"
+          KERNEL_CONFIG="nexora/build/linux-${KERNEL_VERSION}/.config"
+          test -f "${KERNEL_CONFIG}"
+          echo "=== Verify Required NEXORA Kernel Configuration ==="
+          config_failed=0
+          while IFS= read -r cfg; do
+            case "${cfg}" in
+              ""|\#*)
+                continue
+                ;;
+              CONFIG_*=y)
+                if grep -qxF "${cfg}" "${KERNEL_CONFIG}"; then
+                  echo "KERNEL_CONFIG_OK ${cfg}"
+                else
+                  echo "::error::Required kernel option is not =y: ${cfg}"
+                  actual="$(grep -E "^${cfg%%=*}(=| is not set)" "${KERNEL_CONFIG}" || true)"
+                  if [ -n "${actual}" ]; then
+                    echo "KERNEL_CONFIG_ACTUAL ${actual}"
+                  else
+                    echo "KERNEL_CONFIG_ACTUAL <absent>"
+                  fi
+                  config_failed=1
+                fi
+                ;;
+            esac
+          done < nexora/config/kernel.conf
+
+          if [ "${config_failed}" -ne 0 ]; then
+            echo "::error::NEXORA kernel configuration verification failed."
+            exit 1
+          fi
+
+          ls -lh "${KERNEL_IMAGE}"
+          file "${KERNEL_IMAGE}"
+          echo "NEXORA_KERNEL_CONFIG_OK"
+          echo "NEXORA_KERNEL_OK"
+
+      - name: Build NEXORA Initramfs
+        run: |
+          set -euo pipefail
+          bash nexora/scripts/build-initramfs.sh
+
+      - name: Verify NEXORA Initramfs
+        run: |
+          set -euo pipefail
+          INITRAMFS_IMAGE="nexora/build/nexora-initramfs.cpio.gz"
+          test -f "${INITRAMFS_IMAGE}"
+          gzip -t "${INITRAMFS_IMAGE}"
+          ls -lh "${INITRAMFS_IMAGE}"
+          echo "NEXORA_INITRAMFS_OK"
+
+      - name: Build NEXORA ISO
+        run: |
+          set -euo pipefail
+          sudo bash nexora/scripts/build-iso.sh
+
+      - name: Verify NEXORA ISO
+        run: |
+          set -euo pipefail
+          ISO_IMAGE="nexora/build/output/nexora.iso"
+          test -f "${ISO_IMAGE}"
+          ls -lh "${ISO_IMAGE}"
+          file "${ISO_IMAGE}"
+          echo "NEXORA_ISO_OK"
+
+      - name: Inspect NEXORA Initramfs
+        run: |
+          set -euo pipefail
+          INITRAMFS_IMAGE="nexora/build/nexora-initramfs.cpio.gz"
+          gzip -cd "${INITRAMFS_IMAGE}" | cpio -t | grep -E '(^|/)(init|bin/busybox)(|$)'
+          rm -rf /tmp/nexora-initramfs-inspect
+          mkdir -p /tmp/nexora-initramfs-inspect
+          gzip -cd "${INITRAMFS_IMAGE}" | cpio -idmu -D /tmp/nexora-initramfs-inspect
+          test -f /tmp/nexora-initramfs-inspect/init
+          test -e /tmp/nexora-initramfs-inspect/bin/busybox
+          echo "NEXORA_INITRAMFS_INSPECT_DONE"
+
+      - name: Build NEXORA persistent data disk
+        run: |
+          set -euo pipefail
+          sudo bash nexora/scripts/build-persistent-storage.sh
+          sudo chown runner:runner nexora/build/persistent-data.img
+          sudo chmod 600 nexora/build/persistent-data.img
+          test -f nexora/build/persistent-data.img
+          stat -c 'NEXORA_PERSISTENT_DISK_OWNER=%U:%G MODE=%a' nexora/build/persistent-data.img
+          echo "NEXORA_PERSISTENT_DISK_READY"
+
+      - name: Boot NEXORA and verify Docker persistence
+        shell: bash
+        run: |
+          set -euo pipefail
+          ISO_IMAGE="nexora/build/output/nexora.iso"
+          PERSISTENT_DISK="nexora/build/persistent-data.img"
+          OUTPUT_DIR="output"
+          QMP_SOCKET="/tmp/nexora-qmp.sock"
+          mkdir -p "${OUTPUT_DIR}"
+
+          run_nexora_boot() {
+            local LOG_FILE="${1}"
+            rm -f "${QMP_SOCKET}" "${LOG_FILE}"
+            qemu-system-x86_64               -m 1024 -machine q35 -display none -serial stdio               -cdrom "${ISO_IMAGE}"               -drive file="${PERSISTENT_DISK}",format=raw,if=virtio               -qmp "unix:${QMP_SOCKET},server=on,wait=off" -no-reboot >"${LOG_FILE}" 2>&1 &
+            local QEMU_PID=$!
+
+            qemu_running() {
+              if ! kill -0 "${QEMU_PID}" 2>/dev/null; then return 1; fi
+              local state
+              state="$(ps -o stat= -p "${QEMU_PID}" 2>/dev/null | tr -d ' ' || true)"
+              [ -n "${state}" ] && [ "${state#Z}" = "${state}" ]
+            }
+
+            for _ in $(seq 1 90); do
+              if grep -qE "NEXORA_PERSISTENCE_INITIALIZED|NEXORA_PERSISTENCE_RESTORED" "${LOG_FILE}"; then break; fi
+              if ! qemu_running; then cat "${LOG_FILE}"; return 1; fi
+              sleep 1
+            done
+
+            if ! grep -qE "NEXORA_PERSISTENCE_INITIALIZED|NEXORA_PERSISTENCE_RESTORED" "${LOG_FILE}"; then
+              echo "ERROR: persistence marker not reached within 90 seconds"
+              cat "${LOG_FILE}"
+              kill -TERM "${QEMU_PID}" 2>/dev/null || true
+              wait "${QEMU_PID}" 2>/dev/null || true
+              return 1
+            fi
+
+            if [ -S "${QMP_SOCKET}" ]; then
+              if python3 -c 'import json,socket,sys,time; p=sys.argv[1]; s=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM); s.settimeout(3); s.connect(p); s.recv(65536); s.sendall((json.dumps({"execute":"qmp_capabilities","id":"caps"})+"\r\n").encode()); time.sleep(0.1); s.recv(65536); s.sendall((json.dumps({"execute":"quit","id":"quit"})+"\r\n").encode()); s.close()' "${QMP_SOCKET}"; then
+                echo "NEXORA_QMP_QUIT_SENT" >> "${LOG_FILE}"
+              else
+                echo "NEXORA_QMP_QUIT_FAILED" >> "${LOG_FILE}"
+              fi
+            else
+              echo "NEXORA_QMP_SOCKET_ABSENT" >> "${LOG_FILE}"
+            fi
+
+            for _ in $(seq 1 10); do if ! qemu_running; then break; fi; sleep 1; done
+            if qemu_running; then
+              echo "NEXORA_QEMU_TERM_SENT" >> "${LOG_FILE}"
+              kill -TERM "${QEMU_PID}" 2>/dev/null || true
+              for _ in $(seq 1 5); do if ! qemu_running; then break; fi; sleep 1; done
+            fi
+            if qemu_running; then
+              echo "NEXORA_QEMU_KILL_SENT" >> "${LOG_FILE}"
+              kill -KILL "${QEMU_PID}" 2>/dev/null || true
+            fi
+            wait "${QEMU_PID}" 2>/dev/null || true
+            sync
+            echo "NEXORA_HOST_DISK_SYNC_DONE"
+            echo "NEXORA_HOST_DISK_SYNC_DONE" >> "${LOG_FILE}"
+            return 0
+          }
+
+          BOOT_LOG="${OUTPUT_DIR}/nexora-qemu-boot.log"
+          run_nexora_boot "${BOOT_LOG}"
+          grep -q "NEXORA_BOOT_OK" "${BOOT_LOG}"
+          grep -q "NEXORA_DEBIAN_ROOTFS_FOUND" "${BOOT_LOG}"
+          grep -q "NEXORA_PERSISTENT_STORAGE_OK" "${BOOT_LOG}"
+          grep -q "NEXORA_ROOTFS_SWITCH" "${BOOT_LOG}"
+          grep -q "NEXORA_DEBIAN_USERSPACE_OK" "${BOOT_LOG}"
+          grep -q "NEXORA_DOCKER_CONTAINER_OK" "${BOOT_LOG}"
+          grep -q "NEXORA_PERSISTENCE_INITIALIZED" "${BOOT_LOG}"
+          grep -q "NEXORA_PERSISTENCE_SYNCED" "${BOOT_LOG}"
+          grep -q "NEXORA_HOST_DISK_SYNC_DONE" "${BOOT_LOG}"
+          echo "NEXORA_QEMU_BOOT_OK"
+
+          sudo debugfs -R "stat /nexora-persistence-marker" "${PERSISTENT_DISK}" 2>/dev/null | grep -q "Type: regular"
+          sudo debugfs -R "cat /nexora-persistence-marker" "${PERSISTENT_DISK}" 2>/dev/null | grep -q "NEXORA"
+          echo "NEXORA_HOST_PERSISTENCE_MARKER_OK"
+
+          SECOND_BOOT_LOG="${OUTPUT_DIR}/nexora-qemu-persistence-reboot.log"
+          run_nexora_boot "${SECOND_BOOT_LOG}"
+          grep -q "NEXORA_PERSISTENCE_RESTORED" "${SECOND_BOOT_LOG}"
+          grep -q "NEXORA_PERSISTENCE_TEST_DONE" "${SECOND_BOOT_LOG}"
+          grep -q "NEXORA_DOCKER_OK" "${SECOND_BOOT_LOG}"
+          grep -q "NEXORA_DEBIAN_USERSPACE_OK" "${SECOND_BOOT_LOG}"
+          grep -q "NEXORA_DOCKER_CONTAINER_OK" "${SECOND_BOOT_LOG}"
+          grep -q "NEXORA_HOST_DISK_SYNC_DONE" "${SECOND_BOOT_LOG}"
+          echo "NEXORA_PERSISTENCE_REBOOT_OK"
+
+      - name: Validate Argus Python test environment
+        run: |
+          set -euo pipefail
+          python3 --version
+          python3 -m pip --version
+          python3 -m pip install --upgrade pip
+          python3 -m pip install pytest pytest-xdist pytest-cov
+          echo "NEXORA_ARGUS_TEST_ENV_OK"
+
+      - name: Check Argus configuration
+        run: |
+          set -euo pipefail
+          python3 -m pip install -r requirements.txt
+          python3 -m pip check
+          python3 -c "import tenacity; print('ARGUS_TENACITY_OK')"
+          python3 scripts/run_ai_audit.py --help
+          echo "NEXORA_ARGUS_CONFIG_OK"
+
+      - name: Run targeted NEXORA/Argus tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p output
+          if [ -d tests ]; then
+            pytest -v --tb=short --junitxml=output/pytest-junit.xml 2>&1 | tee output/pytest.log
+          else
+            echo "No top-level tests directory; NEXORA runtime validation remains the required gate."
+          fi
+          echo "NEXORA_LINUX_OK"
+
+      - name: Upload NEXORA test reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        continue-on-error: true
+        with:
+          name: argus-nexora-test-results
+          path: output/
+          if-no-files-found: warn
+
+# Verification trigger: run the corrected RootFS symlink validation on the integration branch.
