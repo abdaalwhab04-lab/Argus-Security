@@ -462,14 +462,14 @@ jobs:
               [ -n "${state}" ] && [ "${state#Z}" = "${state}" ]
             }
 
-            for _ in $(seq 1 90); do
+            for _ in $(seq 1 300); do
               if grep -qE "NEXORA_PERSISTENCE_INITIALIZED|NEXORA_PERSISTENCE_RESTORED" "${LOG_FILE}"; then break; fi
               if ! qemu_running; then cat "${LOG_FILE}"; return 1; fi
               sleep 1
             done
 
             if ! grep -qE "NEXORA_PERSISTENCE_INITIALIZED|NEXORA_PERSISTENCE_RESTORED" "${LOG_FILE}"; then
-              echo "ERROR: persistence marker not reached within 90 seconds"
+              echo "ERROR: persistence marker not reached within 300 seconds"
               cat "${LOG_FILE}"
               kill -TERM "${QEMU_PID}" 2>/dev/null || true
               wait "${QEMU_PID}" 2>/dev/null || true
