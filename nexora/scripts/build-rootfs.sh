@@ -108,9 +108,9 @@ if [ -f "${FSTAB}" ]; then
     ' "${FSTAB}.nexora-original" > "${FSTAB}"
 fi
 
-if grep -Eq '^[[:space:]]*[^#].*PARTUUID=' "${FSTAB}" 2>/dev/null; then
-    echo "ERROR: unresolved cloud PARTUUID entry remains in NEXORA /etc/fstab."
-    grep -n 'PARTUUID=' "${FSTAB}" || true
+if grep -Eq '^[[:space:]]*[^#].*(PARTUUID=|UUID=|LABEL=|/dev/)' "${FSTAB}" 2>/dev/null; then
+    echo "ERROR: unresolved cloud/device fstab entry remains in NEXORA /etc/fstab."
+    grep -nE '^[[:space:]]*[^#].*(PARTUUID=|UUID=|LABEL=|/dev/)' "${FSTAB}" || true
     exit 1
 fi
 
