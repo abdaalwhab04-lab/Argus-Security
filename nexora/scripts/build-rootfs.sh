@@ -89,6 +89,40 @@ else
         "${ROOTFS_DIR}" \
         "${DEBIAN_MIRROR}"
 fi
+
+echo "=== Normalize Debian boot mounts for NEXORA ==="
+
+# The repository Debian cloud image is a complete cloud disk image. Its
+# /etc/fstab may contain PARTUUID entries that refer to the original cloud
+# disk layout. NEXORA supplies its own ISO root and /dev/vda persistent disk,
+# so those cloud-specific mounts must not block systemd during boot.
+FSTAB="${ROOTFS_DIR}/etc/fstab"
+if [ -f "${FSTAB}" ]; then
+    cp "${FSTAB}" "${FSTAB}.nexora-original"
+    awk '
+        /^[[:space:]]*#/ { print; next }
+        /^[[:space:]]*$/ { print; next }
+        /PARTUUID=/ { print "# NEXORA disabled cloud PARTUUID mount: " $0; next }
+        /[[:space:]]+\/boot[[:space:]]+/ { print "# NEXORA disabled cloud /boot mount: " $0; next }
+        { print }
+    ' "${FSTAB}.nexora-original" > "${FSTAB}"
+fi
+
+if grep -Eq '^[[:space:]]*[^#].*PARTUUID=' "${FSTAB}" 2>/dev/null; then
+    echo "ERROR: unresolved cloud PARTUUID entry remains in NEXORA /etc/fstab."
+    grep -n 'PARTUUID=' "${FSTAB}" || true
+    exit 1
+fi
+
+# NEXORA networking is not allowed to hold the boot transaction hostage.
+# Docker networking is verified explicitly later by the userspace test.
+mkdir -p "${ROOTFS_DIR}/etc/systemd/system"
+ln -sfn /dev/null "${ROOTFS_DIR}/etc/systemd/system/systemd-networkd-wait-online.service"
+ln -sfn /dev/null "${ROOTFS_DIR}/etc/systemd/system/NetworkManager-wait-online.service"
+
+echo "NEXORA_DEBIAN_BOOT_MOUNTS_NORMALIZED"
+echo "NEXORA_NETWORK_WAIT_DISABLED"
+
 cat > "${ROOTFS_DIR}/etc/apt/apt.conf.d/80-nexora-dev" <<'APTCONF'
 APT::Install-Recommends "false";
 APT::Install-Suggests "false";
