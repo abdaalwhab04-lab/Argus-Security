@@ -456,6 +456,19 @@ chmod +x "${ROOTFS_DIR}/usr/local/bin/nexora-docker-container-test.sh"
 
 echo "=== Configure NEXORA persistent Debian environment ==="
 
+# Repository files are the source of truth; runtime software/data live on the Debian persistent disk.
+REPO_ROOT="$(cd "${NEXORA_DIR}/.." && pwd)"
+PERSISTENT_WORKSPACE="${ROOTFS_DIR}/opt/nexora/debian-workspace"
+mkdir -p "${PERSISTENT_WORKSPACE}/source" "${PERSISTENT_WORKSPACE}/software" "${PERSISTENT_WORKSPACE}/data"
+if [ -d "${REPO_ROOT}/autogpt" ]; then rsync -a --delete "${REPO_ROOT}/autogpt/" "${PERSISTENT_WORKSPACE}/source/autogpt/"; fi
+if [ -d "${REPO_ROOT}/omniroute" ]; then rsync -a --delete "${REPO_ROOT}/omniroute/" "${PERSISTENT_WORKSPACE}/source/omniroute/"; fi
+cat > "${ROOTFS_DIR}/etc/nexora-persistent-workspace.conf" <<'WORKSPACE'
+NEXORA_PERSISTENT_WORKSPACE=/persist/debian-workspace
+NEXORA_REPOSITORY_SOURCE=/opt/nexora/debian-workspace/source
+NEXORA_RUNTIME_SOFTWARE=/persist/debian-workspace/software
+NEXORA_RUNTIME_DATA=/persist/debian-workspace/data
+WORKSPACE
+
 mkdir -p "${ROOTFS_DIR}/var/lib/docker"
 mkdir -p "${ROOTFS_DIR}/var/lib/containerd"
 mkdir -p "${ROOTFS_DIR}/persist"
@@ -475,21 +488,39 @@ DAEMON
 cat > "${ROOTFS_DIR}/usr/local/bin/nexora-persistence-test.sh" <<'PERSISTTEST'
 #!/bin/sh
 set -eu
-
+PERSIST_ROOT="/persist/debian-workspace"
+SOURCE_ROOT="/opt/nexora/debian-workspace/source"
 MARKER="/persist/nexora-persistence-marker"
-
+mkdir -p "${PERSIST_ROOT}/software" "${PERSIST_ROOT}/data" "${PERSIST_ROOT}/source"
+for project in autogpt omniroute; do
+  if [ -d "${SOURCE_ROOT}/${project}" ] && [ ! -e "${PERSIST_ROOT}/source/${project}/.nexora-seeded" ]; then
+    rm -rf "${PERSIST_ROOT}/source/${project}"
+    mkdir -p "${PERSIST_ROOT}/source/${project}"
+    cp -a "${SOURCE_ROOT}/${project}/." "${PERSIST_ROOT}/source/${project}/"
+    touch "${PERSIST_ROOT}/source/${project}/.nexora-seeded"
+  fi
+done
+ln -sfn "${PERSIST_ROOT}/source" /opt/nexora/workspace
+ln -sfn "${PERSIST_ROOT}/software" /opt/nexora/software
+ln -sfn "${PERSIST_ROOT}/data" /opt/nexora/data
+WORKSPACE_DEV="$(findmnt -no SOURCE "${PERSIST_ROOT}" 2>/dev/null || true)"
+case "${WORKSPACE_DEV}" in
+  /dev/vd*|/dev/sd*) ;;
+  *) echo "NEXORA_PERSISTENT_WORKSPACE_FAILED: ${WORKSPACE_DEV}" > /dev/console; exit 1 ;;
+esac
+echo "NEXORA_DEBIAN_PERSISTENT_WORKSPACE_OK" > /dev/console
 if [ -f "${MARKER}" ]; then
-    sync
-    echo "NEXORA_PERSISTENCE_RESTORED" > /dev/console
+  sync
+  echo "NEXORA_PERSISTENCE_RESTORED" > /dev/console
 else
-    printf '%s\n' "NEXORA_PERSISTENCE_OK" > "${MARKER}"
-    sync
-    echo "NEXORA_PERSISTENCE_SYNCED" > /dev/console
-    echo "NEXORA_PERSISTENCE_INITIALIZED" > /dev/console
+  printf '%s
+' "NEXORA_PERSISTENCE_OK" > "${MARKER}"
+  sync
+  echo "NEXORA_PERSISTENCE_SYNCED" > /dev/console
+  echo "NEXORA_PERSISTENCE_INITIALIZED" > /dev/console
 fi
-
 echo "NEXORA_PERSISTENCE_TEST_DONE" > /dev/console
-PERSISTTEST
+PERSISTTESTPERSISTTEST
 
 chmod +x "${ROOTFS_DIR}/usr/local/bin/nexora-persistence-test.sh"
 
