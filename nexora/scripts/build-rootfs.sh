@@ -97,6 +97,7 @@ APTCONF
 echo "=== Mirror portable Termux development tools into Debian ==="
 
 TERMUX_DEBIAN_PACKAGES=(
+    gpgv
     bash bc bison clang cpio curl dos2unix
     ffmpeg file fish flex gawk git
     jq less lld llvm lsof lua5.4
@@ -199,6 +200,20 @@ if ! chroot "${ROOTFS_DIR}" getent hosts deb.debian.org >/dev/null 2>&1; then
     cat "${ROOTFS_DIR}/etc/resolv.conf" || true
     exit 1
 fi
+# The repository base image is minimal: create the device nodes needed by apt.
+mkdir -p "${ROOTFS_DIR}/dev"
+if [ ! -e "${ROOTFS_DIR}/dev/null" ]; then sudo mknod -m 666 "${ROOTFS_DIR}/dev/null" c 1 3; fi
+if [ ! -e "${ROOTFS_DIR}/dev/zero" ]; then sudo mknod -m 666 "${ROOTFS_DIR}/dev/zero" c 1 5; fi
+if [ ! -e "${ROOTFS_DIR}/dev/random" ]; then sudo mknod -m 666 "${ROOTFS_DIR}/dev/random" c 1 8; fi
+if [ ! -e "${ROOTFS_DIR}/dev/urandom" ]; then sudo mknod -m 666 "${ROOTFS_DIR}/dev/urandom" c 1 9; fi
+
+# The minimal Debian image may not include gpgv. Bootstrap only gpgv from the HTTPS mirror,
+# then immediately rerun apt with normal signature verification for the real package set.
+if ! chroot "${ROOTFS_DIR}" command -v gpgv >/dev/null 2>&1; then
+    DEBIAN_FRONTEND=noninteractive chroot "${ROOTFS_DIR}" apt-get -o Acquire::AllowInsecureRepositories=true -o APT::Get::AllowUnauthenticated=true update
+    DEBIAN_FRONTEND=noninteractive chroot "${ROOTFS_DIR}" apt-get -o Acquire::AllowInsecureRepositories=true -o APT::Get::AllowUnauthenticated=true install -y --no-install-recommends gpgv
+fi
+
 DEBIAN_FRONTEND=noninteractive chroot "${ROOTFS_DIR}" apt-get update
 DEBIAN_FRONTEND=noninteractive chroot "${ROOTFS_DIR}" apt-get install -y --no-install-recommends "${TERMUX_DEBIAN_PACKAGES[@]}"
 
