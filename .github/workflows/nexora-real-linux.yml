@@ -425,15 +425,34 @@ jobs:
         run: |
           set -euo pipefail
           ISO_IMAGE="nexora/build/output/nexora.iso"
+          KERNEL_IMAGE="nexora/build/linux-${KERNEL_VERSION:-6.12.50}/arch/x86/boot/bzImage"
+          INITRAMFS_IMAGE="nexora/build/nexora-initramfs.cpio.gz"
           PERSISTENT_DISK="nexora/build/persistent-data.img"
           OUTPUT_DIR="output"
           QMP_SOCKET="/tmp/nexora-qmp.sock"
+          test -f "${KERNEL_IMAGE}"
+          test -f "${INITRAMFS_IMAGE}"
+          echo "NEXORA_QEMU_DIRECT_KERNEL_BOOT=1"
           mkdir -p "${OUTPUT_DIR}"
 
           run_nexora_boot() {
             local LOG_FILE="${1}"
             rm -f "${QMP_SOCKET}" "${LOG_FILE}"
-            qemu-system-x86_64               -m 1024 -machine q35 -display none -serial stdio               -cdrom "${ISO_IMAGE}"               -drive file="${PERSISTENT_DISK}",format=raw,if=virtio               -qmp "unix:${QMP_SOCKET},server=on,wait=off" -no-reboot >"${LOG_FILE}" 2>&1 &
+            # Boot the tested kernel/initramfs directly. The ISO remains the source of the Debian
+            # rootfs via the attached CD-ROM, but bypassing GRUB avoids the GRUB2 runtime crash
+            # observed on the GitHub-hosted QEMU BIOS path ("out of range pointer").
+            qemu-system-x86_64 \
+              -m 1024 \
+              -machine q35 \
+              -display none \
+              -serial stdio \
+              -kernel "${KERNEL_IMAGE}" \
+              -initrd "${INITRAMFS_IMAGE}" \
+              -append "root=/dev/ram0 rw console=ttyS0,115200 systemd.mask=serial-getty@ttyS0.service" \
+              -drive file="${ISO_IMAGE}",media=cdrom,if=ide,readonly=on \
+              -drive file="${PERSISTENT_DISK}",format=raw,if=virtio \
+              -qmp "unix:${QMP_SOCKET},server=on,wait=off" \
+              -no-reboot >"${LOG_FILE}" 2>&1 &
             local QEMU_PID=$!
 
             qemu_running() {
