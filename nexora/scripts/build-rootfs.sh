@@ -538,11 +538,14 @@ echo "NEXORA_PERSISTENCE_SEED_DONE" > /dev/console
 ln -sfn "${PERSIST_ROOT}/source" /opt/nexora/workspace
 ln -sfn "${PERSIST_ROOT}/software" /opt/nexora/software
 ln -sfn "${PERSIST_ROOT}/data" /opt/nexora/data
-WORKSPACE_DEV="$(findmnt -no SOURCE "${PERSIST_ROOT}" 2>/dev/null || true)"
-case "${WORKSPACE_DEV}" in
-  /dev/vd*|/dev/sd*) ;;
-  *) echo "NEXORA_PERSISTENT_WORKSPACE_FAILED: ${WORKSPACE_DEV}" > /dev/console; exit 1 ;;
-esac
+WORKSPACE_FS="$(df -PT "${PERSIST_ROOT}" 2>/dev/null | awk 'NR==2 {print $2}')"
+WORKSPACE_SOURCE="$(df -P "${PERSIST_ROOT}" 2>/dev/null | awk 'NR==2 {print $1}')"
+if ! mountpoint -q "${PERSIST_ROOT}" 2>/dev/null || [ "${WORKSPACE_FS}" != "ext4" ]; then
+  echo "NEXORA_PERSISTENT_WORKSPACE_FAILED: source=${WORKSPACE_SOURCE} fstype=${WORKSPACE_FS}" > /dev/console
+  exit 1
+fi
+echo "NEXORA_PERSISTENT_WORKSPACE_SOURCE=${WORKSPACE_SOURCE}" > /dev/console
+echo "NEXORA_PERSISTENT_WORKSPACE_FSTYPE=${WORKSPACE_FS}" > /dev/console
 echo "NEXORA_DEBIAN_PERSISTENT_WORKSPACE_OK" > /dev/console
 if [ -f "${MARKER}" ]; then
   sync
