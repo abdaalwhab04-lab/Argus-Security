@@ -520,7 +520,7 @@ else
   echo "NEXORA_PERSISTENCE_INITIALIZED" > /dev/console
 fi
 echo "NEXORA_PERSISTENCE_TEST_DONE" > /dev/console
-PERSISTTESTPERSISTTEST
+PERSISTTEST
 
 chmod +x "${ROOTFS_DIR}/usr/local/bin/nexora-persistence-test.sh"
 
