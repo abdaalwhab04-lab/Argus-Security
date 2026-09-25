@@ -100,7 +100,9 @@ mkdir -p "${OUTPUT_DIR}"
 
 grub-mkrescue \
     -o "${OUTPUT_DIR}/${ISO_NAME}" \
-    "${ISO_DIR}"
+    "${ISO_DIR}" \
+    -- \
+    -hfsplus off
 
 echo "=== Verify ISO ==="
 
