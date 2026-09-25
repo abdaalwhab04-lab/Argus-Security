@@ -15,7 +15,7 @@ jobs:
     name: Argus + NEXORA Linux Environment
     cache-mode: write
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
 
     steps:
       - name: Checkout repository with Git LFS
@@ -172,7 +172,7 @@ jobs:
         uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4
         with:
           path: nexora/build/debian-rootfs.tar
-          key: nexora-debian-rootfs-v2-${{ runner.os }}-${{ hashFiles('nexora/scripts/build-rootfs.sh', 'nexora/config/termux-packages.txt', 'nexora/config/termux-python-packages.txt', 'nexora/config/termux-npm-global.txt', 'nexora/config/termux-mirror-policy.md', 'nexora/debian/debian-12-generic-amd64.tar.xz') }}
+          key: nexora-debian-rootfs-v3-${{ runner.os }}-${{ hashFiles('nexora/scripts/build-rootfs.sh', 'nexora/config/termux-packages.txt', 'nexora/config/termux-python-packages.txt', 'nexora/config/termux-npm-global.txt', 'nexora/config/termux-mirror-policy.md', 'nexora/debian/debian-12-generic-amd64.tar.xz') }}
 
       - name: Restore Debian RootFS from cached archive
         if: steps.debian-rootfs-cache.outputs.cache-hit == 'true'
@@ -323,7 +323,12 @@ jobs:
           run_chroot NEXORA_NODE_VERSION /usr/local/bin/node --version
           run_chroot NEXORA_NPM_VERSION /usr/local/bin/npm --version
           run_chroot NEXORA_PNPM_VERSION /usr/local/bin/pnpm --version
+          run_chroot NEXORA_NEXORA_PYTHON_VERSION /opt/nexora/python-venv/bin/python --version
+          run_chroot NEXORA_NEXORA_PIP_VERSION /opt/nexora/python-venv/bin/pip --version
+          run_chroot NEXORA_OMNIROUTE_VERSION /usr/local/bin/omniroute --version
+          run_chroot NEXORA_PRISMA_VERSION /usr/local/bin/prisma --version
           run_chroot NEXORA_DOCKER_COMPOSE /usr/local/bin/docker-compose version
+          run_chroot NEXORA_NPM_GLOBAL_LIST /usr/local/bin/npm ls --global --depth=0
 
           echo "=== NEXORA ROOTFS CACHE STATUS ==="
           if [ "${{ steps.debian-rootfs-cache.outputs.cache-hit }}" = "true" ]; then
@@ -334,6 +339,13 @@ jobs:
 
           if [ "$failures" -ne 0 ]; then
             echo "::error::NEXORA_ROOTFS_VERIFICATION_FAILED failures=$failures"
+            exit 1
+          fi
+
+          if sudo chroot nexora/rootfs test -f /opt/nexora/manifests/termux-python-packages.txt && sudo chroot nexora/rootfs test -f /opt/nexora/manifests/termux-npm-global.txt; then
+            echo "NEXORA_DEBIAN_PROGRAM_MANIFESTS_OK"
+          else
+            echo "::error::NEXORA_DEBIAN_PROGRAM_MANIFESTS_MISSING"
             exit 1
           fi
 

@@ -147,6 +147,7 @@ TERMUX_DEBIAN_PACKAGES=(
     vim-nox w3m wget xorriso zip
     cmake ninja-build
     docker.io containerd runc
+    python3 python3-pip python3-venv python3-dev
 )
 
 # Debian's modern 7zip package exposes the `7zz` command, while the
@@ -308,6 +309,34 @@ fi
 rm -f "${NODE_TMP}" "${NODE_SUMS}"
 
 echo "NEXORA_NODE_OK"
+
+echo "=== Install pinned Python environment from Debian manifest ==="
+PYTHON_VENV="${ROOTFS_DIR}/opt/nexora/python-venv"
+rm -rf "${PYTHON_VENV}"
+chroot "${ROOTFS_DIR}" python3 -m venv "${PYTHON_VENV}"
+chroot "${ROOTFS_DIR}" "${PYTHON_VENV}/bin/python" -m pip install --upgrade --no-cache-dir pip==26.2.1 setuptools==84.0.0 wheel==0.48.0
+chroot "${ROOTFS_DIR}" "${PYTHON_VENV}/bin/python" -m pip install --no-cache-dir -r /opt/nexora/manifests/termux-python-packages.txt
+chroot "${ROOTFS_DIR}" "${PYTHON_VENV}/bin/python" -m pip check
+test -x "${PYTHON_VENV}/bin/python"
+test -x "${PYTHON_VENV}/bin/pip"
+echo "NEXORA_PYTHON_MANIFEST_INSTALL_OK"
+
+echo "=== Install pinned global npm tools from Debian manifest ==="
+mapfile -t NPM_GLOBAL_PACKAGES < <(grep -Ev '^[[:space:]]*(#|$)' "${NEXORA_DIR}/config/termux-npm-global.txt")
+if [ "${#NPM_GLOBAL_PACKAGES[@]}" -eq 0 ]; then
+    echo "ERROR: npm global manifest is empty."
+    exit 1
+fi
+chroot "${ROOTFS_DIR}" /usr/local/bin/npm install --global --no-fund --no-audit "${NPM_GLOBAL_PACKAGES[@]}"
+for npm_package in "${NPM_GLOBAL_PACKAGES[@]}"; do
+    package_name="${npm_package%@*}"
+    if ! chroot "${ROOTFS_DIR}" /usr/local/bin/npm ls --global --depth=0 "${package_name}" >/dev/null 2>&1; then
+        echo "ERROR: required global npm package is missing: ${npm_package}"
+        exit 1
+    fi
+done
+echo "NEXORA_NPM_GLOBAL_MANIFEST_INSTALL_OK"
+
 echo "=== Install Docker Compose v${COMPOSE_VERSION} plugin ==="
 COMPOSE_TMP="/tmp/docker-compose"
 COMPOSE_URL="https://github.com/docker/compose/releases/download/v${COMPOSE_VERSION}/docker-compose-linux-x86_64"
@@ -423,6 +452,7 @@ chroot "${ROOTFS_DIR}" /usr/local/bin/pnpm --version
 
 echo "NEXORA_NODE_TOOLCHAIN_OK"
 echo "NEXORA_PYTHON_TOOLCHAIN_OK"
+echo "NEXORA_NPM_GLOBAL_TOOLCHAIN_OK"
 echo "NEXORA_BUILD_TOOLCHAIN_OK"
 
 echo "=== Configure RootFS ==="
