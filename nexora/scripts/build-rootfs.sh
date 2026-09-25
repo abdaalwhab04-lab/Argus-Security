@@ -317,8 +317,17 @@ chroot "${ROOTFS_DIR}" python3 -m venv "${PYTHON_VENV}"
 chroot "${ROOTFS_DIR}" "${PYTHON_VENV}/bin/python" -m pip install --upgrade --no-cache-dir pip==26.2.1 setuptools==84.0.0 wheel==0.48.0
 chroot "${ROOTFS_DIR}" "${PYTHON_VENV}/bin/python" -m pip install --no-cache-dir -r /opt/nexora/manifests/termux-python-packages.txt
 chroot "${ROOTFS_DIR}" "${PYTHON_VENV}/bin/python" -m pip check
-test -x "${PYTHON_VENV}/bin/python"
-test -x "${PYTHON_VENV}/bin/pip"
+# Debian venvs may expose pip through a symlink/wrapper rather than a regular
+# executable bit. Validate the interpreter and pip module instead of requiring
+# a specific pip filesystem mode.
+if ! chroot "${ROOTFS_DIR}" "${PYTHON_VENV}/bin/python" --version >/dev/null 2>&1; then
+    echo "ERROR: NEXORA Python virtual environment interpreter is unavailable."
+    exit 1
+fi
+if ! chroot "${ROOTFS_DIR}" "${PYTHON_VENV}/bin/python" -m pip --version >/dev/null 2>&1; then
+    echo "ERROR: NEXORA Python virtual environment pip module is unavailable."
+    exit 1
+fi
 echo "NEXORA_PYTHON_MANIFEST_INSTALL_OK"
 
 echo "=== Install pinned global npm tools from Debian manifest ==="
