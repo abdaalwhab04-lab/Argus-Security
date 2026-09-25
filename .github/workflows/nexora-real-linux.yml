@@ -191,8 +191,10 @@ jobs:
           sudo bash nexora/scripts/build-rootfs.sh
           test -d nexora/rootfs
           sudo mkdir -p nexora/build
+          sudo chown "$(id -u):$(id -g)" nexora/build
           sudo tar --create --file=nexora/build/debian-rootfs.tar --directory=nexora/rootfs --numeric-owner --acls --xattrs .
           sudo chmod 0644 nexora/build/debian-rootfs.tar
+          test -w nexora/build
           echo "NEXORA_ROOTFS_BUILD_OK"
           echo "NEXORA_DEBIAN_ROOTFS_CACHE_MISS_BUILT"
 
