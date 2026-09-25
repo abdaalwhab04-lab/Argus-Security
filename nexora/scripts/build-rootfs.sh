@@ -330,6 +330,12 @@ if ! chroot "${ROOTFS_DIR}" "${PYTHON_VENV}/bin/python" -m pip --version >/dev/n
 fi
 echo "NEXORA_PYTHON_MANIFEST_INSTALL_OK"
 
+# npm@11 installs both npm and npx into the global prefix. The Node.js
+# distribution already provided an /usr/local/bin/npx symlink, which causes
+# npm to stop with EEXIST instead of replacing that symlink. Remove only the
+# conflicting launcher before the manifest install; npm will recreate it.
+rm -f "${ROOTFS_DIR}/usr/local/bin/npx"
+
 echo "=== Install pinned global npm tools from Debian manifest ==="
 mapfile -t NPM_GLOBAL_PACKAGES < <(grep -Ev '^[[:space:]]*(#|$)' "${NEXORA_DIR}/config/termux-npm-global.txt")
 if [ "${#NPM_GLOBAL_PACKAGES[@]}" -eq 0 ]; then
