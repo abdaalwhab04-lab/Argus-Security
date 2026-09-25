@@ -167,12 +167,22 @@ jobs:
           qemu-system-x86_64 --version
           echo "NEXORA_BUILD_TOOLS_OK"
 
-      - name: Restore Debian RootFS from repository-scoped Actions cache
+      - name: Restore Debian RootFS archive from repository-scoped Actions cache
         id: debian-rootfs-cache
         uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4
         with:
-          path: nexora/rootfs
-          key: nexora-debian-rootfs-v1-${{ runner.os }}-${{ hashFiles('nexora/scripts/build-rootfs.sh', 'nexora/config/termux-packages.txt', 'nexora/config/termux-python-packages.txt', 'nexora/config/termux-npm-global.txt', 'nexora/config/termux-mirror-policy.md', 'nexora/debian/debian-12-generic-amd64.tar.xz') }}
+          path: nexora/build/debian-rootfs.tar
+          key: nexora-debian-rootfs-v2-${{ runner.os }}-${{ hashFiles('nexora/scripts/build-rootfs.sh', 'nexora/config/termux-packages.txt', 'nexora/config/termux-python-packages.txt', 'nexora/config/termux-npm-global.txt', 'nexora/config/termux-mirror-policy.md', 'nexora/debian/debian-12-generic-amd64.tar.xz') }}
+
+      - name: Restore Debian RootFS from cached archive
+        if: steps.debian-rootfs-cache.outputs.cache-hit == 'true'
+        run: |
+          set -euo pipefail
+          test -s nexora/build/debian-rootfs.tar
+          sudo mkdir -p nexora/rootfs
+          sudo tar --extract --file=nexora/build/debian-rootfs.tar --directory=nexora/rootfs --numeric-owner --same-owner
+          test -d nexora/rootfs
+          echo "NEXORA_DEBIAN_ROOTFS_CACHE_HIT_RESTORED"
 
       - name: Build NEXORA RootFS from Debian only when cache is missing
         if: steps.debian-rootfs-cache.outputs.cache-hit != 'true'
@@ -180,6 +190,9 @@ jobs:
           set -euo pipefail
           sudo bash nexora/scripts/build-rootfs.sh
           test -d nexora/rootfs
+          sudo mkdir -p nexora/build
+          sudo tar --create --file=nexora/build/debian-rootfs.tar --directory=nexora/rootfs --numeric-owner --acls --xattrs .
+          sudo chmod 0644 nexora/build/debian-rootfs.tar
           echo "NEXORA_ROOTFS_BUILD_OK"
           echo "NEXORA_DEBIAN_ROOTFS_CACHE_MISS_BUILT"
 
