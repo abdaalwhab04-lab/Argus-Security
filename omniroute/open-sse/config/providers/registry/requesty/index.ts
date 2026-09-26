@@ -1,4 +1,4 @@
-// Free-tier bootstrap compatibility marker: provider remains unchanged; LFS checkout and serve validation pending.
+// Free-tier bootstrap compatibility marker: provider remains unchanged; LFS checkout, serve, and API-key validation pending.
 import type { RegistryEntry } from "../../shared.ts";
 import { buildOpenAiCompatibleRegistryEntry } from "../../shared.ts";
 
