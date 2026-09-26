@@ -155,7 +155,7 @@ if ! chroot "${ROOTFS_DIR}" command -v gpgv >/dev/null 2>&1; then
     DEBIAN_FRONTEND=noninteractive chroot "${ROOTFS_DIR}" apt-get -o Acquire::AllowInsecureRepositories=true -o APT::Get::AllowUnauthenticated=true install -y --no-install-recommends gpgv
 fi
 DEBIAN_FRONTEND=noninteractive chroot "${ROOTFS_DIR}" apt-get update
-DEBIAN_FRONTEND=noninteractive chroot "${ROOTFS_DIR}" apt-get install -y --no-install-recommends "${TERMUX_DEBIAN_PACKAGES[@]}"
+DEBIAN_FRONTEND=noninteractive chroot "${ROOTFS_DIR}" apt-get install -y --no-install-recommends "${TERMUX_DEBIAN_PACKAGES[@]}" python3.11 python3.11-venv
 
 echo "=== Verify mirrored Termux CLI tools ==="
 for cmd in "${TERMUX_REQUIRED_COMMANDS[@]}"; do
@@ -200,6 +200,19 @@ chroot "${ROOTFS_DIR}" "${PYTHON_VENV}/bin/python" -m pip check
 if ! chroot "${ROOTFS_DIR}" "${PYTHON_VENV}/bin/python" --version >/dev/null 2>&1; then echo "ERROR: NEXORA Python virtual environment interpreter is unavailable."; exit 1; fi
 if ! chroot "${ROOTFS_DIR}" "${PYTHON_VENV}/bin/python" -m pip --version >/dev/null 2>&1; then echo "ERROR: NEXORA Python virtual environment pip module is unavailable."; exit 1; fi
 echo "NEXORA_PYTHON_MANIFEST_INSTALL_OK"
+
+echo "=== Install pinned Aider environment (Python 3.11) ==="
+AIDER_VENV="${ROOTFS_DIR}/opt/nexora/aider-venv"
+rm -rf "${AIDER_VENV}"
+chroot "${ROOTFS_DIR}" /usr/bin/python3.11 -m venv "${AIDER_VENV}"
+chroot "${ROOTFS_DIR}" "${AIDER_VENV}/bin/python" -m pip install --no-cache-dir -r /opt/nexora/manifests/aider-python-packages.txt
+chroot "${ROOTFS_DIR}" "${AIDER_VENV}/bin/python" -m pip check
+if ! chroot "${ROOTFS_DIR}" "${AIDER_VENV}/bin/aider" --version >/dev/null 2>&1; then
+    echo "ERROR: Aider installation failed."
+    exit 1
+fi
+chroot "${ROOTFS_DIR}" "${AIDER_VENV}/bin/aider" --version
+echo "NEXORA_AIDER_OK"
 
 echo "=== Install pinned global npm tools from Debian manifest ==="
 mapfile -t NPM_GLOBAL_PACKAGES < <(grep -Ev '^[[:space:]]*(#|$)' "${NEXORA_DIR}/config/termux-npm-global.txt")
