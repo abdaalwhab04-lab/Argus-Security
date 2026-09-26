@@ -208,6 +208,23 @@ rm -rf "${AIDER_VENV}"
 chroot "${ROOTFS_DIR}" /usr/bin/python3.11 -m venv --copies "${AIDER_VENV}"
 chroot "${ROOTFS_DIR}" "${AIDER_VENV}/bin/python" -m pip install --no-cache-dir -r /opt/nexora/manifests/aider-python-packages.txt
 chroot "${ROOTFS_DIR}" "${AIDER_VENV}/bin/python" -m pip check
+
+# The pip-generated Aider console script can carry a launcher/shebang that
+# is not self-contained after the RootFS is archived and extracted. Replace
+# it with a small Python entry-point wrapper that invokes the installed
+# aider-chat entry point through the venv interpreter itself.
+cat > "${AIDER_VENV}/bin/aider" <<'AIDER_WRAPPER'
+#!/bin/sh
+exec /opt/nexora/aider-venv/bin/python -c '
+import importlib.metadata
+import sys
+entry = next(e for e in importlib.metadata.distribution("aider-chat").entry_points if e.name == "aider")
+sys.argv[0] = "aider"
+raise SystemExit(entry.load()())
+' "$@"
+AIDER_WRAPPER
+chmod 0755 "${AIDER_VENV}/bin/aider"
+
 if ! chroot "${ROOTFS_DIR}" "${AIDER_VENV}/bin/aider" --version >/dev/null 2>&1; then
     echo "ERROR: Aider installation failed."
     exit 1
