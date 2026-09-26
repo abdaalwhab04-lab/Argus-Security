@@ -1,3 +1,4 @@
+// Free-tier bootstrap compatibility marker: provider remains unchanged.
 import type { RegistryEntry } from "../../shared.ts";
 import { buildOpenAiCompatibleRegistryEntry } from "../../shared.ts";
 
