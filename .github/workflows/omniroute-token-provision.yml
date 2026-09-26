@@ -65,6 +65,10 @@ jobs:
             export API_KEY_SECRET="$(/usr/bin/openssl rand -hex 32)"
             export INITIAL_PASSWORD="$(/usr/bin/openssl rand -hex 24)"
             export STORAGE_ENCRYPTION_KEY="$(/usr/bin/openssl rand -hex 32)"
+            INTERNAL_TOKEN="$(/usr/bin/openssl rand -hex 32)"
+            printf "%s" "$INTERNAL_TOKEN" >/tmp/omniroute-internal-token
+            chmod 600 /tmp/omniroute-internal-token
+            export OMNIROUTE_INTERNAL_SERVICE_TOKEN="$INTERNAL_TOKEN"
             export DATA_DIR="/opt/nexora/debian-workspace/data/omniroute-free-tier-ci"
             export DISABLE_SQLITE_AUTO_BACKUP="true"
             export NEXT_TELEMETRY_DISABLED="1"
@@ -74,6 +78,8 @@ jobs:
           for i in $(seq 1 60); do
             if sudo chroot nexora/rootfs /usr/bin/curl -fsS --max-time 2 http://127.0.0.1:20128/api/health >/dev/null 2>&1; then
               echo "OMNIROUTE_DEBIAN_HEALTH_OK"
+              response="$(/usr/bin/curl -fsS --max-time 15 -X POST http://127.0.0.1:20128/api/keys -H "Content-Type: application/json" -H "x-omniroute-internal-service-token: $INTERNAL_TOKEN" --data "{\"name\":\"free-tier-ci\",\"scopes\":[\"chat\"]}")"
+              /usr/local/bin/node -e 'const x=JSON.parse(process.argv[1]); if(!x.key || !String(x.key).startsWith("sk-")) process.exit(1); require("fs").writeFileSync("/tmp/omniroute-ci-api-key",x.key,{mode:0o600});' "$response"
               break
             fi
             if [ "$i" = "60" ]; then
@@ -121,7 +127,7 @@ jobs:
       - name: Verify OmniRoute exposes the free-tier route surface
         run: |
           set -euo pipefail
-          sudo chroot nexora/rootfs /usr/bin/curl -fsS --max-time 15 http://127.0.0.1:20128/v1/models -o /tmp/omniroute-models.json
+          sudo chroot nexora/rootfs /usr/bin/bash -lc 'API_KEY="$(/usr/bin/cat /tmp/omniroute-ci-api-key)"; /usr/bin/curl -fsS --max-time 15 http://127.0.0.1:20128/v1/models -H "Authorization: Bearer $API_KEY" -o /tmp/omniroute-models.json'
           sudo chroot nexora/rootfs /usr/local/bin/node --input-type=module <<'NODE'
           import fs from "node:fs";
           const x = JSON.parse(fs.readFileSync("/tmp/omniroute-models.json","utf8"));
