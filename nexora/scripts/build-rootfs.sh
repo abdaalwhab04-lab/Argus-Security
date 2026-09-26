@@ -169,6 +169,7 @@ cp "${NEXORA_DIR}/config/termux-packages.txt" "${ROOTFS_DIR}/opt/nexora/manifest
 cp "${NEXORA_DIR}/config/termux-python-packages.txt" "${ROOTFS_DIR}/opt/nexora/manifests/"
 cp "${NEXORA_DIR}/config/termux-npm-global.txt" "${ROOTFS_DIR}/opt/nexora/manifests/"
 cp "${NEXORA_DIR}/config/termux-mirror-policy.md" "${ROOTFS_DIR}/opt/nexora/manifests/"
+cp "${NEXORA_DIR}/config/aider-python-packages.txt" "${ROOTFS_DIR}/opt/nexora/manifests/"
 echo "NEXORA_TERMUX_INVENTORY_SAVED"
 echo "NEXORA_TERMUX_DEBIAN_TOOLSET_OK"
 
