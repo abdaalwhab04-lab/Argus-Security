@@ -172,7 +172,7 @@ jobs:
         uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4
         with:
           path: nexora/build/debian-rootfs.tar
-          key: nexora-debian-rootfs-v4-${{ runner.os }}-${{ hashFiles('nexora/scripts/build-rootfs.sh', 'nexora/config/termux-packages.txt', 'nexora/config/termux-python-packages.txt', 'nexora/config/termux-npm-global.txt', 'nexora/config/termux-mirror-policy.md', 'nexora/debian/debian-12-generic-amd64.tar.xz') }}
+          key: nexora-debian-rootfs-v4-${{ runner.os }}-${{ hashFiles('nexora/scripts/build-rootfs.sh', 'nexora/config/termux-packages.txt', 'nexora/config/termux-python-packages.txt', 'nexora/config/termux-npm-global.txt', 'nexora/config/termux-mirror-policy.md', 'nexora/config/aider-python-packages.txt', 'nexora/debian/debian-12-generic-amd64.tar.xz') }}
 
       - name: Restore Debian RootFS from cached archive
         if: steps.debian-rootfs-cache.outputs.cache-hit == 'true'
@@ -249,6 +249,7 @@ jobs:
           check_exec nexora/rootfs/usr/local/bin/pnpm
           check_exec nexora/rootfs/usr/local/bin/nexora-userspace-start.sh
           check_exec nexora/rootfs/usr/local/bin/docker-compose
+          check_exec nexora/rootfs/opt/nexora/aider-venv/bin/aider
 
           echo "=== NEXORA NODE TOOLCHAIN LINKS ==="
           for p in \
@@ -326,6 +327,7 @@ jobs:
           run_chroot NEXORA_NEXORA_PYTHON_VERSION /opt/nexora/python-venv/bin/python --version
           run_chroot NEXORA_NEXORA_PIP_VERSION /opt/nexora/python-venv/bin/pip --version
           run_chroot NEXORA_OMNIROUTE_VERSION /usr/local/bin/omniroute --version
+          run_chroot NEXORA_AIDER_VERSION /opt/nexora/aider-venv/bin/aider --version
           run_chroot NEXORA_PRISMA_VERSION /usr/local/bin/prisma --version
           run_chroot NEXORA_DOCKER_COMPOSE /usr/local/bin/docker-compose version
           run_chroot NEXORA_NPM_GLOBAL_LIST /usr/local/bin/npm ls --global --depth=0
@@ -342,7 +344,7 @@ jobs:
             exit 1
           fi
 
-          if sudo chroot nexora/rootfs test -f /opt/nexora/manifests/termux-python-packages.txt && sudo chroot nexora/rootfs test -f /opt/nexora/manifests/termux-npm-global.txt; then
+          if sudo chroot nexora/rootfs test -f /opt/nexora/manifests/termux-python-packages.txt && sudo chroot nexora/rootfs test -f /opt/nexora/manifests/termux-npm-global.txt && sudo chroot nexora/rootfs test -f /opt/nexora/manifests/aider-python-packages.txt; then
             echo "NEXORA_DEBIAN_PROGRAM_MANIFESTS_OK"
           else
             echo "::error::NEXORA_DEBIAN_PROGRAM_MANIFESTS_MISSING"
