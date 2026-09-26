@@ -54,18 +54,6 @@ jobs:
           echo "NEXORA_DEBIAN_ROOTFS_READY=1"
 
       - name: Start OmniRoute inside Debian
-        env:
-          PORT: "20128"
-          HOSTNAME: "127.0.0.1"
-          NODE_ENV: "test"
-          JWT_SECRET: "ci-free-tier-jwt-secret"
-          API_KEY_SECRET: "ci-free-tier-api-key-secret"
-          INITIAL_PASSWORD: "ci-free-tier-password"
-          STORAGE_ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-          DATA_DIR: "/opt/nexora/debian-workspace/data/omniroute-free-tier-ci"
-          DISABLE_SQLITE_AUTO_BACKUP: "true"
-          NEXT_TELEMETRY_DISABLED: "1"
-          OMNIROUTE_USE_TURBOPACK: "0"
         run: |
           set -euo pipefail
           sudo mkdir -p nexora/rootfs/opt/nexora/debian-workspace/data/omniroute-free-tier-ci
@@ -73,15 +61,15 @@ jobs:
             export PORT="20128"
             export HOSTNAME="127.0.0.1"
             export NODE_ENV="test"
-            export JWT_SECRET="ci-free-tier-jwt-secret"
-            export API_KEY_SECRET="ci-free-tier-api-key-secret"
-            export INITIAL_PASSWORD="ci-free-tier-password"
-            export STORAGE_ENCRYPTION_KEY="0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+            export JWT_SECRET="$(/usr/bin/openssl rand -hex 32)"
+            export API_KEY_SECRET="$(/usr/bin/openssl rand -hex 32)"
+            export INITIAL_PASSWORD="$(/usr/bin/openssl rand -hex 24)"
+            export STORAGE_ENCRYPTION_KEY="$(/usr/bin/openssl rand -hex 32)"
             export DATA_DIR="/opt/nexora/debian-workspace/data/omniroute-free-tier-ci"
             export DISABLE_SQLITE_AUTO_BACKUP="true"
             export NEXT_TELEMETRY_DISABLED="1"
             export OMNIROUTE_USE_TURBOPACK="0"
-            nohup /usr/local/bin/omniroute start >/tmp/omniroute-free-tier.log 2>&1 &
+            nohup /usr/local/bin/omniroute serve --no-open --no-tray >/tmp/omniroute-free-tier.log 2>&1 &
           '
           for i in $(seq 1 60); do
             if sudo chroot nexora/rootfs /usr/bin/curl -fsS --max-time 2 http://127.0.0.1:20128/api/health >/dev/null 2>&1; then
@@ -96,6 +84,7 @@ jobs:
           done
 
       - name: Verify OmniRoute free-tier catalog policy
+
         run: |
           set -euo pipefail
           sudo chroot nexora/rootfs /usr/local/bin/node --input-type=module <<'NODE'
