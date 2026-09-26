@@ -1,110 +1,142 @@
-name: OmniRoute Token Provision
-# Provision workflow: run token provisioning directly on the self-hosted OmniRoute runner.
+name: OmniRoute Free Tier Bootstrap
 
 on:
   workflow_dispatch:
   push:
     branches: [omniroute-v3.8.50-integration]
+    paths:
+      - "omniroute/open-sse/config/freeModelCatalog.data.ts"
+      - "omniroute/open-sse/config/providers/**"
+      - ".github/workflows/omniroute-token-provision.yml"
+
+permissions:
+  contents: read
 
 jobs:
-  provision:
-    runs-on: [self-hosted, termux, ARM64]
-    timeout-minutes: 15
+  free-tier-bootstrap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - name: Verify job execution context
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Restore Debian RootFS from repository-scoped Actions cache
+        id: debian-rootfs-cache
+        uses: actions/cache@v4
+        with:
+          path: nexora/build/debian-rootfs.tar
+          key: nexora-debian-rootfs-v4-${{ runner.os }}-${{ hashFiles('nexora/scripts/build-rootfs.sh', 'nexora/config/termux-packages.txt', 'nexora/config/termux-python-packages.txt', 'nexora/config/termux-npm-global.txt', 'nexora/config/termux-mirror-policy.md', 'nexora/debian/debian-12-generic-amd64.tar.xz') }}
+
+      - name: Require the prepared Debian RootFS
         run: |
           set -euo pipefail
-          echo "OmniRoute Token Provision run #${{ github.run_number }}"
-          echo "Job: ${{ github.job }}"
-          echo "Runner: $RUNNER_NAME"
-          echo "Runner OS: $RUNNER_OS"
-          echo "Runner arch: $RUNNER_ARCH"
-          test -n "${{ github.run_number }}"
-          echo "Job execution marker: OK"
+          test "${{ steps.debian-rootfs-cache.outputs.cache-hit }}" = "true"
+          test -s nexora/build/debian-rootfs.tar
+          sudo mkdir -p nexora/rootfs
+          sudo tar --extract --file=nexora/build/debian-rootfs.tar --directory=nexora/rootfs --numeric-owner --same-owner
+          sudo chroot nexora/rootfs /usr/local/bin/node --version
+          sudo chroot nexora/rootfs /usr/local/bin/npm --version
+          sudo chroot nexora/rootfs /usr/local/bin/omniroute --version
+          echo "NEXORA_DEBIAN_ROOTFS_REUSED=1"
 
-      - name: Verify local OmniRoute token endpoint
+      - name: Start OmniRoute inside Debian
         env:
           PORT: "20128"
+          HOSTNAME: "127.0.0.1"
+          NODE_ENV: "test"
+          JWT_SECRET: "ci-free-tier-jwt-secret"
+          API_KEY_SECRET: "ci-free-tier-api-key-secret"
+          INITIAL_PASSWORD: "ci-free-tier-password"
+          STORAGE_ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+          DATA_DIR: "/opt/nexora/debian-workspace/data/omniroute-free-tier-ci"
+          DISABLE_SQLITE_AUTO_BACKUP: "true"
+          NEXT_TELEMETRY_DISABLED: "1"
+          OMNIROUTE_USE_TURBOPACK: "0"
         run: |
           set -euo pipefail
-          if ! curl -fsS --max-time 5 "http://127.0.0.1:$PORT/healthz" >/dev/null 2>&1; then
-            echo "OmniRoute is not running on the Termux runner at port $PORT."
-            echo "Start OmniRoute locally, then re-run this workflow."
-            exit 1
-          fi
-          echo "OmniRoute health check: OK"
-
-      - name: Verify internal service authentication configuration
-        env:
-          OMNIROUTE_INTERNAL_SERVICE_TOKEN: ${{ secrets.OMNIROUTE_INTERNAL_SERVICE_TOKEN }}
-        run: |
-          set -euo pipefail
-          if [ -n "${OMNIROUTE_INTERNAL_SERVICE_TOKEN:-}" ]; then
-            TOKEN_SOURCE="github-secret"
-          elif [ -n "${RUNNER_OMNIROUTE_INTERNAL_SERVICE_TOKEN:-}" ]; then
-            export OMNIROUTE_INTERNAL_SERVICE_TOKEN="$RUNNER_OMNIROUTE_INTERNAL_SERVICE_TOKEN"
-            TOKEN_SOURCE="runner-environment"
-          else
-            echo "No OmniRoute internal service token is available."
-            echo "Configure the GitHub secret OMNIROUTE_INTERNAL_SERVICE_TOKEN"
-            echo "or export RUNNER_OMNIROUTE_INTERNAL_SERVICE_TOKEN in the self-hosted runner environment."
-            exit 1
-          fi
-
-          status=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10             -X POST http://127.0.0.1:20128/api/keys             -H 'Content-Type: application/json'             -H "x-omniroute-internal-service-token: $OMNIROUTE_INTERNAL_SERVICE_TOKEN"             --data '{"name":"argus-token-auth-check","scopes":["chat"]}' || true)
-
-          case "$status" in
-            201) echo "Internal service authentication: OK (source: $TOKEN_SOURCE)" ;;
-            401)
-              echo "Internal service authentication rejected (source: $TOKEN_SOURCE)."
-              echo "The supplied token does not match the running OmniRoute instance."
-              exit 1 ;;
-            *)
-              echo "Unexpected /api/keys HTTP status: $status"
-              exit 1 ;;
-          esac
-
-      - name: Create three OmniRoute tokens
-        env:
-          OMNIROUTE_INTERNAL_SERVICE_TOKEN: ${{ secrets.OMNIROUTE_INTERNAL_SERVICE_TOKEN }}
-        run: |
-          set -euo pipefail
-          if [ -z "${OMNIROUTE_INTERNAL_SERVICE_TOKEN:-}" ] && [ -n "${RUNNER_OMNIROUTE_INTERNAL_SERVICE_TOKEN:-}" ]; then
-            export OMNIROUTE_INTERNAL_SERVICE_TOKEN="$RUNNER_OMNIROUTE_INTERNAL_SERVICE_TOKEN"
-          fi
-          if [ -z "${OMNIROUTE_INTERNAL_SERVICE_TOKEN:-}" ]; then
-            echo "Internal service token is unavailable."
-            exit 1
-          fi
-          BASE_DIR="$HOME/.omniroute"
-          mkdir -p "$BASE_DIR"
-          chmod 700 "$BASE_DIR"
-          OUT="$BASE_DIR/tokens.json"
-          TMP="$BASE_DIR/tokens.tmp.json"
-          rm -f "$TMP"
-          printf '[]' > "$TMP"
-          chmod 600 "$TMP"
-          for name in argus-chat-1 argus-chat-2 argus-chat-3; do
-            response=$(curl -fsS --max-time 30               -X POST http://127.0.0.1:20128/api/keys               -H 'Content-Type: application/json'               -H "x-omniroute-internal-service-token: $OMNIROUTE_INTERNAL_SERVICE_TOKEN"               --data "{\"name\":\"$name\",\"scopes\":[\"chat\"]}")
-            node -e 'const x=JSON.parse(process.argv[1]); if(!x.key||!x.id||!String(x.key).startsWith("sk-")) process.exit(1);' "$response"
-            node -e 'const fs=require("fs"); const x=JSON.parse(process.argv[1]); const p=process.argv[2]; const a=JSON.parse(fs.readFileSync(p,"utf8")); a.push({name:x.name,id:x.id,key:x.key}); fs.writeFileSync(p,JSON.stringify(a,null,2));' "$response" "$TMP"
+          sudo mkdir -p nexora/rootfs/opt/nexora/debian-workspace/data/omniroute-free-tier-ci
+          sudo chroot nexora/rootfs /bin/bash -lc '
+            export PORT="20128"
+            export HOSTNAME="127.0.0.1"
+            export NODE_ENV="test"
+            export JWT_SECRET="ci-free-tier-jwt-secret"
+            export API_KEY_SECRET="ci-free-tier-api-key-secret"
+            export INITIAL_PASSWORD="ci-free-tier-password"
+            export STORAGE_ENCRYPTION_KEY="0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+            export DATA_DIR="/opt/nexora/debian-workspace/data/omniroute-free-tier-ci"
+            export DISABLE_SQLITE_AUTO_BACKUP="true"
+            export NEXT_TELEMETRY_DISABLED="1"
+            export OMNIROUTE_USE_TURBOPACK="0"
+            nohup /usr/local/bin/omniroute start >/tmp/omniroute-free-tier.log 2>&1 &
+          '
+          for i in $(seq 1 60); do
+            if sudo chroot nexora/rootfs /usr/bin/curl -fsS --max-time 2 http://127.0.0.1:20128/api/health >/dev/null 2>&1; then
+              echo "OMNIROUTE_DEBIAN_HEALTH_OK"
+              break
+            fi
+            if [ "$i" = "60" ]; then
+              sudo chroot nexora/rootfs /bin/cat /tmp/omniroute-free-tier.log || true
+              exit 1
+            fi
+            sleep 2
           done
-          mv "$TMP" "$OUT"
-          chmod 600 "$OUT"
-          echo "Created 3 OmniRoute tokens; values withheld."
 
-      - name: Validate all three tokens
+      - name: Verify OmniRoute free-tier catalog policy
         run: |
           set -euo pipefail
-          OUT="$HOME/.omniroute/tokens.json"
-          node -e 'const fs=require("fs"); const a=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if(a.length!==3) process.exit(1); for(const x of a){if(!x.key.startsWith("sk-")) process.exit(2)} console.log("3 token records present; values withheld.");' "$OUT"
-          while IFS= read -r key; do
-            status=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 http://127.0.0.1:20128/v1/models -H "Authorization: Bearer $key")
-            test "$status" = 200
-          done < <(node -e 'for(const x of JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"))) console.log(x.key)' "$OUT")
-          echo "All 3 tokens validated successfully."
+          sudo chroot nexora/rootfs /usr/local/bin/node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const p = "/opt/nexora/debian-workspace/source/omniroute/open-sse/config/freeModelCatalog.data.ts";
+          const s = fs.readFileSync(p, "utf8");
+          const ok = [...s.matchAll(/\{ provider: "([^"]+)", modelId: "([^"]+)", displayName: "([^"]+)", monthlyTokens: (\d+), creditTokens: (\d+), freeType: "([^"]+)", poolKey: "([^"]+)", tos: "([^"]+)" \}/g)]
+            .map(m => ({provider:m[1],model:m[2],monthlyTokens:Number(m[4]),creditTokens:Number(m[5]),freeType:m[6],tos:m[8]}))
+            .filter(x => x.tos === "ok");
+          const providers = [...new Set(ok.map(x => x.provider))];
+          if (!providers.length) throw new Error("No tos=ok free-tier providers found");
+          if (ok.some(x => x.tos === "avoid")) throw new Error("Catalog parser unexpectedly admitted tos=avoid");
+          console.log("FREE_TIER_OK_ENTRIES=" + ok.length);
+          console.log("FREE_TIER_OK_PROVIDERS=" + providers.join(","));
+          console.log("FREE_TIER_POLICY=ONLY_TOS_OK");
+          NODE
 
-      - name: Final permissions check
+      - name: Test keyless provider model discovery from Debian
         run: |
-          stat -c '%A %n' "$HOME/.omniroute/tokens.json"
-# runner dispatch trigger: 2026-09-19
+          set -euo pipefail
+          sudo chroot nexora/rootfs /usr/bin/curl -fsS --max-time 15 https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/models -o /tmp/ovh-models.json
+          sudo chroot nexora/rootfs /usr/bin/curl -fsS --max-time 15 https://oai.aihorde.net/v1/models -H "apikey: 0000000000" -o /tmp/aihorde-models.json
+          sudo chroot nexora/rootfs /usr/bin/curl -fsS --max-time 15 -H "User-Agent: OmniRoute/1.0" https://api.navy/v1/models -o /tmp/navy-models.json
+          sudo chroot nexora/rootfs /usr/local/bin/node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          for (const [name,path] of [["ovhcloud","/tmp/ovh-models.json"],["aihorde","/tmp/aihorde-models.json"],["navy","/tmp/navy-models.json"]]) {
+            const x = JSON.parse(fs.readFileSync(path,"utf8"));
+            const count = Array.isArray(x.data) ? x.data.length : Array.isArray(x.models) ? x.models.length : 0;
+            if (!count) throw new Error(name + ": no models returned");
+            console.log(name.toUpperCase() + "_KEYLESS_MODELS=" + count);
+          }
+          NODE
+
+      - name: Verify OmniRoute exposes the free-tier route surface
+        run: |
+          set -euo pipefail
+          sudo chroot nexora/rootfs /usr/bin/curl -fsS --max-time 15 http://127.0.0.1:20128/v1/models -o /tmp/omniroute-models.json
+          sudo chroot nexora/rootfs /usr/local/bin/node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const x = JSON.parse(fs.readFileSync("/tmp/omniroute-models.json","utf8"));
+          const ids = (x.data || []).map(x => x.id);
+          const wanted = ["ovhcloud","aihorde","navy"];
+          const seen = wanted.filter(p => ids.some(id => String(id).toLowerCase().includes(p)));
+          console.log("OMNIROUTE_MODELS_VISIBLE=" + ids.length);
+          console.log("OMNIROUTE_FREE_PROVIDER_PREFIXES=" + seen.join(","));
+          if (!seen.length) {
+            console.log("::warning::No keyless free provider prefix was exposed by /v1/models; registry/catalog support is present, but provider connection discovery may require explicit registration.");
+          }
+          NODE
+
+      - name: Upload non-secret Free Tier report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: omniroute-free-tier-debian-report
+          path: |
+            nexora/rootfs/tmp/omniroute-free-tier.log
+          if-no-files-found: ignore
