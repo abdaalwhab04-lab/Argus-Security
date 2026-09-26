@@ -27,17 +27,29 @@ jobs:
           path: nexora/build/debian-rootfs.tar
           key: nexora-debian-rootfs-v4-${{ runner.os }}-${{ hashFiles('nexora/scripts/build-rootfs.sh', 'nexora/config/termux-packages.txt', 'nexora/config/termux-python-packages.txt', 'nexora/config/termux-npm-global.txt', 'nexora/config/termux-mirror-policy.md', 'nexora/debian/debian-12-generic-amd64.tar.xz') }}
 
-      - name: Require the prepared Debian RootFS
+      - name: Build Debian RootFS from the repository archive when cache is missing
+        if: steps.debian-rootfs-cache.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
-          test "${{ steps.debian-rootfs-cache.outputs.cache-hit }}" = "true"
+          sudo apt-get update
+          sudo apt-get install -y debootstrap rsync
+          sudo bash nexora/scripts/build-rootfs.sh
+          sudo mkdir -p nexora/build
+          sudo chown "$(id -u):$(id -g)" nexora/build
+          sudo tar --create --file=nexora/build/debian-rootfs.tar --directory=nexora/rootfs --numeric-owner --acls --xattrs .
+          sudo chmod 0644 nexora/build/debian-rootfs.tar
+          echo "NEXORA_DEBIAN_ROOTFS_BUILT_FROM_REPOSITORY_ARCHIVE=1"
+
+      - name: Prepare Debian RootFS
+        run: |
+          set -euo pipefail
           test -s nexora/build/debian-rootfs.tar
           sudo mkdir -p nexora/rootfs
           sudo tar --extract --file=nexora/build/debian-rootfs.tar --directory=nexora/rootfs --numeric-owner --same-owner
           sudo chroot nexora/rootfs /usr/local/bin/node --version
           sudo chroot nexora/rootfs /usr/local/bin/npm --version
           sudo chroot nexora/rootfs /usr/local/bin/omniroute --version
-          echo "NEXORA_DEBIAN_ROOTFS_REUSED=1"
+          echo "NEXORA_DEBIAN_ROOTFS_READY=1"
 
       - name: Start OmniRoute inside Debian
         env:
