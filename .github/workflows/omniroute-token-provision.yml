@@ -7,6 +7,8 @@ on:
     paths:
       - "omniroute/open-sse/config/freeModelCatalog.data.ts"
       - "omniroute/open-sse/config/providers/**"
+      - "nexora/scripts/build-rootfs.sh"
+      - "nexora/config/aider-python-packages.txt"
       - ".github/workflows/omniroute-token-provision.yml"
 
 permissions:
@@ -27,7 +29,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: nexora/build/debian-rootfs.tar
-          key: nexora-debian-rootfs-v4-${{ runner.os }}-${{ hashFiles('nexora/scripts/build-rootfs.sh', 'nexora/config/termux-packages.txt', 'nexora/config/termux-python-packages.txt', 'nexora/config/termux-npm-global.txt', 'nexora/config/termux-mirror-policy.md', 'nexora/debian/debian-12-generic-amd64.tar.xz') }}
+          key: nexora-debian-rootfs-v4-${{ runner.os }}-${{ hashFiles('nexora/scripts/build-rootfs.sh', 'nexora/config/termux-packages.txt', 'nexora/config/termux-python-packages.txt', 'nexora/config/termux-npm-global.txt', 'nexora/config/termux-mirror-policy.md', 'nexora/config/aider-python-packages.txt', 'nexora/debian/debian-12-generic-amd64.tar.xz') }}
 
       - name: Build Debian RootFS from the repository archive when cache is missing
         if: steps.debian-rootfs-cache.outputs.cache-hit != 'true'
@@ -138,6 +140,32 @@ jobs:
             console.log("::warning::No keyless free provider prefix was exposed by /v1/models; registry/catalog support is present, but provider connection discovery may require explicit registration.");
           }
           NODE
+
+      - name: Verify Aider can use OmniRoute Free Tier
+        run: |
+          set -euo pipefail
+          sudo chroot nexora/rootfs /usr/local/bin/node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const x = JSON.parse(fs.readFileSync("/tmp/omniroute-models.json","utf8"));
+          const ids = (x.data || []).map(x => String(x.id));
+          const model = ids.find(id => id.toLowerCase().includes("aihorde"));
+          if (!model) throw new Error("No AI Horde model is exposed by OmniRoute");
+          fs.writeFileSync("/tmp/aider-free-model",""+model+"\n");
+          console.log("AIDER_OMNIROUTE_MODEL=" + model);
+          NODE
+          sudo chroot nexora/rootfs /usr/bin/bash -lc '\
+            set -euo pipefail; \
+            API_KEY="$(/usr/bin/cat /tmp/omniroute-ci-api-key)"; \
+            MODEL="$(/usr/bin/cat /tmp/aider-free-model)"; \
+            export OPENAI_API_BASE="http://127.0.0.1:20128/v1"; \
+            export OPENAI_API_KEY="$API_KEY"; \
+            /opt/nexora/aider-venv/bin/aider --version; \
+            rm -rf /tmp/aider-free-tier-smoke; mkdir -p /tmp/aider-free-tier-smoke; cd /tmp/aider-free-tier-smoke; \
+            git init -q; git config user.email "ci@example.invalid"; git config user.name "Aider CI"; printf "# Aider smoke test\\n" > README.md; git add README.md; git commit -qm init; \
+            /opt/nexora/aider-venv/bin/aider --model "openai/$MODEL" --yes --no-auto-commits --message "Do not modify files. Reply with the single word OK." >/tmp/aider-smoke.log 2>&1; \
+            grep -Eq "\\bOK\\b" /tmp/aider-smoke.log; \
+            echo "AIDER_OMNIROUTE_FREE_TIER_OK"; \
+            sed -n "1,80p" /tmp/aider-smoke.log'
 
       - name: Upload non-secret Free Tier report
         if: always()
