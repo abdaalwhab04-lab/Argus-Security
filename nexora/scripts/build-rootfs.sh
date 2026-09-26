@@ -205,7 +205,7 @@ echo "NEXORA_PYTHON_MANIFEST_INSTALL_OK"
 echo "=== Install pinned Aider environment (Python 3.11) ==="
 AIDER_VENV="${ROOTFS_DIR}/opt/nexora/aider-venv"
 rm -rf "${AIDER_VENV}"
-chroot "${ROOTFS_DIR}" /usr/bin/python3.11 -m venv "${AIDER_VENV}"
+chroot "${ROOTFS_DIR}" /usr/bin/python3.11 -m venv --copies "${AIDER_VENV}"
 chroot "${ROOTFS_DIR}" "${AIDER_VENV}/bin/python" -m pip install --no-cache-dir -r /opt/nexora/manifests/aider-python-packages.txt
 chroot "${ROOTFS_DIR}" "${AIDER_VENV}/bin/python" -m pip check
 if ! chroot "${ROOTFS_DIR}" "${AIDER_VENV}/bin/aider" --version >/dev/null 2>&1; then
