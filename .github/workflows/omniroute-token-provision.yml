@@ -75,7 +75,7 @@ jobs:
               if /usr/bin/curl -fsS --max-time 2 http://127.0.0.1:20128/api/health >/dev/null 2>&1; then
                 echo "OMNIROUTE_DEBIAN_HEALTH_OK"
                 response="$(/usr/bin/curl -fsS --max-time 15 -X POST http://127.0.0.1:20128/api/keys -H "Content-Type: application/json" -H "x-omniroute-internal-service-token: $OMNIROUTE_INTERNAL_SERVICE_TOKEN" --data "{\"name\":\"free-tier-ci\",\"scopes\":[\"chat\"]}")"
-                /usr/local/bin/node -e 'const x=JSON.parse(process.argv[1]); if(!x.key || !String(x.key).startsWith("sk-")) process.exit(1); require("fs").writeFileSync("/tmp/omniroute-ci-api-key",x.key,{mode:0o600});' "$response"
+                /usr/local/bin/node -e "const x=JSON.parse(process.argv[1]); if(!x.key || !String(x.key).startsWith('sk-')) process.exit(1); require('fs').writeFileSync('/tmp/omniroute-ci-api-key',x.key,{mode:0o600});" "$response"
                 exit 0
               fi
               sleep 2
