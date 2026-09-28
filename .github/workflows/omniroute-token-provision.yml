@@ -157,7 +157,7 @@ jobs:
           cat > /tmp/aider-free-tier-ci.sh <<'SCRIPT'
           set -euo pipefail
           API_KEY="$(/usr/bin/cat /tmp/omniroute-ci-api-key)"
-          MODEL="$(/usr/bin/cat /tmp/aider-free-model)"
+          export MODEL="$(/usr/bin/cat /tmp/aider-free-model)"
           export OPENAI_API_BASE="http://127.0.0.1:20128/v1"
           export OPENAI_API_KEY="$API_KEY"
           /usr/bin/python3.11 -c "import sys; sys.path.insert(0, '/opt/nexora/aider-site'); import aider.main; sys.argv=['aider','--version']; raise SystemExit(aider.main.main())"
