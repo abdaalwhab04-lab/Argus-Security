@@ -13,7 +13,6 @@ permissions:
 jobs:
   argus-nexora:
     name: Argus + NEXORA Linux Environment
-    cache-mode: write
     runs-on: ubuntu-latest
     timeout-minutes: 90
 
