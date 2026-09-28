@@ -203,17 +203,15 @@ if ! chroot "${ROOTFS_DIR}" "${PYTHON_VENV}/bin/python" -m pip --version >/dev/n
 echo "NEXORA_PYTHON_MANIFEST_INSTALL_OK"
 
 echo "=== Install pinned Aider environment (Python 3.11) ==="
-AIDER_VENV="${ROOTFS_DIR}/opt/nexora/aider-venv"
-rm -rf "${AIDER_VENV}"
-chroot "${ROOTFS_DIR}" /usr/bin/python3.11 -m venv --copies "${AIDER_VENV}"
-chroot "${ROOTFS_DIR}" "${AIDER_VENV}/bin/python" -m pip install --no-cache-dir -r /opt/nexora/manifests/aider-python-packages.txt
-chroot "${ROOTFS_DIR}" "${AIDER_VENV}/bin/python" -m pip check
-
-# Validate Aider through the Debian system Python plus the venv site-packages.
-# The venv interpreter launcher can become a broken symlink after RootFS
-# archive/extraction; the installed Python packages themselves remain portable.
-AIDER_SITE_PACKAGES="/opt/nexora/aider-venv/lib/python3.11/site-packages"
-if ! chroot "${ROOTFS_DIR}" env PYTHONPATH="${AIDER_SITE_PACKAGES}" /usr/bin/python3.11 -c '
+AIDER_SITE_PACKAGES="${ROOTFS_DIR}/opt/nexora/aider-site"
+rm -rf "${AIDER_SITE_PACKAGES}"
+mkdir -p "${AIDER_SITE_PACKAGES}"
+chroot "${ROOTFS_DIR}" /usr/bin/python3.11 -m pip install --no-cache-dir --target "${AIDER_SITE_PACKAGES}" -r /opt/nexora/manifests/aider-python-packages.txt
+if ! chroot "${ROOTFS_DIR}" env PYTHONPATH="/opt/nexora/aider-site" /usr/bin/python3.11 -m pip check >/dev/null 2>&1; then
+    echo "ERROR: Aider target installation failed dependency check."
+    exit 1
+fi
+if ! chroot "${ROOTFS_DIR}" env PYTHONPATH="/opt/nexora/aider-site" /usr/bin/python3.11 -c '
 import importlib.metadata
 import sys
 entry = next(e for e in importlib.metadata.distribution("aider-chat").entry_points if e.name == "aider")
@@ -223,7 +221,7 @@ raise SystemExit(entry.load()())
     echo "ERROR: Aider installation failed."
     exit 1
 fi
-chroot "${ROOTFS_DIR}" env PYTHONPATH="${AIDER_SITE_PACKAGES}" /usr/bin/python3.11 -c '
+chroot "${ROOTFS_DIR}" env PYTHONPATH="/opt/nexora/aider-site" /usr/bin/python3.11 -c '
 import importlib.metadata
 import sys
 entry = next(e for e in importlib.metadata.distribution("aider-chat").entry_points if e.name == "aider")
