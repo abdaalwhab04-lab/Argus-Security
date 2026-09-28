@@ -206,7 +206,7 @@ echo "=== Install pinned Aider environment (Python 3.11) ==="
 AIDER_SITE_PACKAGES="${ROOTFS_DIR}/opt/nexora/aider-site"
 rm -rf "${AIDER_SITE_PACKAGES}"
 mkdir -p "${AIDER_SITE_PACKAGES}"
-chroot "${ROOTFS_DIR}" /usr/bin/python3.11 -m pip install --no-cache-dir --target "${AIDER_SITE_PACKAGES}" -r /opt/nexora/manifests/aider-python-packages.txt
+chroot "${ROOTFS_DIR}" /usr/bin/python3.11 -m pip install --no-cache-dir --target /opt/nexora/aider-site -r /opt/nexora/manifests/aider-python-packages.txt
 if ! chroot "${ROOTFS_DIR}" env PYTHONPATH="/opt/nexora/aider-site" /usr/bin/python3.11 -m pip check >/dev/null 2>&1; then
     echo "ERROR: Aider target installation failed dependency check."
     exit 1
