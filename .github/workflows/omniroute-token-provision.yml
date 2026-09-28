@@ -159,7 +159,7 @@ jobs:
           MODEL="$(/usr/bin/cat /tmp/aider-free-model)"
           export OPENAI_API_BASE="http://127.0.0.1:20128/v1"
           export OPENAI_API_KEY="$API_KEY"
-          /opt/nexora/aider-venv/bin/python -c "import importlib.metadata,sys; entry=next(e for e in importlib.metadata.distribution('aider-chat').entry_points if e.name=='aider'); sys.argv=['aider','--version']; raise SystemExit(entry.load()())"
+          env PYTHONPATH=/opt/nexora/aider-venv/lib/python3.11/site-packages /usr/bin/python3.11 -c "import importlib.metadata,sys; entry=next(e for e in importlib.metadata.distribution('aider-chat').entry_points if e.name=='aider'); sys.argv=['aider','--version']; raise SystemExit(entry.load()())"
           rm -rf /tmp/aider-free-tier-smoke
           mkdir -p /tmp/aider-free-tier-smoke
           cd /tmp/aider-free-tier-smoke
@@ -175,7 +175,7 @@ jobs:
             --data "{\\\"model\\\":\\\"$MODEL\\\",\\\"messages\\\":[{\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Reply with the single word OK.\\\"}],\\\"max_tokens\\\":8}" \\
             >/tmp/omniroute-free-chat.json
           /usr/bin/python3 -c "import json; x=json.load(open('/tmp/omniroute-free-chat.json')); t=x.get('choices',[{}])[0].get('message',{}).get('content',''); assert t, x; print('OMNIROUTE_FREE_CHAT_OK=' + t[:80])"
-          if ! /opt/nexora/aider-venv/bin/python -c "import importlib.metadata,sys; entry=next(e for e in importlib.metadata.distribution('aider-chat').entry_points if e.name=='aider'); sys.argv=['aider','--model','openai/'+__import__('os').environ['MODEL'],'--yes','--no-auto-commits','--message','Do not modify files. Reply with the single word OK.']; raise SystemExit(entry.load()())" >/tmp/aider-smoke.log 2>&1; then
+          if ! env PYTHONPATH=/opt/nexora/aider-venv/lib/python3.11/site-packages /usr/bin/python3.11 -c "import importlib.metadata,sys; entry=next(e for e in importlib.metadata.distribution('aider-chat').entry_points if e.name=='aider'); sys.argv=['aider','--model','openai/'+__import__('os').environ['MODEL'],'--yes','--no-auto-commits','--message','Do not modify files. Reply with the single word OK.']; raise SystemExit(entry.load()())" >/tmp/aider-smoke.log 2>&1; then
             echo "AIDER_SMOKE_FAILED"
             /usr/bin/sed -n '1,160p' /tmp/aider-smoke.log
             exit 1
