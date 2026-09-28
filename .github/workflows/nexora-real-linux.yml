@@ -607,3 +607,5 @@ jobs:
 # Verification trigger: run the corrected RootFS symlink validation on the integration branch.
 
 # Trigger NEXORA validation from the integration branch.
+
+# Final end-to-end validation trigger: Debian archive -> NEXORA -> Aider -> OmniRoute -> Free Tier.
