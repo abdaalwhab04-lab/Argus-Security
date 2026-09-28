@@ -326,7 +326,7 @@ jobs:
           run_chroot NEXORA_NEXORA_PYTHON_VERSION /opt/nexora/python-venv/bin/python --version
           run_chroot NEXORA_NEXORA_PIP_VERSION /opt/nexora/python-venv/bin/pip --version
           run_chroot NEXORA_OMNIROUTE_VERSION /usr/local/bin/omniroute --version
-          run_chroot NEXORA_AIDER_VERSION /opt/nexora/aider-venv/bin/python -c '
+          run_chroot NEXORA_AIDER_VERSION env PYTHONPATH=/opt/nexora/aider-venv/lib/python3.11/site-packages /usr/bin/python3.11 -c '
 import importlib.metadata, sys
 entry = next(e for e in importlib.metadata.distribution("aider-chat").entry_points if e.name == "aider")
 sys.argv = ["aider", "--version"]
