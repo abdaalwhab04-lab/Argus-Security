@@ -209,10 +209,11 @@ chroot "${ROOTFS_DIR}" /usr/bin/python3.11 -m venv --copies "${AIDER_VENV}"
 chroot "${ROOTFS_DIR}" "${AIDER_VENV}/bin/python" -m pip install --no-cache-dir -r /opt/nexora/manifests/aider-python-packages.txt
 chroot "${ROOTFS_DIR}" "${AIDER_VENV}/bin/python" -m pip check
 
-# Validate the installed package through the venv interpreter directly.
-# This avoids relying on a generated console-script launcher surviving
-# RootFS archiving/extraction with an identical executable interpreter path.
-if ! chroot "${ROOTFS_DIR}" "${AIDER_VENV}/bin/python" -c '
+# Validate Aider through the Debian system Python plus the venv site-packages.
+# The venv interpreter launcher can become a broken symlink after RootFS
+# archive/extraction; the installed Python packages themselves remain portable.
+AIDER_SITE_PACKAGES="/opt/nexora/aider-venv/lib/python3.11/site-packages"
+if ! chroot "${ROOTFS_DIR}" env PYTHONPATH="${AIDER_SITE_PACKAGES}" /usr/bin/python3.11 -c '
 import importlib.metadata
 import sys
 entry = next(e for e in importlib.metadata.distribution("aider-chat").entry_points if e.name == "aider")
@@ -222,14 +223,13 @@ raise SystemExit(entry.load()())
     echo "ERROR: Aider installation failed."
     exit 1
 fi
-chroot "${ROOTFS_DIR}" "${AIDER_VENV}/bin/python" -c '
+chroot "${ROOTFS_DIR}" env PYTHONPATH="${AIDER_SITE_PACKAGES}" /usr/bin/python3.11 -c '
 import importlib.metadata
 import sys
 entry = next(e for e in importlib.metadata.distribution("aider-chat").entry_points if e.name == "aider")
 sys.argv = ["aider", "--version"]
 raise SystemExit(entry.load()())
 '
-
 echo "=== Install pinned global npm tools from Debian manifest ==="
 mapfile -t NPM_GLOBAL_PACKAGES < <(grep -Ev '^[[:space:]]*(#|$)' "${NEXORA_DIR}/config/termux-npm-global.txt")
 if [ "${#NPM_GLOBAL_PACKAGES[@]}" -eq 0 ]; then echo "ERROR: npm global manifest is empty."; exit 1; fi
