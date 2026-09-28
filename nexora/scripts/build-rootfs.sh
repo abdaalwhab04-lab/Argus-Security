@@ -217,7 +217,7 @@ import sys
 entry = next(e for e in importlib.metadata.distribution("aider-chat").entry_points if e.name == "aider")
 sys.argv = ["aider", "--version"]
 raise SystemExit(entry.load()())
-' >/dev/null 2>&1; then
+'; then
     echo "ERROR: Aider installation failed."
     exit 1
 fi
