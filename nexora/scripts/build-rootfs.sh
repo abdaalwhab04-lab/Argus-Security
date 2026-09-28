@@ -212,7 +212,7 @@ chroot "${ROOTFS_DIR}" "${AIDER_VENV}/bin/python" -m pip check
 # Validate the installed package through the venv interpreter directly.
 # This avoids relying on a generated console-script launcher surviving
 # RootFS archiving/extraction with an identical executable interpreter path.
-if ! chroot "${AIDER_ROOT}" "${AIDER_VENV}/bin/python" -c '
+if ! chroot "${ROOTFS_DIR}" "${AIDER_VENV}/bin/python" -c '
 import importlib.metadata
 import sys
 entry = next(e for e in importlib.metadata.distribution("aider-chat").entry_points if e.name == "aider")
@@ -222,7 +222,7 @@ raise SystemExit(entry.load()())
     echo "ERROR: Aider installation failed."
     exit 1
 fi
-chroot "${AIDER_ROOT}" "${AIDER_VENV}/bin/python" -c '
+chroot "${ROOTFS_DIR}" "${AIDER_VENV}/bin/python" -c '
 import importlib.metadata
 import sys
 entry = next(e for e in importlib.metadata.distribution("aider-chat").entry_points if e.name == "aider")
