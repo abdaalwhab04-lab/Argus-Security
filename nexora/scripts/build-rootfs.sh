@@ -211,23 +211,12 @@ if ! chroot "${ROOTFS_DIR}" env PYTHONPATH="/opt/nexora/aider-site" /usr/bin/pyt
     echo "ERROR: Aider target installation failed dependency check."
     exit 1
 fi
-if ! chroot "${ROOTFS_DIR}" env PYTHONPATH="/opt/nexora/aider-site" /usr/bin/python3.11 -c '
-import importlib.metadata
-import sys
-entry = next(e for e in importlib.metadata.distribution("aider-chat").entry_points if e.name == "aider")
-sys.argv = ["aider", "--version"]
-raise SystemExit(entry.load()())
-'; then
+if ! chroot "${ROOTFS_DIR}" env PYTHONPATH="/opt/nexora/aider-site" /usr/bin/python3.11 -m aider.main --version; then
     echo "ERROR: Aider installation failed."
     exit 1
 fi
-chroot "${ROOTFS_DIR}" env PYTHONPATH="/opt/nexora/aider-site" /usr/bin/python3.11 -c '
-import importlib.metadata
-import sys
-entry = next(e for e in importlib.metadata.distribution("aider-chat").entry_points if e.name == "aider")
-sys.argv = ["aider", "--version"]
-raise SystemExit(entry.load()())
-'
+chroot "${ROOTFS_DIR}" env PYTHONPATH="/opt/nexora/aider-site" /usr/bin/python3.11 -m aider.main --version
+
 echo "=== Install pinned global npm tools from Debian manifest ==="
 mapfile -t NPM_GLOBAL_PACKAGES < <(grep -Ev '^[[:space:]]*(#|$)' "${NEXORA_DIR}/config/termux-npm-global.txt")
 if [ "${#NPM_GLOBAL_PACKAGES[@]}" -eq 0 ]; then echo "ERROR: npm global manifest is empty."; exit 1; fi
