@@ -1,1 +1,2 @@
 aider-chat==0.86.2
+# CI bootstrap trigger marker
