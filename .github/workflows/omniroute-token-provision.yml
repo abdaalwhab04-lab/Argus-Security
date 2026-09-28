@@ -149,7 +149,7 @@ jobs:
           const x = JSON.parse(fs.readFileSync("/tmp/omniroute-models.json","utf8"));
           const ids = (x.data || []).map(x => String(x.id));
           const chatCandidates = ids.filter(id => id.toLowerCase().includes("aihorde"));
-          const model = chatCandidates.find(id => /aphrodite\/|google\/gemma/i.test(id)) || chatCandidates.find(id => !/^aihorde\/(2dn|image)/i.test(id));
+          const model = chatCandidates.find(id => /aihorde\/(aphrodite\/|google\/gemma)/i.test(id) && !/image/i.test(id));
           if (!model) throw new Error("No AI Horde model is exposed by OmniRoute");
           fs.writeFileSync("/tmp/aider-free-model",""+model+"\n");
           console.log("AIDER_OMNIROUTE_MODEL=" + model);
