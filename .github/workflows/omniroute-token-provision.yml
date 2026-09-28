@@ -159,10 +159,10 @@ jobs:
             MODEL="$(/usr/bin/cat /tmp/aider-free-model)"; \
             export OPENAI_API_BASE="http://127.0.0.1:20128/v1"; \
             export OPENAI_API_KEY="$API_KEY"; \
-            /opt/nexora/aider-venv/bin/aider --version; \
+            /opt/nexora/aider-venv/bin/python -c 'import importlib.metadata,sys; entry=next(e for e in importlib.metadata.distribution("aider-chat").entry_points if e.name=="aider"); sys.argv=["aider","--version"]; raise SystemExit(entry.load()())'; \
             rm -rf /tmp/aider-free-tier-smoke; mkdir -p /tmp/aider-free-tier-smoke; cd /tmp/aider-free-tier-smoke; \
             git init -q; git config user.email "ci@example.invalid"; git config user.name "Aider CI"; printf "# Aider smoke test\\n" > README.md; git add README.md; git commit -qm init; \
-            /opt/nexora/aider-venv/bin/aider --model "openai/$MODEL" --yes --no-auto-commits --message "Do not modify files. Reply with the single word OK." >/tmp/aider-smoke.log 2>&1; \
+            /opt/nexora/aider-venv/bin/python -c 'import importlib.metadata,sys; entry=next(e for e in importlib.metadata.distribution("aider-chat").entry_points if e.name=="aider"); sys.argv=["aider","--model","openai/$MODEL","--yes","--no-auto-commits","--message","Do not modify files. Reply with the single word OK."]; raise SystemExit(entry.load()())' >/tmp/aider-smoke.log 2>&1; \
             grep -Eq "\\bOK\\b" /tmp/aider-smoke.log; \
             echo "AIDER_OMNIROUTE_FREE_TIER_OK"; \
             sed -n "1,80p" /tmp/aider-smoke.log'
