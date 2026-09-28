@@ -169,7 +169,7 @@ jobs:
           printf "# Aider smoke test\\n" > README.md
           git add README.md
           git commit -qm init
-          if ! /usr/bin/python3.11 -c "import sys,os; sys.path.insert(0, '/opt/nexora/aider-site'); import aider.main; sys.argv=['aider','--model','openai/'+os.environ['MODEL'],'--yes','--no-auto-commits','--message','Do not modify files. Reply with the single word OK.']; raise SystemExit(aider.main.main())" >/tmp/aider-smoke.log 2>&1; then
+          if ! /usr/bin/python3.11 -c "import sys,os; sys.path.insert(0, '/opt/nexora/aider-site'); import aider.main; sys.argv=['aider','--model','openai/'+os.environ['MODEL'],'--no-stream','--no-check-model-accepts-settings','--no-show-model-warnings','--yes','--no-auto-commits','--message','Do not modify files. Reply with the single word OK.']; raise SystemExit(aider.main.main())" >/tmp/aider-smoke.log 2>&1; then
             echo "AIDER_SMOKE_FAILED"
             /usr/bin/sed -n '1,160p' /tmp/aider-smoke.log
             exit 1
