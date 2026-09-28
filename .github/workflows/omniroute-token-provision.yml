@@ -159,7 +159,7 @@ jobs:
           MODEL="$(/usr/bin/cat /tmp/aider-free-model)"
           export OPENAI_API_BASE="http://127.0.0.1:20128/v1"
           export OPENAI_API_KEY="$API_KEY"
-          env PYTHONPATH=/opt/nexora/aider-site /usr/bin/python3.11 -m aider.main --version
+          /usr/bin/python3.11 -c "import sys; sys.path.insert(0, '/opt/nexora/aider-site'); import aider.main; sys.argv=['aider','--version']; raise SystemExit(aider.main.main())"
           rm -rf /tmp/aider-free-tier-smoke
           mkdir -p /tmp/aider-free-tier-smoke
           cd /tmp/aider-free-tier-smoke
@@ -175,7 +175,7 @@ jobs:
             --data "{\\\"model\\\":\\\"$MODEL\\\",\\\"messages\\\":[{\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Reply with the single word OK.\\\"}],\\\"max_tokens\\\":8}" \\
             >/tmp/omniroute-free-chat.json
           /usr/bin/python3 -c "import json; x=json.load(open('/tmp/omniroute-free-chat.json')); t=x.get('choices',[{}])[0].get('message',{}).get('content',''); assert t, x; print('OMNIROUTE_FREE_CHAT_OK=' + t[:80])"
-          if ! env PYTHONPATH=/opt/nexora/aider-site /usr/bin/python3.11 -m aider.main --model "openai/$MODEL" --yes --no-auto-commits --message "Do not modify files. Reply with the single word OK." >/tmp/aider-smoke.log 2>&1; then
+          if ! /usr/bin/python3.11 -c "import sys,os; sys.path.insert(0, '/opt/nexora/aider-site'); import aider.main; sys.argv=['aider','--model','openai/'+os.environ['MODEL'],'--yes','--no-auto-commits','--message','Do not modify files. Reply with the single word OK.']; raise SystemExit(aider.main.main())" >/tmp/aider-smoke.log 2>&1; then
             echo "AIDER_SMOKE_FAILED"
             /usr/bin/sed -n '1,160p' /tmp/aider-smoke.log
             exit 1
