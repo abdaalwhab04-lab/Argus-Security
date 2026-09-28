@@ -1,0 +1,6 @@
+# Aider -> OmniRoute (OpenAI-compatible gateway)
+# Keep the OmniRoute API key in the environment, never in this file.
+openai-api-base: http://127.0.0.1:20128/v1
+model: openai/auto/coding
+weak-model: openai/auto/coding
+show-model-warnings: false
