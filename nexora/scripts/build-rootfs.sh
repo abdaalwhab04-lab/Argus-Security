@@ -472,5 +472,167 @@ RemainAfterExit=yes
 WantedBy=multi-user.target
 SERVICE
 ln -sf ../nexora-userspace.service "${ROOTFS_DIR}/etc/systemd/system/multi-user.target.wants/nexora-userspace.service"
+cat > "${ROOTFS_DIR}/usr/local/bin/nexora-omniroute-env.sh" <<'ENV'
+#!/bin/sh
+set -eu
+PERSIST_ROOT="/persist/debian-workspace"
+DATA_ROOT="${PERSIST_ROOT}/data/omniroute"
+ENV_FILE="${DATA_ROOT}/server.env"
+mkdir -p "${DATA_ROOT}"
+chmod 700 "${DATA_ROOT}"
+rand_hex() { od -An -N32 -tx1 /dev/urandom | tr -d ' \n'; }
+if [ ! -s "${ENV_FILE}" ]; then
+  JWT_SECRET="$(rand_hex)"
+  API_KEY_SECRET="$(rand_hex)"
+  INITIAL_PASSWORD="$(rand_hex)"
+  cat > "${ENV_FILE}" <<EOF
+NODE_ENV=production
+PORT=20128
+API_PORT=20128
+DASHBOARD_PORT=20128
+OMNIROUTE_SERVER_HOST=127.0.0.1
+DATA_DIR=${DATA_ROOT}
+OMNIROUTE_DATA_DIR=${DATA_ROOT}
+JWT_SECRET=${JWT_SECRET}
+API_KEY_SECRET=${API_KEY_SECRET}
+INITIAL_PASSWORD=${INITIAL_PASSWORD}
+OMNIROUTE_ENABLE_LIVE_WS=0
+EOF
+  chmod 600 "${ENV_FILE}"
+fi
+
+ENV
+chmod +x "${ROOTFS_DIR}/usr/local/bin/nexora-omniroute-env.sh"
+
+cat > "${ROOTFS_DIR}/usr/local/bin/nexora-free-aider-init.sh" <<'FREEAIDER'
+#!/bin/sh
+set -eu
+CONSOLE=/dev/console
+log() { echo "$*" > "$CONSOLE"; }
+PERSIST_ROOT="/persist/debian-workspace"
+DATA_ROOT="${PERSIST_ROOT}/data/omniroute"
+SOFTWARE_ROOT="${PERSIST_ROOT}/software"
+AIDER_ROOT="${SOFTWARE_ROOT}/aider"
+OMNI_ENV="${DATA_ROOT}/server.env"
+OMNI_LOG="${DATA_ROOT}/server.log"
+OMNI_URL="http://127.0.0.1:20128"
+mkdir -p "${DATA_ROOT}" "${SOFTWARE_ROOT}" "${AIDER_ROOT}"
+chmod 700 "${DATA_ROOT}" "${AIDER_ROOT}"
+set -a
+. "${OMNI_ENV}"
+set +a
+wait_for_health() {
+  i=0
+  while [ "$i" -lt 90 ]; do
+    if curl -fsS "${OMNI_URL}/healthz" >/dev/null 2>&1; then return 0; fi
+    i=$((i + 1))
+    sleep 1
+  done
+  return 1
+}
+log "NEXORA_OMNIROUTE_WAIT_START"
+if ! wait_for_health; then
+  log "NEXORA_OMNIROUTE_HEALTH_FAILED"
+  tail -n 80 "${OMNI_LOG}" > "${CONSOLE}" 2>&1 || true
+  exit 1
+fi
+log "NEXORA_OMNIROUTE_HEALTH_OK"
+if [ ! -s "${DATA_ROOT}/aider-api-key" ]; then
+  ADMIN_TOKEN="$(curl -fsS -X POST "${OMNI_URL}/api/cli/connect" -H 'Content-Type: application/json' --data "{\"password\":\"${INITIAL_PASSWORD}\",\"name\":\"nexora-bootstrap\",\"scope\":\"admin\"}" | jq -er '.token')"
+  PROVIDER_IDS="$(curl -fsS "${OMNI_URL}/api/providers/free-onboarding" -H "Authorization: Bearer ${ADMIN_TOKEN}" | jq -r '.providers[].id')"
+  if [ -n "${PROVIDER_IDS}" ]; then
+    PROVIDER_JSON="$(printf '%s\n' "${PROVIDER_IDS}" | jq -Rsc 'split("\n") | map(select(length > 0))')"
+    curl -fsS -X POST "${OMNI_URL}/api/providers/free-onboarding" -H 'Content-Type: application/json' -H "Authorization: Bearer ${ADMIN_TOKEN}" --data "{\"providerIds\":${PROVIDER_JSON},\"confirmed\":true}" > "${DATA_ROOT}/free-provider-setup.json"
+  else
+    printf '%s\n' '{"providers":[],"results":[]}' > "${DATA_ROOT}/free-provider-setup.json"
+  fi
+  API_KEY="$(curl -fsS -X POST "${OMNI_URL}/api/keys" -H 'Content-Type: application/json' -H "Authorization: Bearer ${ADMIN_TOKEN}" --data '{"name":"aider","scopes":[]}' | jq -er '.key')"
+  printf '%s\n' "${API_KEY}" > "${DATA_ROOT}/aider-api-key"
+  chmod 600 "${DATA_ROOT}/aider-api-key"
+  unset ADMIN_TOKEN API_KEY PROVIDER_IDS PROVIDER_JSON
+  log "NEXORA_FREE_PROVIDERS_CONFIGURED"
+else
+  log "NEXORA_FREE_PROVIDERS_ALREADY_CONFIGURED"
+fi
+if [ ! -x "${AIDER_ROOT}/bin/aider" ]; then
+  rm -rf "${AIDER_ROOT}"
+  python3 -m venv "${AIDER_ROOT}"
+  "${AIDER_ROOT}/bin/python" -m pip install --no-cache-dir aider-chat
+fi
+ln -sfn "${AIDER_ROOT}/bin/aider" /usr/local/bin/aider
+AIDER_PROJECT="${PERSIST_ROOT}/source/omniroute"
+mkdir -p "${AIDER_PROJECT}"
+AIDER_KEY="$(cat "${DATA_ROOT}/aider-api-key")"
+cat > "${AIDER_PROJECT}/.env.aider" <<EOF
+OPENAI_API_BASE=${OMNI_URL}/v1
+OPENAI_API_KEY=${AIDER_KEY}
+AIDER_MODEL=openai/auto/coding
+AIDER_WEAK_MODEL=openai/auto/coding
+AIDER_SHOW_MODEL_WARNINGS=false
+AIDER_CHECK_UPDATE=false
+EOF
+chmod 600 "${AIDER_PROJECT}/.env.aider"
+cat > "${AIDER_PROJECT}/.aider.conf.yml" <<'EOF'
+openai-api-base: http://127.0.0.1:20128/v1
+model: openai/auto/coding
+weak-model: openai/auto/coding
+show-model-warnings: false
+check-update: false
+EOF
+MODELS_JSON="$(curl -fsS "${OMNI_URL}/v1/models" -H "Authorization: Bearer ${AIDER_KEY}")"
+printf '%s\n' "${MODELS_JSON}" > "${DATA_ROOT}/models.json"
+MODEL="$(printf '%s\n' "${MODELS_JSON}" | jq -r '.data[].id' | grep '^auto/coding
+echo "NEXORA_ROOTFS_OK"
+ | head -n 1 || true)"
+if [ -z "${MODEL}" ]; then MODEL="$(printf '%s\n' "${MODELS_JSON}" | jq -r '.data[].id' | grep '^auto/' | head -n 1 || true)"; fi
+if [ -z "${MODEL}" ]; then log "NEXORA_OMNIROUTE_NO_AUTO_MODEL"; exit 1; fi
+TEST_RESPONSE="$(curl -fsS -X POST "${OMNI_URL}/v1/chat/completions" -H 'Content-Type: application/json' -H "Authorization: Bearer ${AIDER_KEY}" --data "$(jq -nc --arg model "${MODEL}" '{model:$model,messages:[{role:"user",content:"Reply with exactly NEXORA_OMNIROUTE_AIDER_OK"}],max_tokens:16}')")"
+printf '%s\n' "${TEST_RESPONSE}" > "${DATA_ROOT}/aider-smoke.json"
+printf '%s\n' "${TEST_RESPONSE}" | jq -e '.choices[0].message.content' >/dev/null
+"${AIDER_ROOT}/bin/aider" --version > "${DATA_ROOT}/aider-version.txt" 2>&1
+log "NEXORA_AIDER_OK"
+log "NEXORA_FREE_TIER_AIDER_OK"
+
+FREEAIDER
+chmod +x "${ROOTFS_DIR}/usr/local/bin/nexora-free-aider-init.sh"
+
+cat > "${ROOTFS_DIR}/etc/systemd/system/nexora-omniroute.service" <<'SERVICE'
+[Unit]
+Description=NEXORA OmniRoute persistent gateway
+Requires=nexora-userspace.service
+After=nexora-userspace.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStartPre=/usr/local/bin/nexora-omniroute-env.sh
+ExecStart=/bin/sh -c '. /persist/debian-workspace/data/omniroute/server.env; exec /usr/local/bin/omniroute serve --no-open --no-recovery'
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+
+cat > "${ROOTFS_DIR}/etc/systemd/system/nexora-free-aider.service" <<'SERVICE'
+[Unit]
+Description=NEXORA Free Tier and Aider bootstrap
+Requires=nexora-omniroute.service
+After=nexora-omniroute.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/nexora-free-aider-init.sh
+RemainAfterExit=yes
+TimeoutStartSec=900
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+
+ln -sf ../nexora-omniroute.service "${ROOTFS_DIR}/etc/systemd/system/multi-user.target.wants/nexora-omniroute.service"
+ln -sf ../nexora-free-aider.service "${ROOTFS_DIR}/etc/systemd/system/multi-user.target.wants/nexora-free-aider.service"
+
 echo "=== Debian RootFS Created ==="
 echo "NEXORA_ROOTFS_OK"
