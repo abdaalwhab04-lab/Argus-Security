@@ -28,7 +28,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pytest pyyaml
+          pip install pytest pytest-cov pyyaml
 
       - name: Run workflow security tests
         run: |
@@ -53,7 +53,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest pyyaml
+          pip install pytest pytest-cov pyyaml
 
       - name: Run config and CLI tests
         run: |

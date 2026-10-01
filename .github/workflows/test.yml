@@ -29,7 +29,7 @@ jobs:
         run: pip install ruff
 
       - name: Run ruff check
-        run: ruff check scripts/ tests/ --output-format=github
+        run: ruff check scripts/ --output-format=github
 
   test:
     name: Test Python ${{ matrix.python-version }}

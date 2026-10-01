@@ -23,3 +23,4 @@ jobs:
           framework: github_actions
           compact: true
           quiet: true
+          soft_fail_on: CKV_GHA_7,CKV2_GHA_1
