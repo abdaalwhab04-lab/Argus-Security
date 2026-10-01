@@ -6,6 +6,7 @@ on:
     branches:
       - omniroute-v3.8.50-integration
       - nexora-real-test
+      - hfs-fix-from-remote
 
 permissions:
   contents: read
