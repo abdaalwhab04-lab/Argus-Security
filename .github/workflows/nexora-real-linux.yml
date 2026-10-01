@@ -490,12 +490,12 @@ jobs:
             }
 
             for _ in $(seq 1 300); do
-              if grep -qE "NEXORA_PERSISTENCE_INITIALIZED|NEXORA_PERSISTENCE_RESTORED" "${LOG_FILE}"; then break; fi
+              if grep -q "NEXORA_FREE_TIER_AIDER_OK" "${LOG_FILE}"; then break; fi
               if ! qemu_running; then cat "${LOG_FILE}"; return 1; fi
               sleep 1
             done
 
-            if ! grep -qE "NEXORA_PERSISTENCE_INITIALIZED|NEXORA_PERSISTENCE_RESTORED" "${LOG_FILE}"; then
+            if ! grep -q "NEXORA_FREE_TIER_AIDER_OK" "${LOG_FILE}"; then
               echo "ERROR: persistence marker not reached within 300 seconds"
               cat "${LOG_FILE}"
               kill -TERM "${QEMU_PID}" 2>/dev/null || true
@@ -543,6 +543,9 @@ jobs:
           grep -q "NEXORA_PERSISTENCE_INITIALIZED" "${BOOT_LOG}"
           grep -q "NEXORA_PERSISTENCE_SYNCED" "${BOOT_LOG}"
           grep -q "NEXORA_DEBIAN_PERSISTENT_WORKSPACE_OK" "${BOOT_LOG}"
+grep -q "NEXORA_OMNIROUTE_HEALTH_OK" "${BOOT_LOG}"
+grep -q "NEXORA_AIDER_OK" "${BOOT_LOG}"
+grep -q "NEXORA_FREE_TIER_AIDER_OK" "${BOOT_LOG}"
           grep -q "NEXORA_HOST_DISK_SYNC_DONE" "${BOOT_LOG}"
           echo "NEXORA_QEMU_BOOT_OK"
 
