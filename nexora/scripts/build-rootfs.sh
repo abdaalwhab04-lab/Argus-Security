@@ -559,7 +559,13 @@ if [ ! -x "${AIDER_ROOT}/bin/aider" ]; then
   python3 -m venv "${AIDER_ROOT}"
   "${AIDER_ROOT}/bin/python" -m pip install --no-cache-dir aider-chat
 fi
-ln -sfn "${AIDER_ROOT}/bin/aider" /usr/local/bin/aider
+cat > /usr/local/bin/aider <<'AIDERWRAPPER'
+#!/bin/sh
+set -eu
+export AIDER_ENV_FILE=/persist/debian-workspace/source/omniroute/.env.aider
+exec /persist/debian-workspace/software/aider/bin/aider "$@"
+AIDERWRAPPER
+chmod +x /usr/local/bin/aider
 AIDER_PROJECT="${PERSIST_ROOT}/source/omniroute"
 mkdir -p "${AIDER_PROJECT}"
 AIDER_KEY="$(cat "${DATA_ROOT}/aider-api-key")"
