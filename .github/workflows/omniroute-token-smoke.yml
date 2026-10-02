@@ -151,14 +151,41 @@ jobs:
             /usr/bin/curl -fsS --max-time 20 -H "User-Agent: OmniRoute/1.0" https://api.navy/v1/models -o /tmp/navy-models.json
           '
           sudo chroot nexora/rootfs /usr/local/bin/node --input-type=module <<'NODE'
-          import fs from "node:fs";
-          for (const [name,path] of [["ovhcloud","/tmp/ovh-models.json"],["aihorde","/tmp/aihorde-models.json"],["navy","/tmp/navy-models.json"]]) {
-            const x = JSON.parse(fs.readFileSync(path,"utf8"));
-            const count = Array.isArray(x.data) ? x.data.length : Array.isArray(x.models) ? x.models.length : 0;
-            if (!count) throw new Error(name + ": no models returned");
-            console.log(name.toUpperCase() + "_KEYLESS_MODELS=" + count);
-          }
-          NODE
+import fs from "node:fs";
+for (const [name,path] of [["ovhcloud","/tmp/ovh-models.json"],["aihorde","/tmp/aihorde-models.json"],["navy","/tmp/navy-models.json"]]) {
+  const x = JSON.parse(fs.readFileSync(path,"utf8"));
+  const count = Array.isArray(x.data) ? x.data.length : Array.isArray(x.models) ? x.models.length : 0;
+  if (!count) throw new Error(name + ": no models returned");
+  console.log(name.toUpperCase() + "_KEYLESS_MODELS=" + count);
+}
+NODE
+
+      - name: Activate eligible Free Tier providers through OmniRoute
+        run: |
+          set -euo pipefail
+          sudo chroot nexora/rootfs /usr/bin/bash -lc '
+            TOKEN="$(/usr/bin/cat /tmp/omniroute-nexora-internal-token 2>/dev/null || true)"
+            if [ -z "$TOKEN" ]; then echo "No internal token file; onboarding endpoint will be probed with the service token from the running process."; fi
+          '
+          sudo chroot nexora/rootfs /usr/local/bin/node --input-type=module <<'NODE'
+import fs from "node:fs";
+const base = "http://127.0.0.1:20129";
+const token = fs.readFileSync("/tmp/omniroute-nexora-api-key","utf8").trim();
+const headers = {"Authorization": "Bearer " + token, "Content-Type": "application/json"};
+const get = await fetch(base + "/api/providers/free-onboarding", {headers});
+const body = await get.text();
+if (!get.ok) throw new Error("Free onboarding GET failed: " + get.status + " " + body.slice(0,500));
+const data = JSON.parse(body);
+const providers = Array.isArray(data.providers) ? data.providers : [];
+console.log("NEXORA_FREE_ONBOARDING_CANDIDATES=" + providers.length);
+if (!providers.length) { console.log("NEXORA_FREE_ONBOARDING_ALREADY_CONFIGURED_OR_EMPTY=1"); process.exit(0); }
+const ids = providers.map(p => typeof p === "string" ? p : p.id).filter(Boolean);
+const post = await fetch(base + "/api/providers/free-onboarding", {method:"POST", headers, body:JSON.stringify({providerIds:ids, confirmed:true})});
+const out = await post.text();
+if (!post.ok) throw new Error("Free onboarding POST failed: " + post.status + " " + out.slice(0,800));
+console.log("NEXORA_FREE_ONBOARDING_RESULT=" + out.slice(0,1000));
+NODE
+          echo "NEXORA_FREE_PROVIDER_ACTIVATION_STEP_OK=1"
 
       - name: Verify NEXORA OmniRoute exposes Free Tier models
         run: |
@@ -212,14 +239,14 @@ PY
         run: |
           set -euo pipefail
           sudo chroot nexora/rootfs /usr/local/bin/node --input-type=module <<'NODE'
-          import fs from "node:fs";
-          const x = JSON.parse(fs.readFileSync("/tmp/omniroute-nexora-models.json","utf8"));
-          const ids = (x.data || []).map(x => String(x.id));
-          const model = ids.find(id => id.toLowerCase().includes("aihorde") && !/image/i.test(id));
-          if (!model) throw new Error("No AI Horde chat model is exposed by NEXORA OmniRoute");
-          fs.writeFileSync("/tmp/nexora-aider-model", model + "\n");
-          console.log("AIDER_NEXORA_OMNIROUTE_MODEL=" + model);
-          NODE
+import fs from "node:fs";
+const x = JSON.parse(fs.readFileSync("/tmp/omniroute-nexora-models.json","utf8"));
+const ids = (x.data || []).map(x => String(x.id));
+const model = ids.find(id => id.toLowerCase().includes("aihorde") && !/image/i.test(id));
+if (!model) throw new Error("No AI Horde chat model is exposed by NEXORA OmniRoute");
+fs.writeFileSync("/tmp/nexora-aider-model", model + "\n");
+console.log("AIDER_NEXORA_OMNIROUTE_MODEL=" + model);
+NODE
           sudo chroot nexora/rootfs /usr/bin/bash -lc '
             set -euo pipefail
             rm -rf /tmp/aider-nexora-free-tier-smoke
