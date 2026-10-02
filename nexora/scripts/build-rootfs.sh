@@ -456,7 +456,7 @@ chmod +x "${ROOTFS_DIR}/usr/local/bin/nexora-omniroute-env.sh"
 cat > "${ROOTFS_DIR}/etc/systemd/system/nexora-omniroute.service" <<'SERVICE'
 [Unit]
 Description=NEXORA persistent OmniRoute gateway
-After=network-online.target nexora-userspace.service
+After=network-online.target
 Wants=network-online.target
 RequiresMountsFor=/persist/debian-workspace
 
@@ -476,7 +476,6 @@ TimeoutStopSec=40
 [Install]
 WantedBy=multi-user.target
 SERVICE
-ln -sf ../nexora-omniroute.service "${ROOTFS_DIR}/etc/systemd/system/multi-user.target.wants/nexora-omniroute.service"
 
 mkdir -p "${ROOTFS_DIR}/etc/systemd/system/docker.service.d"
 cat > "${ROOTFS_DIR}/etc/systemd/system/docker.service.d/nexora-storage.conf" <<'DROPIN'
