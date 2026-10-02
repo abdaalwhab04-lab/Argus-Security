@@ -141,6 +141,39 @@ jobs:
           }
           NODE
 
+      - name: Test real Free Tier chat request through OmniRoute
+        run: |
+          set -euo pipefail
+          sudo chroot nexora/rootfs /usr/bin/bash -lc '\
+            API_KEY="$(/usr/bin/cat /tmp/omniroute-ci-api-key)"
+            MODEL="$(/usr/bin/cat /tmp/aider-free-model)"
+            /usr/bin/curl -fsS --max-time 120 \
+              -X POST http://127.0.0.1:20128/v1/chat/completions \
+              -H "Authorization: Bearer $API_KEY" \
+              -H "Content-Type: application/json" \
+              --data "$(MODEL="$MODEL" /usr/bin/python3 - <<'"'"'PY'"'"'
+import json, os
+print(json.dumps({
+  "model": os.environ["MODEL"],
+  "messages": [{"role": "user", "content": "Reply with the single word OK."}],
+  "stream": False,
+}))
+PY
+)" -o /tmp/omniroute-free-chat.json
+            /usr/bin/python3 - <<'"'"'PY'
+import json
+x=json.load(open("/tmp/omniroute-free-chat.json"))
+choices=x.get("choices") or []
+if not choices:
+    raise SystemExit("No choices returned by OmniRoute")
+content=((choices[0].get("message") or {}).get("content") or "").strip()
+print("OMNIROUTE_FREE_CHAT_RESPONSE=" + content[:500])
+if "OK" not in content.upper():
+    raise SystemExit("Free Tier chat request returned without OK")
+print("OMNIROUTE_REAL_FREE_TIER_CHAT_OK=1")
+PY
+          '
+
       - name: Verify Aider can use OmniRoute Free Tier
         run: |
           set -euo pipefail
