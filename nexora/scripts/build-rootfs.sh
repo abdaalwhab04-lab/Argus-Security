@@ -374,10 +374,9 @@ MARKER="/persist/nexora-persistence-marker"
 mkdir -p "${PERSIST_ROOT}/software" "${PERSIST_ROOT}/data" "${PERSIST_ROOT}/source"
 echo "NEXORA_PERSISTENCE_SEED_START" > /dev/console
 for project in autogpt omniroute; do
-  if [ -d "${SOURCE_ROOT}/${project}" ] && [ ! -e "${PERSIST_ROOT}/source/${project}/.nexora-seeded" ]; then
-    rm -rf "${PERSIST_ROOT}/source/${project}"
+  if [ -d "${SOURCE_ROOT}/${project}" ]; then
     mkdir -p "${PERSIST_ROOT}/source/${project}"
-    cp -a "${SOURCE_ROOT}/${project}/." "${PERSIST_ROOT}/source/${project}/"
+    rsync -a --delete --exclude '.nexora-seeded' "${SOURCE_ROOT}/${project}/" "${PERSIST_ROOT}/source/${project}/"
     touch "${PERSIST_ROOT}/source/${project}/.nexora-seeded"
   fi
 done
@@ -399,6 +398,86 @@ if [ -f "${MARKER}" ]; then sync; echo "NEXORA_PERSISTENCE_RESTORED" > /dev/cons
 echo "NEXORA_PERSISTENCE_TEST_DONE" > /dev/console
 PERSISTTEST
 chmod +x "${ROOTFS_DIR}/usr/local/bin/nexora-persistence-test.sh"
+
+cat > "${ROOTFS_DIR}/usr/local/bin/nexora-omniroute-install.sh" <<'OMNIINSTALL'
+#!/bin/sh
+set -eu
+PERSIST_ROOT="/persist/debian-workspace"
+SOURCE_ROOT="${PERSIST_ROOT}/source/omniroute"
+RUNTIME_ROOT="${PERSIST_ROOT}/software/omniroute"
+DATA_ROOT="${PERSIST_ROOT}/data/omniroute"
+MARKER="${RUNTIME_ROOT}/.nexora-source-sha"
+
+test -f "${SOURCE_ROOT}/package.json"
+mkdir -p "${RUNTIME_ROOT}" "${DATA_ROOT}"
+SOURCE_SHA="$(sha256sum "${SOURCE_ROOT}/package.json" | awk '{print $1}')"
+
+if [ ! -x "${RUNTIME_ROOT}/node_modules/.bin/omniroute" ] || [ ! -f "${MARKER}" ] || [ "$(cat "${MARKER}" 2>/dev/null || true)" != "${SOURCE_SHA}" ]; then
+  echo "NEXORA_OMNIROUTE_INSTALL_START" > /dev/console
+  rm -rf "${RUNTIME_ROOT}/node_modules" "${RUNTIME_ROOT}/package.json" "${RUNTIME_ROOT}/package-lock.json"
+  npm install --prefix "${RUNTIME_ROOT}" --omit=dev "${SOURCE_ROOT}"
+  printf '%s\n' "${SOURCE_SHA}" > "${MARKER}"
+  echo "NEXORA_OMNIROUTE_INSTALL_DONE" > /dev/console
+else
+  echo "NEXORA_OMNIROUTE_INSTALL_REUSED" > /dev/console
+fi
+
+test -x "${RUNTIME_ROOT}/node_modules/.bin/omniroute"
+"${RUNTIME_ROOT}/node_modules/.bin/omniroute" --version > /dev/console 2>&1 || true
+OMNIINSTALL
+chmod +x "${ROOTFS_DIR}/usr/local/bin/nexora-omniroute-install.sh"
+
+cat > "${ROOTFS_DIR}/usr/local/bin/nexora-omniroute-env.sh" <<'OMNIENV'
+#!/bin/sh
+set -eu
+DATA_ROOT="/persist/debian-workspace/data/omniroute"
+ENV_FILE="${DATA_ROOT}/server.env"
+mkdir -p "${DATA_ROOT}"
+chmod 700 "${DATA_ROOT}"
+if [ ! -f "${ENV_FILE}" ]; then
+  JWT_SECRET="$(openssl rand -base64 48 | tr -d '\n')"
+  API_KEY_SECRET="$(openssl rand -hex 32)"
+  INITIAL_PASSWORD="$(openssl rand -base64 24 | tr -d '/+=' | cut -c1-20)"
+  umask 077
+  {
+    echo "JWT_SECRET=${JWT_SECRET}"
+    echo "API_KEY_SECRET=${API_KEY_SECRET}"
+    echo "INITIAL_PASSWORD=${INITIAL_PASSWORD}"
+    echo "DATA_DIR=${DATA_ROOT}"
+    echo "OMNIROUTE_DATA_DIR=${DATA_ROOT}"
+    echo "PORT=20128"
+  } > "${ENV_FILE}"
+  echo "NEXORA_OMNIROUTE_ENV_INITIALIZED" > /dev/console
+fi
+chmod 600 "${ENV_FILE}"
+OMNIENV
+chmod +x "${ROOTFS_DIR}/usr/local/bin/nexora-omniroute-env.sh"
+
+cat > "${ROOTFS_DIR}/etc/systemd/system/nexora-omniroute.service" <<'SERVICE'
+[Unit]
+Description=NEXORA persistent OmniRoute gateway
+After=network-online.target nexora-userspace.service
+Wants=network-online.target
+RequiresMountsFor=/persist/debian-workspace
+
+[Service]
+Type=simple
+WorkingDirectory=/persist/debian-workspace/source/omniroute
+EnvironmentFile=/persist/debian-workspace/data/omniroute/server.env
+Environment=HOME=/persist/debian-workspace/data/omniroute/home
+Environment=XDG_CONFIG_HOME=/persist/debian-workspace/data/omniroute/config
+Environment=XDG_DATA_HOME=/persist/debian-workspace/data/omniroute/data
+ExecStart=/persist/debian-workspace/software/omniroute/node_modules/.bin/omniroute
+Restart=on-failure
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=40
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+ln -sf ../nexora-omniroute.service "${ROOTFS_DIR}/etc/systemd/system/multi-user.target.wants/nexora-omniroute.service"
+
 mkdir -p "${ROOTFS_DIR}/etc/systemd/system/docker.service.d"
 cat > "${ROOTFS_DIR}/etc/systemd/system/docker.service.d/nexora-storage.conf" <<'DROPIN'
 [Unit]
@@ -453,6 +532,16 @@ if ! docker compose version > "${CONSOLE}" 2>&1; then log "NEXORA_DOCKER_COMPOSE
 log "NEXORA_DOCKER_COMPOSE_OK"
 /usr/local/bin/nexora-docker-container-test.sh
 /usr/local/bin/nexora-persistence-test.sh
+/usr/local/bin/nexora-omniroute-install.sh
+/usr/local/bin/nexora-omniroute-env.sh
+systemctl restart nexora-omniroute
+if ! systemctl is-active --quiet nexora-omniroute; then
+  log "NEXORA_OMNIROUTE_FAILED"
+  systemctl status nexora-omniroute --no-pager -l > "${CONSOLE}" 2>&1 || true
+  journalctl -u nexora-omniroute -n 80 --no-pager > "${CONSOLE}" 2>&1 || true
+  exit 1
+fi
+log "NEXORA_OMNIROUTE_OK"
 log "NEXORA_DEBIAN_USERSPACE_OK"
 USERSpace
 chmod +x "${ROOTFS_DIR}/usr/local/bin/nexora-userspace-start.sh"
