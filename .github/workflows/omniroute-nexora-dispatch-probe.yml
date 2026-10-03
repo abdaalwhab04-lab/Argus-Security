@@ -1,0 +1,23 @@
+name: OmniRoute NEXORA Dispatch Probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout integration branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: omniroute-v3.8.50-integration
+          lfs: true
+      - name: Verify repository Debian archive
+        run: |
+          set -euo pipefail
+          test -f nexora/debian/debian-12-generic-amd64.tar.xz
+          sha256sum nexora/debian/debian-12-generic-amd64.tar.xz
+          echo NEXORA_DISPATCH_PROBE_OK
