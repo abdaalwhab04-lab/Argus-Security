@@ -1,0 +1,29 @@
+name: OmniRoute NEXORA Free Tier Smoke Fixed
+
+"on":
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  nexora-free-tier:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout integration branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: omniroute-v3.8.50-integration
+          lfs: true
+
+      - name: Run NEXORA OmniRoute Free Tier smoke
+        run: bash nexora/scripts/omniroute-free-tier-smoke.sh
+
+      - name: Show NEXORA logs on failure
+        if: failure()
+        run: |
+          sudo chroot nexora/rootfs /bin/cat /tmp/omniroute-nexora.log 2>/dev/null || true
+          sudo chroot nexora/rootfs /bin/cat /tmp/omniroute-login.json 2>/dev/null || true
