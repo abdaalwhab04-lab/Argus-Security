@@ -1,4 +1,5 @@
 name: OmniRoute NEXORA Free Tier Smoke Fixed
+# bootstrap-check: 2026-10-04
 
 "on":
   push:
