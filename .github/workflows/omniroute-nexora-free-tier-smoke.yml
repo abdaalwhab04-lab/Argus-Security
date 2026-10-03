@@ -1,7 +1,7 @@
 name: OmniRoute NEXORA Free Tier Smoke Test
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
   push:
     branches:
       - omniroute-v3.8.50-integration
