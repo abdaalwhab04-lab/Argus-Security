@@ -32,6 +32,23 @@ jobs:
           sudo apt-get install -y debootstrap rsync
           sudo bash nexora/scripts/build-rootfs.sh
 
+      - name: Diagnose NEXORA rootfs payload
+        if: always()
+        run: |
+          set -euo pipefail
+          echo "=== rootfs bin inventory ==="
+          ls -la nexora/rootfs/usr/local/bin || true
+          echo "=== requested files ==="
+          for f in             nexora/rootfs/usr/local/bin/node             nexora/rootfs/usr/local/bin/nexora-omniroute-install.sh             nexora/rootfs/usr/local/bin/nexora-omniroute-env.sh             nexora/rootfs/usr/local/bin/nexora-persistence-test.sh; do
+            if [ -e "$f" ]; then
+              stat "$f"
+            else
+              echo "MISSING: $f"
+            fi
+          done
+          echo "=== installer source in build script ==="
+          grep -n -A8 -B3 'nexora-omniroute-install.sh' nexora/scripts/build-rootfs.sh || true
+
       - name: Verify NEXORA rootfs
         run: |
           set -euo pipefail
