@@ -1,0 +1,56 @@
+name: OmniRoute NEXORA Free Tier Smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  nexora-free-tier:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - name: Checkout integration branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: omniroute-v3.8.50-integration
+          lfs: true
+
+      - name: Verify repository Debian archive
+        run: |
+          set -euo pipefail
+          test -f nexora/debian/debian-12-generic-amd64.tar.xz
+          echo "Debian archive:"
+          ls -lh nexora/debian/debian-12-generic-amd64.tar.xz
+          sha256sum nexora/debian/debian-12-generic-amd64.tar.xz
+
+      - name: Prepare NEXORA Debian rootfs
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y debootstrap rsync
+          sudo bash nexora/scripts/build-rootfs.sh
+
+      - name: Verify NEXORA rootfs
+        run: |
+          set -euo pipefail
+          test -x nexora/rootfs/usr/local/bin/node
+          test -x nexora/rootfs/usr/local/bin/nexora-omniroute-install.sh
+          echo "NEXORA_ROOTFS_READY"
+
+      - name: Verify Aider runtime payload
+        run: |
+          set -euo pipefail
+          test -d nexora/rootfs/opt/nexora/aider-site || true
+          test -f nexora/config/aider-python-packages.txt
+          echo "AIDER_PAYLOAD_CHECKED"
+
+      - name: Report persistent workspace contract
+        run: |
+          set -euo pipefail
+          echo "NEXORA_PERSISTENT_WORKSPACE=/persist/debian-workspace"
+          echo "NEXORA_REPOSITORY_SOURCE=/opt/nexora/debian-workspace/source"
+          echo "NEXORA_RUNTIME_SOFTWARE=/persist/debian-workspace/software"
+          echo "NEXORA_RUNTIME_DATA=/persist/debian-workspace/data"
+          echo "NEXORA_WORKSPACE_CONTRACT_OK"
