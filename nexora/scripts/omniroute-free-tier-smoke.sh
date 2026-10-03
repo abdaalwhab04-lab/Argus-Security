@@ -9,10 +9,10 @@ test -f "$ARCHIVE"
 sudo apt-get update
 sudo apt-get install -y debootstrap rsync e2fsprogs
 sudo bash nexora/scripts/build-rootfs.sh
+echo "=== Verify NEXORA helper payload ==="
 sudo chroot "$ROOTFS" /usr/local/bin/node --version
-sudo chroot "$ROOTFS" test -x /usr/local/bin/nexora-omniroute-install.sh
-sudo chroot "$ROOTFS" test -x /usr/local/bin/nexora-omniroute-env.sh
-sudo chroot "$ROOTFS" test -x /usr/local/bin/nexora-persistence-test.sh
+sudo chroot "$ROOTFS" /usr/bin/ls -l /usr/local/bin/nexora-omniroute-install.sh /usr/local/bin/nexora-omniroute-env.sh /usr/local/bin/nexora-persistence-test.sh
+sudo chroot "$ROOTFS" /usr/bin/bash -lc 'set -e; test -f /usr/local/bin/nexora-omniroute-install.sh; test -f /usr/local/bin/nexora-omniroute-env.sh; test -f /usr/local/bin/nexora-persistence-test.sh; bash -n /usr/local/bin/nexora-omniroute-install.sh; bash -n /usr/local/bin/nexora-omniroute-env.sh; bash -n /usr/local/bin/nexora-persistence-test.sh'
 
 sudo truncate -s 4G "$PERSIST_IMG"
 sudo mkfs.ext4 -F -q "$PERSIST_IMG"
