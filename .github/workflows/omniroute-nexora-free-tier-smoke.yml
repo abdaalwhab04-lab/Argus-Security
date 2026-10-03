@@ -180,51 +180,46 @@ jobs:
       - name: Activate eligible Free Tier providers through OmniRoute
         run: |
           set -euo pipefail
-          sudo chroot nexora/rootfs /usr/bin/bash -lc '
-            TOKEN="$(/usr/bin/cat /tmp/omniroute-nexora-internal-token 2>/dev/null || true)"
-            if [ -z "$TOKEN" ]; then echo "No internal token file; onboarding endpoint will be probed with the service token from the running process."; fi
-          '
-          sudo chroot nexora/rootfs /usr/local/bin/node --input-type=module <<'NODE'
-import fs from "node:fs";
-const base = "http://127.0.0.1:20129";
-const token = fs.readFileSync("/tmp/omniroute-nexora-api-key","utf8").trim();
-const headers = {"Authorization": "Bearer " + token, "Content-Type": "application/json"};
-const get = await fetch(base + "/api/providers/free-onboarding", {headers});
-const body = await get.text();
-if (!get.ok) throw new Error("Free onboarding GET failed: " + get.status + " " + body.slice(0,500));
-const data = JSON.parse(body);
-const providers = Array.isArray(data.providers) ? data.providers : [];
-console.log("NEXORA_FREE_ONBOARDING_CANDIDATES=" + providers.length);
-if (!providers.length) { console.log("NEXORA_FREE_ONBOARDING_ALREADY_CONFIGURED_OR_EMPTY=1"); process.exit(0); }
-const ids = providers.map(p => typeof p === "string" ? p : p.id).filter(Boolean);
-const post = await fetch(base + "/api/providers/free-onboarding", {method:"POST", headers, body:JSON.stringify({providerIds:ids, confirmed:true})});
-const out = await post.text();
-if (!post.ok) throw new Error("Free onboarding POST failed: " + post.status + " " + out.slice(0,800));
-console.log("NEXORA_FREE_ONBOARDING_RESULT=" + out.slice(0,1000));
-NODE
-          echo "NEXORA_FREE_PROVIDER_ACTIVATION_STEP_OK=1"
-
-      - name: Activate eligible Free Tier providers through OmniRoute
-        run: |
-          set -euo pipefail
           sudo chroot nexora/rootfs /usr/local/bin/node --input-type=module <<'NODE'
           import fs from "node:fs";
           const base = "http://127.0.0.1:20129";
-          const cookie = fs.readFileSync("/tmp/omniroute-nexora-cookie","utf8");
-          const ids = JSON.parse(fs.readFileSync("/tmp/nexora-free-provider-ids.json","utf8"));
+          const cookie = fs.readFileSync("/tmp/omniroute-nexora-cookie", "utf8");
+          const ids = JSON.parse(fs.readFileSync("/tmp/nexora-free-provider-ids.json", "utf8"));
           const res = await fetch(base + "/api/providers/free-onboarding", {
             method: "POST",
-            headers: {"Content-Type":"application/json","Cookie":cookie},
-            body: JSON.stringify({providerIds:ids, confirmed:true}),
+            headers: {"Content-Type": "application/json", "Cookie": cookie},
+            body: JSON.stringify({providerIds: ids, confirmed: true}),
           });
           const body = await res.text();
           if (!res.ok) throw new Error("Free onboarding POST failed: " + res.status + " " + body.slice(0,800));
-          fs.writeFileSync("/tmp/omniroute-nexora-free-onboarding-result.json", body);
           const x = JSON.parse(body);
           if (!Array.isArray(x.results)) throw new Error("Free onboarding did not return per-provider results");
-          const created = x.results.filter(r => r.status === "created").map(r => r.providerId);
-          const skipped = x.results.filter(r => r.status === "skipped").map(r => r.providerId);
-          const failed = x.results.filter(r      - name: Test real Free Tier chat request through NEXORA OmniRoute
+          const failed = x.results.filter(r => r.status === "failed");
+          console.log("NEXORA_FREE_ONBOARDING_RESULT=" + body.slice(0,1500));
+          if (failed.length) throw new Error("Free provider activation failed: " + failed.map(r => r.providerId || "unknown").join(","));
+          fs.writeFileSync("/tmp/omniroute-nexora-free-onboarding-result.json", body);
+          NODE
+          echo "NEXORA_FREE_PROVIDER_ACTIVATION_OK=1"
+
+      - name: Load OmniRoute models after Free Tier activation
+        run: |
+          set -euo pipefail
+          sudo chroot nexora/rootfs /usr/bin/bash -lc '
+            API_KEY="$(/usr/bin/cat /tmp/omniroute-nexora-api-key)"
+            /usr/bin/curl -fsS --max-time 30               http://127.0.0.1:20129/v1/models               -H "Authorization: Bearer $API_KEY"               -o /tmp/omniroute-nexora-models.json
+          '
+          sudo chroot nexora/rootfs /usr/local/bin/node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const x = JSON.parse(fs.readFileSync("/tmp/omniroute-nexora-models.json", "utf8"));
+          const ids = (x.data || []).map(x => String(x.id));
+          console.log("NEXORA_OMNIROUTE_MODEL_COUNT=" + ids.length);
+          console.log("NEXORA_OMNIROUTE_MODELS=" + ids.slice(0,50).join(","));
+          const model = ids.find(id => id.toLowerCase().includes("aihorde") && !/image/i.test(id));
+          if (!model) throw new Error("No AI Horde chat model is exposed by NEXORA OmniRoute");
+          fs.writeFileSync("/tmp/nexora-aider-model", model + "\n");
+          console.log("NEXORA_AIHORDE_CHAT_MODEL=" + model);
+          NODE
+      - name: Test real Free Tier chat request through NEXORA OmniRoute
         run: |
           set -euo pipefail
           sudo chroot nexora/rootfs /usr/bin/bash -lc '
