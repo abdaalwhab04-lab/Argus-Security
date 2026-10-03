@@ -1,5 +1,6 @@
 name: OmniRoute NEXORA Free Tier Smoke Test
 # helper-diagnostics-bootstrap
+# helper-syntax-probe
 
 "on":
   push:
