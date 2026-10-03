@@ -12,7 +12,16 @@ sudo bash nexora/scripts/build-rootfs.sh
 echo "=== Verify NEXORA helper payload ==="
 sudo chroot "$ROOTFS" /usr/local/bin/node --version
 sudo chroot "$ROOTFS" /usr/bin/ls -l /usr/local/bin/nexora-omniroute-install.sh /usr/local/bin/nexora-omniroute-env.sh /usr/local/bin/nexora-persistence-test.sh
-sudo chroot "$ROOTFS" /usr/bin/bash -lc 'set -e; test -f /usr/local/bin/nexora-omniroute-install.sh; test -f /usr/local/bin/nexora-omniroute-env.sh; test -f /usr/local/bin/nexora-persistence-test.sh; bash -n /usr/local/bin/nexora-omniroute-install.sh; bash -n /usr/local/bin/nexora-omniroute-env.sh; bash -n /usr/local/bin/nexora-persistence-test.sh'
+sudo chroot "$ROOTFS" /usr/bin/bash -lc '
+set -u
+for helper in nexora-omniroute-install.sh nexora-omniroute-env.sh nexora-persistence-test.sh; do
+  path="/usr/local/bin/$helper"
+  echo "NEXORA_HELPER_CHECK=$helper"
+  test -f "$path" || { echo "NEXORA_HELPER_MISSING=$path"; exit 1; }
+  /bin/bash -n "$path" || { echo "NEXORA_HELPER_BASH_SYNTAX_FAILED=$path"; /bin/bash -n "$path"; exit 1; }
+  echo "NEXORA_HELPER_SYNTAX_OK=$path"
+done
+'
 
 sudo truncate -s 4G "$PERSIST_IMG"
 sudo mkfs.ext4 -F -q "$PERSIST_IMG"
