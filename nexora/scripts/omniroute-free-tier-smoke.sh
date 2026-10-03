@@ -95,3 +95,28 @@ python3 -c "import json; x=json.load(open('/tmp/omniroute-chat.json')); c=((x.ge
 echo NEXORA_OMNIROUTE_REAL_FREE_TIER_CHAT_OK=1'
 
 echo NEXORA_OMNIROUTE_FREE_TIER_SMOKE_OK=1
+
+
+sudo chroot "$ROOTFS" /usr/bin/bash -lc 'set -euo pipefail
+rm -rf /tmp/aider-nexora-free-tier-smoke
+mkdir -p /tmp/aider-nexora-free-tier-smoke
+cd /tmp/aider-nexora-free-tier-smoke
+git init -q
+git config user.email "ci@example.invalid"
+git config user.name "Aider CI"
+printf "# Aider smoke test\\n" > README.md
+git add README.md
+git commit -qm init
+API_KEY="$(cat /tmp/omniroute-api-key)"
+MODEL="$(cat /tmp/nexora-aider-model)"
+export OPENAI_API_BASE="http://127.0.0.1:20129/v1"
+export OPENAI_API_KEY="$API_KEY"
+if ! python3.11 -c "import sys,os; sys.path.insert(0, "/opt/nexora/aider-site"); import aider.main; sys.argv=["aider","--model","openai/"+os.environ["MODEL"],"--no-stream","--no-check-model-accepts-settings","--no-show-model-warnings","--yes","--no-auto-commits","--message","Do not modify files. Reply with the single word OK."]; raise SystemExit(aider.main.main())" >/tmp/aider-nexora-smoke.log 2>&1; then
+  echo AIDER_NEXORA_FREE_TIER_SMOKE_FAILED
+  sed -n "1,200p" /tmp/aider-nexora-smoke.log
+  exit 1
+fi
+grep -Eq "\\bOK\\b" /tmp/aider-nexora-smoke.log
+echo AIDER_NEXORA_OMNIROUTE_FREE_TIER_OK=1
+sed -n "1,100p" /tmp/aider-nexora-smoke.log'
+echo NEXORA_OMNIROUTE_FREE_TIER_SMOKE_OK=1

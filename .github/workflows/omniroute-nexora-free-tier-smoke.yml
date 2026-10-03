@@ -1,289 +1,32 @@
 name: OmniRoute NEXORA Free Tier Smoke Test
 
-on:
-  workflow_dispatch:
+"on":
   push:
     branches:
       - main
       - omniroute-v3.8.50-integration
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
-  token-smoke:
+  nexora-free-tier:
     runs-on: ubuntu-latest
-    timeout-minutes: 50
+    timeout-minutes: 60
     steps:
-      - name: Checkout OmniRoute branch
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+      - name: Checkout integration branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: omniroute-v3.8.50-integration
           lfs: true
 
-      - name: Setup Node 24
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
-        with:
-          node-version: 24.21.0
+      - name: Run NEXORA OmniRoute Free Tier and Aider smoke
+        run: bash nexora/scripts/omniroute-free-tier-smoke.sh
 
-      - name: Install OmniRoute dependencies
-        working-directory: omniroute
-        run: npm install --ignore-scripts
-
-      - name: Build OmniRoute
-        working-directory: omniroute
-        env:
-          NODE_ENV: test
-          JWT_SECRET: ci-only-jwt-secret-0123456789abcdef
-          API_KEY_SECRET: ci-only-api-key-secret-0123456789abcdef
-          INITIAL_PASSWORD: ci-only-password
-          STORAGE_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
-          DATA_DIR: ${{ runner.temp }}/omniroute-data
-          DISABLE_SQLITE_AUTO_BACKUP: "true"
-          OMNIROUTE_USE_TURBOPACK: "0"
-          OMNIROUTE_BUILD_MEMORY_MB: "8192"
-          NEXT_TELEMETRY_DISABLED: "1"
-        run: npm run build
-
-      - name: Start OmniRoute
-        working-directory: omniroute
-        env:
-          NODE_ENV: test
-          PORT: 20128
-          HOSTNAME: 127.0.0.1
-          JWT_SECRET: ci-only-jwt-secret-0123456789abcdef
-          API_KEY_SECRET: ci-only-api-key-secret-0123456789abcdef
-          INITIAL_PASSWORD: ci-only-password
-          STORAGE_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
-          DATA_DIR: ${{ runner.temp }}/omniroute-data
-          DISABLE_SQLITE_AUTO_BACKUP: "true"
-          REQUIRE_API_KEY: "true"
-          OMNIROUTE_INTERNAL_SERVICE_TOKEN: ci-only-jwt-secret-0123456789abcdef
-        run: |
-          nohup npm run start > "$RUNNER_TEMP/omniroute.log" 2>&1 &
-          for i in $(seq 1 90); do
-            if curl -fsS --max-time 3 http://127.0.0.1:20128/healthz >/dev/null 2>&1; then
-              echo "OmniRoute is ready"
-              exit 0
-            fi
-            sleep 2
-          done
-          tail -n 200 "$RUNNER_TEMP/omniroute.log" || true
-          exit 1
-
-      - name: Generate API key through OmniRoute API
-        run: |
-          set -euo pipefail
-          response=$(curl -fsS --max-time 30 \
-            -X POST http://127.0.0.1:20128/api/keys \
-            -H 'Content-Type: application/json' \
-            -H 'x-omniroute-internal-service-token: ci-only-jwt-secret-0123456789abcdef' \
-            --data '{"name":"github-ci-token","scopes":["chat"]}')
-          printf '%s' "$response" > "$RUNNER_TEMP/key-response.json"
-          node -e 'const x=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")); if(!x.key || !x.id) process.exit(1); if(!String(x.key).startsWith("sk-")) process.exit(2); console.log("API key generation: PASS"); console.log("Key id:", x.id);' "$RUNNER_TEMP/key-response.json"
-          node -e 'const x=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")); require("fs").writeFileSync(process.env.RUNNER_TEMP+"/omniroute-api-key",x.key)' "$RUNNER_TEMP/key-response.json"
-
-      - name: Validate generated key on /v1/models
-        run: |
-          set -euo pipefail
-          key=$(cat "$RUNNER_TEMP/omniroute-api-key")
-          status=$(curl -sS -o "$RUNNER_TEMP/models.json" -w '%{http_code}' --max-time 30 \
-            http://127.0.0.1:20128/v1/models \
-            -H "Authorization: Bearer $key")
-          echo "Valid key /v1/models status: $status"
-          test "$status" = 200
-          node -e 'const x=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")); if(!Array.isArray(x.data)) process.exit(1); console.log("Bearer token validation: PASS"); console.log("Models returned:",x.data.length)' "$RUNNER_TEMP/models.json"
-
-      - name: Confirm invalid key is rejected
-        run: |
-          status=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 \
-            http://127.0.0.1:20128/v1/models \
-            -H 'Authorization: Bearer sk-invalid-token-for-smoke-test')
-          echo "Invalid key status: $status"
-          test "$status" = 401 || test "$status" = 403
-          echo "Invalid key rejection: PASS"
-
-      - name: Prepare NEXORA Debian from repository archive
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y debootstrap rsync e2fsprogs
-          sudo bash nexora/scripts/build-rootfs.sh
-          sudo chroot nexora/rootfs test -x /usr/local/bin/node
-          sudo chroot nexora/rootfs test -x /usr/local/bin/nexora-omniroute-install.sh
-          sudo chroot nexora/rootfs /usr/local/bin/node --version
-          echo "NEXORA_DEBIAN_ROOTFS_READY=1"
-
-      - name: Mount NEXORA persistent workspace and seed repository source
-        run: |
-          set -euo pipefail
-          sudo truncate -s 4G nexora/persistent-workspace.ext4
-          sudo mkfs.ext4 -F -q nexora/persistent-workspace.ext4
-          sudo mkdir -p nexora/rootfs/persist
-          sudo mount -o loop nexora/persistent-workspace.ext4 nexora/rootfs/persist
-          sudo chroot nexora/rootfs /usr/local/bin/nexora-persistence-test.sh
-          sudo chroot nexora/rootfs test -f /persist/debian-workspace/source/omniroute/package.json
-          echo "NEXORA_PERSISTENT_WORKSPACE_MOUNTED=1"
-          echo "NEXORA_PERSISTENT_SOURCE_SEEDED=1"
-
-      - name: Install and start OmniRoute inside NEXORA persistent Debian
-        run: |
-          set -euo pipefail
-          sudo chroot nexora/rootfs /usr/local/bin/nexora-omniroute-install.sh
-          sudo chroot nexora/rootfs /usr/local/bin/nexora-omniroute-env.sh
-          sudo chroot nexora/rootfs test -x /persist/debian-workspace/software/omniroute/node_modules/.bin/omniroute
-          sudo chroot nexora/rootfs test -f /persist/debian-workspace/data/omniroute/server.env
-
-          sudo chroot nexora/rootfs /usr/bin/bash -lc '
-            set -euo pipefail
-            . /persist/debian-workspace/data/omniroute/server.env
-            export PORT="20129"
-            export HOSTNAME="127.0.0.1"
-            export NODE_ENV="test"
-            export NEXT_TELEMETRY_DISABLED="1"
-            export OMNIROUTE_USE_TURBOPACK="0"
-            nohup /persist/debian-workspace/software/omniroute/node_modules/.bin/omniroute serve --no-open --no-tray >/tmp/omniroute-nexora.log 2>&1 &
-            for i in $(seq 1 120); do
-              if /usr/bin/curl -fsS --max-time 2 http://127.0.0.1:20129/healthz >/dev/null 2>&1 || /usr/bin/curl -fsS --max-time 2 http://127.0.0.1:20129/api/health >/dev/null 2>&1; then
-                echo "OMNIROUTE_NEXORA_DEBIAN_HEALTH_OK"
-                break
-              fi
-              if [ "$i" -eq 120 ]; then /bin/cat /tmp/omniroute-nexora.log || true; exit 1; fi
-              sleep 2
-            done
-            /usr/bin/curl -fsS --max-time 30 -c /tmp/omniroute-nexora-cookie -b /tmp/omniroute-nexora-cookie               -X POST http://127.0.0.1:20129/api/auth/login               -H "Content-Type: application/json"               --data "$(INITIAL_PASSWORD="$INITIAL_PASSWORD" /usr/bin/python3 -c '"'"'import json,os; print(json.dumps({"password":os.environ["INITIAL_PASSWORD"]}))'"'"')"               -o /tmp/omniroute-nexora-login.json
-            /usr/bin/python3 -c 'import json; x=json.load(open("/tmp/omniroute-nexora-login.json")); assert x.get("success") is True, x'
-            test -s /tmp/omniroute-nexora-cookie
-            echo "NEXORA_OMNIROUTE_MANAGEMENT_LOGIN_OK=1"
-          '
-
-          sudo chroot nexora/rootfs /usr/bin/bash -lc '
-            set -euo pipefail
-            /usr/bin/curl -fsS --max-time 30 -b /tmp/omniroute-nexora-cookie               -X POST http://127.0.0.1:20129/api/keys               -H "Content-Type: application/json"               --data '"'"'{"name":"nexora-free-tier-ci","scopes":["chat"]}'"'"'               -o /tmp/omniroute-nexora-key.json
-            /usr/bin/python3 -c '"'"'import json; x=json.load(open("/tmp/omniroute-nexora-key.json")); k=x.get("key",""); assert x.get("id") and k.startswith("sk-"); open("/tmp/omniroute-nexora-api-key","w").write(k)'"'"'
-            chmod 600 /tmp/omniroute-nexora-api-key
-          '
-          echo "NEXORA_OMNIROUTE_PERSISTENT_INSTALL_OK=1"
-
-      - name: Discover keyless Free Tier providers through OmniRoute
-        run: |
-          set -euo pipefail
-          sudo chroot nexora/rootfs /usr/bin/curl -fsS --max-time 30             -b /tmp/omniroute-nexora-cookie             http://127.0.0.1:20129/api/providers/free-onboarding             -o /tmp/omniroute-nexora-free-onboarding.json
-          sudo chroot nexora/rootfs /usr/local/bin/node --input-type=module <<'NODE'
-          import fs from "node:fs";
-          const x = JSON.parse(fs.readFileSync("/tmp/omniroute-nexora-free-onboarding.json","utf8"));
-          const providers = Array.isArray(x.providers) ? x.providers : [];
-          const ids = providers.map(p => typeof p === "string" ? p : p.id).filter(Boolean);
-          console.log("NEXORA_FREE_ONBOARDING_CANDIDATES=" + ids.length);
-          console.log("NEXORA_FREE_ONBOARDING_IDS=" + ids.join(","));
-          if (!ids.includes("aihorde")) throw new Error("AI Horde is not present in OmniRoute keyless Free Tier catalog");
-          fs.writeFileSync("/tmp/nexora-free-provider-ids.json", JSON.stringify(ids));
-          NODE
-
-      - name: Activate eligible Free Tier providers through OmniRoute
-        run: |
-          set -euo pipefail
-          sudo chroot nexora/rootfs /usr/local/bin/node --input-type=module <<'NODE'
-          import fs from "node:fs";
-          const base = "http://127.0.0.1:20129";
-          const cookie = fs.readFileSync("/tmp/omniroute-nexora-cookie", "utf8");
-          const ids = JSON.parse(fs.readFileSync("/tmp/nexora-free-provider-ids.json", "utf8"));
-          const res = await fetch(base + "/api/providers/free-onboarding", {
-            method: "POST",
-            headers: {"Content-Type": "application/json", "Cookie": cookie},
-            body: JSON.stringify({providerIds: ids, confirmed: true}),
-          });
-          const body = await res.text();
-          if (!res.ok) throw new Error("Free onboarding POST failed: " + res.status + " " + body.slice(0,800));
-          const x = JSON.parse(body);
-          if (!Array.isArray(x.results)) throw new Error("Free onboarding did not return per-provider results");
-          const failed = x.results.filter(r => r.status === "failed");
-          console.log("NEXORA_FREE_ONBOARDING_RESULT=" + body.slice(0,1500));
-          if (failed.length) throw new Error("Free provider activation failed: " + failed.map(r => r.providerId || "unknown").join(","));
-          fs.writeFileSync("/tmp/omniroute-nexora-free-onboarding-result.json", body);
-          NODE
-          echo "NEXORA_FREE_PROVIDER_ACTIVATION_OK=1"
-
-      - name: Load OmniRoute models after Free Tier activation
-        run: |
-          set -euo pipefail
-          sudo chroot nexora/rootfs /usr/bin/bash -lc '
-            API_KEY="$(/usr/bin/cat /tmp/omniroute-nexora-api-key)"
-            /usr/bin/curl -fsS --max-time 30               http://127.0.0.1:20129/v1/models               -H "Authorization: Bearer $API_KEY"               -o /tmp/omniroute-nexora-models.json
-          '
-          sudo chroot nexora/rootfs /usr/local/bin/node --input-type=module <<'NODE'
-          import fs from "node:fs";
-          const x = JSON.parse(fs.readFileSync("/tmp/omniroute-nexora-models.json", "utf8"));
-          const ids = (x.data || []).map(x => String(x.id));
-          console.log("NEXORA_OMNIROUTE_MODEL_COUNT=" + ids.length);
-          console.log("NEXORA_OMNIROUTE_MODELS=" + ids.slice(0,50).join(","));
-          const model = ids.find(id => id.toLowerCase().includes("aihorde") && !/image/i.test(id));
-          if (!model) throw new Error("No AI Horde chat model is exposed by NEXORA OmniRoute");
-          fs.writeFileSync("/tmp/nexora-aider-model", model + "\n");
-          console.log("NEXORA_AIHORDE_CHAT_MODEL=" + model);
-          NODE
-      - name: Test real Free Tier chat request through NEXORA OmniRoute
-        run: |
-          set -euo pipefail
-          sudo chroot nexora/rootfs /usr/bin/bash -lc '
-            set -euo pipefail
-            API_KEY="$(/usr/bin/cat /tmp/omniroute-nexora-api-key)"
-            MODEL="$(/usr/bin/cat /tmp/nexora-aider-model)"
-            /usr/bin/curl -fsS --max-time 180 -X POST http://127.0.0.1:20129/v1/chat/completions               -H "Authorization: Bearer $API_KEY"               -H "Content-Type: application/json"               --data "$(MODEL="$MODEL" /usr/bin/python3 -c '"'"'import json,os; print(json.dumps({"model":os.environ["MODEL"].strip(),"messages":[{"role":"user","content":"Reply with the single word OK."}],"stream":False}))'"'"')"               -o /tmp/omniroute-nexora-free-chat.json
-          '
-          sudo chroot nexora/rootfs /usr/bin/python3 - <<'PY'
-import json
-x=json.load(open("/tmp/omniroute-nexora-free-chat.json"))
-choices=x.get("choices") or []
-if not choices:
-    raise SystemExit("No choices returned by NEXORA OmniRoute")
-content=((choices[0].get("message") or {}).get("content") or "").strip()
-print("NEXORA_OMNIROUTE_FREE_CHAT_RESPONSE=" + content[:500])
-if "OK" not in content.upper():
-    raise SystemExit("Free Tier chat request returned without OK")
-print("NEXORA_OMNIROUTE_REAL_FREE_TIER_CHAT_OK=1")
-PY
-
-      - name: Verify Aider can use NEXORA OmniRoute Free Tier
-        run: |
-          set -euo pipefail
-          sudo chroot nexora/rootfs /usr/local/bin/node --input-type=module <<'NODE'
-import fs from "node:fs";
-const x = JSON.parse(fs.readFileSync("/tmp/omniroute-nexora-models.json","utf8"));
-const ids = (x.data || []).map(x => String(x.id));
-const model = ids.find(id => id.toLowerCase().includes("aihorde") && !/image/i.test(id));
-if (!model) throw new Error("No AI Horde chat model is exposed by NEXORA OmniRoute");
-fs.writeFileSync("/tmp/nexora-aider-model", model + "\n");
-console.log("AIDER_NEXORA_OMNIROUTE_MODEL=" + model);
-NODE
-          sudo chroot nexora/rootfs /usr/bin/bash -lc '
-            set -euo pipefail
-            rm -rf /tmp/aider-nexora-free-tier-smoke
-            mkdir -p /tmp/aider-nexora-free-tier-smoke
-            cd /tmp/aider-nexora-free-tier-smoke
-            git init -q
-            git config user.email "ci@example.invalid"
-            git config user.name "Aider CI"
-            printf "# Aider smoke test\n" > README.md
-            git add README.md
-            git commit -qm init
-            API_KEY="$(/usr/bin/cat /tmp/omniroute-nexora-api-key)"
-            MODEL="$(/usr/bin/cat /tmp/nexora-aider-model)"
-            export OPENAI_API_BASE="http://127.0.0.1:20129/v1"
-            export OPENAI_API_KEY="$API_KEY"
-            if ! /usr/bin/python3.11 -c "import sys,os; sys.path.insert(0, '/opt/nexora/aider-site'); import aider.main; sys.argv=['aider','--model','openai/'+os.environ['MODEL'],'--no-stream','--no-check-model-accepts-settings','--no-show-model-warnings','--yes','--no-auto-commits','--message','Do not modify files. Reply with the single word OK.']; raise SystemExit(aider.main.main())" >/tmp/aider-nexora-smoke.log 2>&1; then
-              echo "AIDER_NEXORA_FREE_TIER_SMOKE_FAILED"
-              /usr/bin/sed -n '1,200p' /tmp/aider-nexora-smoke.log
-              exit 1
-            fi
-            grep -Eq "\\bOK\\b" /tmp/aider-nexora-smoke.log
-            echo "AIDER_NEXORA_OMNIROUTE_FREE_TIER_OK=1"
-            /usr/bin/sed -n '1,100p' /tmp/aider-nexora-smoke.log
-          '
-
-      - name: Show sanitized logs on failure
+      - name: Show diagnostics on failure
         if: failure()
         run: |
-          echo "=== Host OmniRoute log ==="
-          tail -n 160 "$RUNNER_TEMP/omniroute.log" || true
-          echo "=== NEXORA OmniRoute log ==="
           sudo chroot nexora/rootfs /bin/cat /tmp/omniroute-nexora.log 2>/dev/null || true
-          echo "=== Aider log ==="
+          sudo chroot nexora/rootfs /bin/cat /tmp/omniroute-login.json 2>/dev/null || true
           sudo chroot nexora/rootfs /bin/cat /tmp/aider-nexora-smoke.log 2>/dev/null || true
