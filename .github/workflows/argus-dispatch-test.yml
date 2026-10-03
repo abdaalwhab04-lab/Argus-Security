@@ -1,0 +1,11 @@
+name: Argus Dispatch Test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch test
+        run: echo "WORKFLOW_DISPATCH_OK"
