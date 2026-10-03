@@ -39,27 +39,45 @@ jobs:
           echo "=== rootfs bin inventory ==="
           ls -la nexora/rootfs/usr/local/bin || true
           echo "=== requested files ==="
-          for f in             nexora/rootfs/usr/local/bin/node             nexora/rootfs/usr/local/bin/nexora-omniroute-install.sh             nexora/rootfs/usr/local/bin/nexora-omniroute-env.sh             nexora/rootfs/usr/local/bin/nexora-persistence-test.sh; do
+          for f in \
+            nexora/rootfs/usr/local/bin/node \
+            nexora/rootfs/usr/local/bin/nexora-omniroute-install.sh \
+            nexora/rootfs/usr/local/bin/nexora-omniroute-env.sh \
+            nexora/rootfs/usr/local/bin/nexora-persistence-test.sh; do
             if [ -e "$f" ]; then
               stat "$f"
             else
               echo "MISSING: $f"
             fi
           done
+          echo "=== node symlink target ==="
+          readlink nexora/rootfs/usr/local/bin/node || true
+          node_target="$(readlink nexora/rootfs/usr/local/bin/node || true)"
+          if [ -n "$node_target" ]; then
+            if [ -e "nexora/rootfs$node_target" ]; then
+              echo "NODE_TARGET_EXISTS_IN_ROOTFS=YES"
+              stat "nexora/rootfs$node_target"
+            else
+              echo "NODE_TARGET_EXISTS_IN_ROOTFS=NO"
+            fi
+          fi
           echo "=== installer source in build script ==="
           grep -n -A8 -B3 'nexora-omniroute-install.sh' nexora/scripts/build-rootfs.sh || true
 
       - name: Verify NEXORA rootfs
         run: |
           set -euo pipefail
-          test -x nexora/rootfs/usr/local/bin/node
-          test -x nexora/rootfs/usr/local/bin/nexora-omniroute-install.sh
+          sudo chroot nexora/rootfs test -x /usr/local/bin/node
+          sudo chroot nexora/rootfs test -x /usr/local/bin/nexora-omniroute-install.sh
+          sudo chroot nexora/rootfs test -x /usr/local/bin/nexora-omniroute-env.sh
+          sudo chroot nexora/rootfs test -x /usr/local/bin/nexora-persistence-test.sh
+          sudo chroot nexora/rootfs /usr/local/bin/node --version
           echo "NEXORA_ROOTFS_READY"
 
       - name: Verify Aider runtime payload
         run: |
           set -euo pipefail
-          test -d nexora/rootfs/opt/nexora/aider-site || true
+          test -d nexora/rootfs/opt/nexora/aider-site
           test -f nexora/config/aider-python-packages.txt
           echo "AIDER_PAYLOAD_CHECKED"
 
