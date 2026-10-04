@@ -421,9 +421,20 @@ if [ ! -x "${RUNTIME_ROOT}/node_modules/.bin/omniroute" ] || [ ! -f "${MARKER}" 
   echo "NEXORA_OMNIROUTE_INSTALL_START"
   rm -rf "${RUNTIME_ROOT}/node_modules" "${RUNTIME_ROOT}/package.json" "${RUNTIME_ROOT}/package-lock.json"
   rm -rf "${SOURCE_ROOT}/node_modules"
-  npm install --prefix "${RUNTIME_ROOT}" --omit=dev --ignore-scripts "${SOURCE_ROOT}"
-  test -f "${RUNTIME_ROOT}/node_modules/tsx/package.json"
+  # Install from the source manifest so npm resolves the full dependency tree,
+  # including runtime dependencies such as tsx. The temporary node_modules tree
+  # is moved into the persistent software area immediately after installation.
+  cd "${SOURCE_ROOT}"
+  npm install --omit=dev --ignore-scripts --workspaces=false
+  rm -rf "${RUNTIME_ROOT}/node_modules"
+  mv "${SOURCE_ROOT}/node_modules" "${RUNTIME_ROOT}/node_modules"
+  rm -rf "${RUNTIME_ROOT}/package.json" "${RUNTIME_ROOT}/package-lock.json"
+  cp "${SOURCE_ROOT}/package.json" "${RUNTIME_ROOT}/package.json"
+  if [ -f "${SOURCE_ROOT}/package-lock.json" ]; then
+    cp "${SOURCE_ROOT}/package-lock.json" "${RUNTIME_ROOT}/package-lock.json"
+  fi
   ln -s "${RUNTIME_ROOT}/node_modules" "${SOURCE_ROOT}/node_modules"
+  test -f "${RUNTIME_ROOT}/node_modules/tsx/package.json"
   printf '%s\n' "${SOURCE_SHA}" > "${MARKER}"
   echo "NEXORA_OMNIROUTE_INSTALL_DONE"
 else
