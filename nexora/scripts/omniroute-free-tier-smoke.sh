@@ -39,7 +39,14 @@ fi
 echo "NEXORA_PERSIST_MOUNT_OK"
 sudo mountpoint "$ROOTFS/persist"
 sudo df -PT "$ROOTFS/persist"
-trap 'sudo umount "$ROOTFS/persist" 2>/dev/null || true' EXIT
+# Next.js/Node process.memoryUsage() requires /proc/self/stat. The NEXORA
+# build is performed inside a chroot, so mount proc explicitly for the build
+# and unmount it during cleanup. This keeps the fix inside NEXORA/GitHub CI
+# and does not require Termux or Android host changes.
+echo "NEXORA_PROC_MOUNT_ATTEMPT"
+sudo mount -t proc proc "$ROOTFS/proc"
+echo "NEXORA_PROC_MOUNT_OK"
+trap 'sudo umount "$ROOTFS/proc" 2>/dev/null || true; sudo umount "$ROOTFS/persist" 2>/dev/null || true' EXIT
 
 sudo chroot "$ROOTFS" /usr/local/bin/nexora-persistence-test.sh
 sudo chroot "$ROOTFS" test -f /persist/debian-workspace/source/omniroute/package.json
