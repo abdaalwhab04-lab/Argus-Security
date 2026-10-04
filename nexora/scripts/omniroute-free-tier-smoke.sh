@@ -23,10 +23,22 @@ for helper in nexora-omniroute-install.sh nexora-omniroute-env.sh nexora-persist
 done
 '
 
+echo "=== Prepare NEXORA persistent workspace image ==="
 sudo truncate -s 4G "$PERSIST_IMG"
+ls -lh "$PERSIST_IMG"
 sudo mkfs.ext4 -F -q "$PERSIST_IMG"
 sudo mkdir -p "$ROOTFS/persist"
-sudo mount -o loop "$PERSIST_IMG" "$ROOTFS/persist"
+echo "NEXORA_PERSIST_MOUNT_ATTEMPT"
+if ! sudo mount -o loop "$PERSIST_IMG" "$ROOTFS/persist"; then
+  echo "NEXORA_PERSIST_MOUNT_FAILED"
+  sudo losetup -a || true
+  mount | tail -n 30 || true
+  sudo dmesg | tail -n 30 || true
+  exit 1
+fi
+echo "NEXORA_PERSIST_MOUNT_OK"
+sudo mountpoint "$ROOTFS/persist"
+sudo df -PT "$ROOTFS/persist"
 trap 'sudo umount "$ROOTFS/persist" 2>/dev/null || true' EXIT
 
 sudo chroot "$ROOTFS" /usr/local/bin/nexora-persistence-test.sh
