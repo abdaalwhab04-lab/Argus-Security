@@ -411,19 +411,34 @@ test -f "${SOURCE_ROOT}/package.json"
 mkdir -p "${RUNTIME_ROOT}" "${DATA_ROOT}"
 SOURCE_SHA="$(sha256sum "${SOURCE_ROOT}/package.json" | awk '{print $1}')"
 
-if [ ! -x "${RUNTIME_ROOT}/node_modules/.bin/omniroute" ] || [ ! -f "${MARKER}" ] || [ "$(cat "${MARKER}" 2>/dev/null || true)" != "${SOURCE_SHA}" ]; then
-  echo "NEXORA_OMNIROUTE_INSTALL_START" 
+# OmniRoute's CLI entrypoint lives in the persistent source tree, so its
+# runtime dependency tree must be resolvable from SOURCE_ROOT/node_modules.
+# Keep the actual dependency tree under the persistent software area and
+# expose it to the source tree through a symlink. This prevents dependencies
+# from being written into the repository source while preserving Node ESM
+# package resolution from bin/omniroute.mjs.
+if [ ! -x "${RUNTIME_ROOT}/node_modules/.bin/omniroute" ] || [ ! -f "${MARKER}" ] || [ "$(cat "${MARKER}" 2>/dev/null || true)" != "${SOURCE_SHA}" ] || [ ! -f "${RUNTIME_ROOT}/node_modules/tsx/package.json" ]; then
+  echo "NEXORA_OMNIROUTE_INSTALL_START"
   rm -rf "${RUNTIME_ROOT}/node_modules" "${RUNTIME_ROOT}/package.json" "${RUNTIME_ROOT}/package-lock.json"
-  npm install --prefix "${SOURCE_ROOT}" --omit=dev --ignore-scripts
+  rm -rf "${SOURCE_ROOT}/node_modules"
   npm install --prefix "${RUNTIME_ROOT}" --omit=dev --ignore-scripts "${SOURCE_ROOT}"
+  test -f "${RUNTIME_ROOT}/node_modules/tsx/package.json"
+  ln -s "${RUNTIME_ROOT}/node_modules" "${SOURCE_ROOT}/node_modules"
   printf '%s\n' "${SOURCE_SHA}" > "${MARKER}"
-  echo "NEXORA_OMNIROUTE_INSTALL_DONE" 
+  echo "NEXORA_OMNIROUTE_INSTALL_DONE"
 else
-  echo "NEXORA_OMNIROUTE_INSTALL_REUSED" 
+  if [ -L "${SOURCE_ROOT}/node_modules" ] && [ "$(readlink "${SOURCE_ROOT}/node_modules")" = "${RUNTIME_ROOT}/node_modules" ]; then
+    :
+  else
+    rm -rf "${SOURCE_ROOT}/node_modules"
+    ln -s "${RUNTIME_ROOT}/node_modules" "${SOURCE_ROOT}/node_modules"
+  fi
+  echo "NEXORA_OMNIROUTE_INSTALL_REUSED"
 fi
 
 test -x "${RUNTIME_ROOT}/node_modules/.bin/omniroute"
-"${RUNTIME_ROOT}/node_modules/.bin/omniroute" --version  || true
+test -f "${RUNTIME_ROOT}/node_modules/tsx/package.json"
+"${RUNTIME_ROOT}/node_modules/.bin/omniroute" --version
 OMNIINSTALL
 chmod +x "${ROOTFS_DIR}/usr/local/bin/nexora-omniroute-install.sh"
 
