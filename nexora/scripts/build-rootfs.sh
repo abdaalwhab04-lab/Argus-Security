@@ -414,7 +414,7 @@ SOURCE_SHA="$(sha256sum "${SOURCE_ROOT}/package.json" | awk '{print $1}')"
 if [ ! -x "${RUNTIME_ROOT}/node_modules/.bin/omniroute" ] || [ ! -f "${MARKER}" ] || [ "$(cat "${MARKER}" 2>/dev/null || true)" != "${SOURCE_SHA}" ]; then
   echo "NEXORA_OMNIROUTE_INSTALL_START" 
   rm -rf "${RUNTIME_ROOT}/node_modules" "${RUNTIME_ROOT}/package.json" "${RUNTIME_ROOT}/package-lock.json"
-  npm install --prefix "${RUNTIME_ROOT}" --omit=dev "${SOURCE_ROOT}"
+  npm install --prefix "${RUNTIME_ROOT}" --omit=dev --ignore-scripts "${SOURCE_ROOT}"
   printf '%s\n' "${SOURCE_SHA}" > "${MARKER}"
   echo "NEXORA_OMNIROUTE_INSTALL_DONE" 
 else
