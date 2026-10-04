@@ -435,6 +435,14 @@ if [ ! -x "${RUNTIME_ROOT}/node_modules/.bin/omniroute" ] || [ ! -f "${MARKER}" 
   fi
   ln -s "${RUNTIME_ROOT}/node_modules" "${SOURCE_ROOT}/node_modules"
   test -f "${RUNTIME_ROOT}/node_modules/tsx/package.json"
+  # npm does not create a self-bin entry when installing the current project
+  # from its own package.json. Provide the persistent CLI launcher explicitly.
+  mkdir -p "${RUNTIME_ROOT}/node_modules/.bin"
+  cat > "${RUNTIME_ROOT}/node_modules/.bin/omniroute" <<'OMNILAUNCHER'
+#!/bin/sh
+exec /usr/local/bin/node /persist/debian-workspace/source/omniroute/bin/omniroute.mjs "$@"
+OMNILAUNCHER
+  chmod 0755 "${RUNTIME_ROOT}/node_modules/.bin/omniroute"
   printf '%s\n' "${SOURCE_SHA}" > "${MARKER}"
   echo "NEXORA_OMNIROUTE_INSTALL_DONE"
 else
