@@ -23,8 +23,8 @@ for helper in nexora-omniroute-install.sh nexora-omniroute-env.sh nexora-persist
 done
 '
 
-echo "=== Prepare NEXORA persistent workspace image ==="
-sudo truncate -s 4G "$PERSIST_IMG"
+echo "=== Prepare NEXORA persistent workspace image (8G for OmniRoute release build) ==="
+sudo truncate -s 8G "$PERSIST_IMG"
 ls -lh "$PERSIST_IMG"
 sudo mkfs.ext4 -F -q "$PERSIST_IMG"
 sudo mkdir -p "$ROOTFS/persist"
