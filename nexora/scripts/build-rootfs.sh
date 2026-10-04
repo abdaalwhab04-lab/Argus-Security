@@ -372,7 +372,7 @@ PERSIST_ROOT="/persist/debian-workspace"
 SOURCE_ROOT="/opt/nexora/debian-workspace/source"
 MARKER="/persist/nexora-persistence-marker"
 mkdir -p "${PERSIST_ROOT}/software" "${PERSIST_ROOT}/data" "${PERSIST_ROOT}/source"
-echo "NEXORA_PERSISTENCE_SEED_START" > /dev/console
+echo "NEXORA_PERSISTENCE_SEED_START" 
 for project in autogpt omniroute; do
   if [ -d "${SOURCE_ROOT}/${project}" ]; then
     mkdir -p "${PERSIST_ROOT}/source/${project}"
@@ -380,7 +380,7 @@ for project in autogpt omniroute; do
     touch "${PERSIST_ROOT}/source/${project}/.nexora-seeded"
   fi
 done
-echo "NEXORA_PERSISTENCE_SEED_DONE" > /dev/console
+echo "NEXORA_PERSISTENCE_SEED_DONE" 
 ln -sfn "${PERSIST_ROOT}/source" /opt/nexora/workspace
 ln -sfn "${PERSIST_ROOT}/software" /opt/nexora/software
 ln -sfn "${PERSIST_ROOT}/data" /opt/nexora/data
@@ -388,14 +388,14 @@ PERSIST_MOUNT_ROOT="/persist"
 WORKSPACE_FS="$(df -PT "${PERSIST_MOUNT_ROOT}" 2>/dev/null | awk 'NR==2 {print $2}')"
 WORKSPACE_SOURCE="$(df -P "${PERSIST_MOUNT_ROOT}" 2>/dev/null | awk 'NR==2 {print $1}')"
 if ! mountpoint -q "${PERSIST_MOUNT_ROOT}" 2>/dev/null || [ "${WORKSPACE_FS}" != "ext4" ]; then
-  echo "NEXORA_PERSISTENT_WORKSPACE_FAILED: mount=${PERSIST_MOUNT_ROOT} source=${WORKSPACE_SOURCE} fstype=${WORKSPACE_FS}" > /dev/console
+  echo "NEXORA_PERSISTENT_WORKSPACE_FAILED: mount=${PERSIST_MOUNT_ROOT} source=${WORKSPACE_SOURCE} fstype=${WORKSPACE_FS}" 
   exit 1
 fi
-echo "NEXORA_PERSISTENT_WORKSPACE_SOURCE=${WORKSPACE_SOURCE}" > /dev/console
-echo "NEXORA_PERSISTENT_WORKSPACE_FSTYPE=${WORKSPACE_FS}" > /dev/console
-echo "NEXORA_DEBIAN_PERSISTENT_WORKSPACE_OK" > /dev/console
-if [ -f "${MARKER}" ]; then sync; echo "NEXORA_PERSISTENCE_RESTORED" > /dev/console; else printf '%s\n' "NEXORA_PERSISTENCE_OK" > "${MARKER}"; sync; echo "NEXORA_PERSISTENCE_SYNCED" > /dev/console; echo "NEXORA_PERSISTENCE_INITIALIZED" > /dev/console; fi
-echo "NEXORA_PERSISTENCE_TEST_DONE" > /dev/console
+echo "NEXORA_PERSISTENT_WORKSPACE_SOURCE=${WORKSPACE_SOURCE}" 
+echo "NEXORA_PERSISTENT_WORKSPACE_FSTYPE=${WORKSPACE_FS}" 
+echo "NEXORA_DEBIAN_PERSISTENT_WORKSPACE_OK" 
+if [ -f "${MARKER}" ]; then sync; echo "NEXORA_PERSISTENCE_RESTORED" ; else printf '%s\n' "NEXORA_PERSISTENCE_OK" > "${MARKER}"; sync; echo "NEXORA_PERSISTENCE_SYNCED" ; echo "NEXORA_PERSISTENCE_INITIALIZED" ; fi
+echo "NEXORA_PERSISTENCE_TEST_DONE" 
 PERSISTTEST
 chmod +x "${ROOTFS_DIR}/usr/local/bin/nexora-persistence-test.sh"
 
@@ -413,17 +413,17 @@ mkdir -p "${RUNTIME_ROOT}" "${DATA_ROOT}"
 SOURCE_SHA="$(sha256sum "${SOURCE_ROOT}/package.json" | awk '{print $1}')"
 
 if [ ! -x "${RUNTIME_ROOT}/node_modules/.bin/omniroute" ] || [ ! -f "${MARKER}" ] || [ "$(cat "${MARKER}" 2>/dev/null || true)" != "${SOURCE_SHA}" ]; then
-  echo "NEXORA_OMNIROUTE_INSTALL_START" > /dev/console
+  echo "NEXORA_OMNIROUTE_INSTALL_START" 
   rm -rf "${RUNTIME_ROOT}/node_modules" "${RUNTIME_ROOT}/package.json" "${RUNTIME_ROOT}/package-lock.json"
   npm install --prefix "${RUNTIME_ROOT}" --omit=dev "${SOURCE_ROOT}"
   printf '%s\n' "${SOURCE_SHA}" > "${MARKER}"
-  echo "NEXORA_OMNIROUTE_INSTALL_DONE" > /dev/console
+  echo "NEXORA_OMNIROUTE_INSTALL_DONE" 
 else
-  echo "NEXORA_OMNIROUTE_INSTALL_REUSED" > /dev/console
+  echo "NEXORA_OMNIROUTE_INSTALL_REUSED" 
 fi
 
 test -x "${RUNTIME_ROOT}/node_modules/.bin/omniroute"
-"${RUNTIME_ROOT}/node_modules/.bin/omniroute" --version > /dev/console 2>&1 || true
+"${RUNTIME_ROOT}/node_modules/.bin/omniroute" --version  || true
 OMNIINSTALL
 chmod +x "${ROOTFS_DIR}/usr/local/bin/nexora-omniroute-install.sh"
 
@@ -447,7 +447,7 @@ if [ ! -f "${ENV_FILE}" ]; then
     echo "OMNIROUTE_DATA_DIR=${DATA_ROOT}"
     echo "PORT=20128"
   } > "${ENV_FILE}"
-  echo "NEXORA_OMNIROUTE_ENV_INITIALIZED" > /dev/console
+  echo "NEXORA_OMNIROUTE_ENV_INITIALIZED" 
 fi
 chmod 600 "${ENV_FILE}"
 OMNIENV
