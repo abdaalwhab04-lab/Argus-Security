@@ -421,11 +421,14 @@ if [ ! -x "${RUNTIME_ROOT}/node_modules/.bin/omniroute" ] || [ ! -f "${MARKER}" 
   echo "NEXORA_OMNIROUTE_INSTALL_START"
   rm -rf "${RUNTIME_ROOT}/node_modules" "${RUNTIME_ROOT}/package.json" "${RUNTIME_ROOT}/package-lock.json"
   rm -rf "${SOURCE_ROOT}/node_modules"
-  # Install from the source manifest so npm resolves the full dependency tree,
-  # including runtime dependencies such as tsx. The temporary node_modules tree
-  # is moved into the persistent software area immediately after installation.
+  # Build the release from the repository source before pruning development
+  # dependencies. The CLI serve command intentionally boots the generated
+  # dist/server.js (with app/server.js as a legacy fallback); a source-only
+  # npm install cannot provide that runtime artifact.
   cd "${SOURCE_ROOT}"
-  npm install --omit=dev --ignore-scripts --workspaces=false
+  npm install --include=dev --ignore-scripts --workspaces=false
+  npm run build:release
+  npm prune --omit=dev --ignore-scripts
   rm -rf "${RUNTIME_ROOT}/node_modules"
   mv "${SOURCE_ROOT}/node_modules" "${RUNTIME_ROOT}/node_modules"
   rm -rf "${RUNTIME_ROOT}/package.json" "${RUNTIME_ROOT}/package-lock.json"
@@ -435,6 +438,7 @@ if [ ! -x "${RUNTIME_ROOT}/node_modules/.bin/omniroute" ] || [ ! -f "${MARKER}" 
   fi
   ln -s "${RUNTIME_ROOT}/node_modules" "${SOURCE_ROOT}/node_modules"
   test -f "${RUNTIME_ROOT}/node_modules/tsx/package.json"
+  test -f "${SOURCE_ROOT}/dist/server.js"
   # npm does not create a self-bin entry when installing the current project
   # from its own package.json. Provide the persistent CLI launcher explicitly.
   mkdir -p "${RUNTIME_ROOT}/node_modules/.bin"
