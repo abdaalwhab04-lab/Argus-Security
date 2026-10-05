@@ -68,10 +68,10 @@ for i in $(seq 1 120); do
   if [ "$i" -eq 120 ]; then cat /tmp/omniroute-nexora.log || true; exit 1; fi
   sleep 2
 done
-/usr/bin/curl -fsS --max-time 30 -c /tmp/omniroute-cookie -X POST http://127.0.0.1:20129/api/auth/login -H "Content-Type: application/json" --data "{"password":"$INITIAL_PASSWORD"}" -o /tmp/omniroute-login.json
+/usr/bin/curl -fsS --max-time 30 -c /tmp/omniroute-cookie -X POST http://127.0.0.1:20129/api/auth/login -H "Content-Type: application/json" --data '{"password":"'"$INITIAL_PASSWORD"'"}' -o /tmp/omniroute-login.json
 /usr/bin/python3 -c "import json; x=json.load(open('/tmp/omniroute-login.json')); assert x.get('success') is True, x"
 test -s /tmp/omniroute-cookie
-/usr/bin/curl -fsS --max-time 30 -b /tmp/omniroute-cookie -X POST http://127.0.0.1:20129/api/keys -H "Content-Type: application/json" --data "{"name":"nexora-free-tier-ci","scopes":["chat"]}" -o /tmp/omniroute-key.json
+/usr/bin/curl -fsS --max-time 30 -b /tmp/omniroute-cookie -X POST http://127.0.0.1:20129/api/keys -H "Content-Type: application/json" --data '{"name":"nexora-free-tier-ci","scopes":["chat"]}' -o /tmp/omniroute-key.json
 /usr/bin/python3 -c "import json; x=json.load(open('/tmp/omniroute-key.json')); k=x.get('key',''); assert x.get('id') and k.startswith('sk-'); open('/tmp/omniroute-api-key','w').write(k)"
 chmod 600 /tmp/omniroute-api-key
 echo NEXORA_OMNIROUTE_PERSISTENT_INSTALL_OK=1'
