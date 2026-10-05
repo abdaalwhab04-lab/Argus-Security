@@ -199,6 +199,9 @@ const nextConfig = {
       bodySizeLimit: process.env.OMNIROUTE_SERVER_ACTIONS_BODY_LIMIT || "50mb",
     },
     // Reduce peak heap during production builds (Next.js 15+).
+    // Static page-data generation otherwise defaults to multiple workers;
+    // the NEXORA hosted runner is memory-constrained, so keep it deterministic.
+    cpus: 1,
     webpackMemoryOptimizations: true,
     // Run webpack in a separate Node worker, lowering main-process memory.
     webpackBuildWorker: true,
