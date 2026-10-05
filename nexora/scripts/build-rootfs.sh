@@ -405,80 +405,43 @@ PERSIST_ROOT="/persist/debian-workspace"
 SOURCE_ROOT="${PERSIST_ROOT}/source/omniroute"
 RUNTIME_ROOT="${PERSIST_ROOT}/software/omniroute"
 DATA_ROOT="${PERSIST_ROOT}/data/omniroute"
-MARKER="${RUNTIME_ROOT}/.nexora-source-sha"
+MARKER="${RUNTIME_ROOT}/.nexora-omniroute-version"
+OMNIROUTE_VERSION="${OMNIROUTE_VERSION:-3.8.50}"
 
 test -f "${SOURCE_ROOT}/package.json"
 mkdir -p "${RUNTIME_ROOT}" "${DATA_ROOT}"
-SOURCE_SHA="$(sha256sum "${SOURCE_ROOT}/package.json" | awk '{print $1}')"
 
-# OmniRoute's CLI entrypoint lives in the persistent source tree, so its
-# runtime dependency tree must be resolvable from SOURCE_ROOT/node_modules.
-# Keep the actual dependency tree under the persistent software area and
-# expose it to the source tree through a symlink. This prevents dependencies
-# from being written into the repository source while preserving Node ESM
-# package resolution from bin/omniroute.mjs.
-if [ ! -x "${RUNTIME_ROOT}/node_modules/.bin/omniroute" ] || [ ! -f "${MARKER}" ] || [ "$(cat "${MARKER}" 2>/dev/null || true)" != "${SOURCE_SHA}" ] || [ ! -f "${RUNTIME_ROOT}/node_modules/tsx/package.json" ]; then
+# Use the published OmniRoute npm package. Version 3.8.50 ships its
+# production dist/ tree in the npm tarball, so NEXORA does not need to run
+# the multi-gigabyte Next.js source build on every smoke test. This is the
+# durable alternative to the repeatedly terminated hosted-runner builds.
+if [ ! -x "${RUNTIME_ROOT}/node_modules/.bin/omniroute" ] || [ ! -f "${MARKER}" ] || [ "$(cat "${MARKER}" 2>/dev/null || true)" != "${OMNIROUTE_VERSION}" ]; then
   echo "NEXORA_OMNIROUTE_INSTALL_START"
   rm -rf "${RUNTIME_ROOT}/node_modules" "${RUNTIME_ROOT}/package.json" "${RUNTIME_ROOT}/package-lock.json"
   rm -rf "${SOURCE_ROOT}/node_modules"
-  # Build the release in the NEXORA rootfs, not inside the small persistent
-  # ext4 workspace. Development dependencies and Next.js build intermediates
-  # can be several gigabytes and previously caused ENOSPC / long-running builds
-  # inside /persist. Only the final runtime dependency tree and release output
-  # are copied back to persistent storage.
-  BUILD_ROOT="/opt/nexora/build/omniroute"
-  rm -rf "${BUILD_ROOT}"
-  mkdir -p "${BUILD_ROOT}"
-  rsync -a --delete --exclude 'node_modules' --exclude '.next' --exclude 'dist' "${SOURCE_ROOT}/" "${BUILD_ROOT}/"
-  cd "${BUILD_ROOT}"
-  # Keep Next.js page-data generation within the hosted runner memory envelope.
-  export OMNIROUTE_BUILD_MEMORY_MB="${OMNIROUTE_BUILD_MEMORY_MB:-4096}"
-  export NEXT_PRIVATE_BUILD_WORKER="${NEXT_PRIVATE_BUILD_WORKER:-1}"
-  npm install --include=dev --ignore-scripts --workspaces=false
-  npm run build:release
-  npm prune --omit=dev --ignore-scripts
-
-  rm -rf "${RUNTIME_ROOT}/node_modules"
-  mv "${BUILD_ROOT}/node_modules" "${RUNTIME_ROOT}/node_modules"
-  rm -rf "${RUNTIME_ROOT}/package.json" "${RUNTIME_ROOT}/package-lock.json"
-  cp "${BUILD_ROOT}/package.json" "${RUNTIME_ROOT}/package.json"
-  if [ -f "${BUILD_ROOT}/package-lock.json" ]; then
-    cp "${BUILD_ROOT}/package-lock.json" "${RUNTIME_ROOT}/package-lock.json"
-  fi
-
-  # The CLI serve path resolves dist/server.js from SOURCE_ROOT, so persist
-  # only the release artifact(s) produced by the build. Keep source immutable
-  # apart from these generated runtime artifacts.
+  npm install --prefix "${RUNTIME_ROOT}" --omit=dev --ignore-scripts --no-fund --no-audit "omniroute@${OMNIROUTE_VERSION}"
+  test -f "${RUNTIME_ROOT}/node_modules/omniroute/package.json"
+  test -f "${RUNTIME_ROOT}/node_modules/omniroute/dist/server.js"
+  test -x "${RUNTIME_ROOT}/node_modules/.bin/omniroute"
   rm -rf "${SOURCE_ROOT}/dist"
-  if [ -d "${BUILD_ROOT}/dist" ]; then
-    cp -a "${BUILD_ROOT}/dist" "${SOURCE_ROOT}/dist"
-  fi
-  test -f "${SOURCE_ROOT}/dist/server.js"
-  rm -rf "${BUILD_ROOT}"
+  ln -s "${RUNTIME_ROOT}/node_modules/omniroute/dist" "${SOURCE_ROOT}/dist"
   ln -s "${RUNTIME_ROOT}/node_modules" "${SOURCE_ROOT}/node_modules"
-  test -f "${RUNTIME_ROOT}/node_modules/tsx/package.json"
-  # npm does not create a self-bin entry when installing the current project
-  # from its own package.json. Provide the persistent CLI launcher explicitly.
-  mkdir -p "${RUNTIME_ROOT}/node_modules/.bin"
-  cat > "${RUNTIME_ROOT}/node_modules/.bin/omniroute" <<'OMNILAUNCHER'
-#!/bin/sh
-exec /usr/local/bin/node /persist/debian-workspace/source/omniroute/bin/omniroute.mjs "$@"
-OMNILAUNCHER
-  chmod 0755 "${RUNTIME_ROOT}/node_modules/.bin/omniroute"
-  printf '%s\n' "${SOURCE_SHA}" > "${MARKER}"
+  printf '%s\\n' "${OMNIROUTE_VERSION}" > "${MARKER}"
   echo "NEXORA_OMNIROUTE_INSTALL_DONE"
 else
-  if [ -L "${SOURCE_ROOT}/node_modules" ] && [ "$(readlink "${SOURCE_ROOT}/node_modules")" = "${RUNTIME_ROOT}/node_modules" ]; then
-    :
-  else
+  if [ ! -L "${SOURCE_ROOT}/node_modules" ]; then
     rm -rf "${SOURCE_ROOT}/node_modules"
     ln -s "${RUNTIME_ROOT}/node_modules" "${SOURCE_ROOT}/node_modules"
+  fi
+  if [ ! -L "${SOURCE_ROOT}/dist" ]; then
+    rm -rf "${SOURCE_ROOT}/dist"
+    ln -s "${RUNTIME_ROOT}/node_modules/omniroute/dist" "${SOURCE_ROOT}/dist"
   fi
   echo "NEXORA_OMNIROUTE_INSTALL_REUSED"
 fi
 
 test -x "${RUNTIME_ROOT}/node_modules/.bin/omniroute"
-test -f "${RUNTIME_ROOT}/node_modules/tsx/package.json"
+test -f "${RUNTIME_ROOT}/node_modules/omniroute/dist/server.js"
 "${RUNTIME_ROOT}/node_modules/.bin/omniroute" --version
 OMNIINSTALL
 chmod +x "${ROOTFS_DIR}/usr/local/bin/nexora-omniroute-install.sh"
