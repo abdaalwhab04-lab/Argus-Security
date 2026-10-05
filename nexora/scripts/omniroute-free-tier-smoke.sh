@@ -94,7 +94,11 @@ NODE
 sudo chroot "$ROOTFS" /usr/local/bin/node --input-type=module <<'NODE'
 import fs from "node:fs";
 const base="http://127.0.0.1:20129";
-const cookie=fs.readFileSync("/tmp/omniroute-cookie","utf8");
+const cookieFile=fs.readFileSync("/tmp/omniroute-cookie","utf8");
+const cookieLine=cookieFile.split("\n").find(line => line.includes("\tauth_token\t"));
+if(!cookieLine) throw new Error("auth_token cookie not found");
+const cookieParts=cookieLine.split("\t");
+const cookie="auth_token="+cookieParts[cookieParts.length-1];
 const ids=JSON.parse(fs.readFileSync("/tmp/omniroute-free-ids.json","utf8"));
 const res=await fetch(base+"/api/providers/free-onboarding",{method:"POST",headers:{"Content-Type":"application/json","Cookie":cookie},body:JSON.stringify({providerIds:ids,confirmed:true})});
 const body=await res.text();
