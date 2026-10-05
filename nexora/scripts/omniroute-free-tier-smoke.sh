@@ -126,7 +126,11 @@ sudo chroot "$ROOTFS" /usr/bin/bash -lc 'set -euo pipefail
 API_KEY="$(cat /tmp/omniroute-api-key)"
 MODEL="$(cat /tmp/nexora-aider-model)"
   printf '%s' "$MODEL" | python3 -c "import json,sys; m=sys.stdin.read().strip(); print(json.dumps({chr(109)+chr(111)+chr(100)+chr(101)+chr(108):m,chr(109)+chr(101)+chr(115)+chr(115)+chr(97)+chr(103)+chr(101)+chr(115):[{chr(114)+chr(111)+chr(108)+chr(101):chr(117)+chr(115)+chr(101)+chr(114),chr(99)+chr(111)+chr(110)+chr(116)+chr(101)+chr(110)+chr(116):chr(82)+chr(101)+chr(112)+chr(108)+chr(121)+chr(32)+chr(119)+chr(105)+chr(116)+chr(104)+chr(32)+chr(116)+chr(104)+chr(101)+chr(32)+chr(115)+chr(105)+chr(110)+chr(103)+chr(108)+chr(101)+chr(32)+chr(119)+chr(111)+chr(114)+chr(100)+chr(32)+chr(79)+chr(75)+chr(46)}],chr(115)+chr(116)+chr(114)+chr(101)+chr(97)+chr(109):False}))" > /tmp/omniroute-chat-payload.json
-  curl -fsS --max-time 180 -X POST http://127.0.0.1:20129/v1/chat/completions -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" --data-binary @/tmp/omniroute-chat-payload.json -o /tmp/omniroute-chat.json
+  HTTP_CODE="$(curl -sS --max-time 180 -X POST http://127.0.0.1:20129/v1/chat/completions -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" --data-binary @/tmp/omniroute-chat-payload.json -o /tmp/omniroute-chat.json -w "%{http_code}")"
+  echo "NEXORA_OMNIROUTE_CHAT_HTTP_CODE=$HTTP_CODE"
+  echo "NEXORA_OMNIROUTE_CHAT_RESPONSE="
+  cat /tmp/omniroute-chat.json
+  if [ "$HTTP_CODE" != "200" ]; then exit 1; fi
 python3 -c "import json; x=json.load(open('/tmp/omniroute-chat.json')); c=((x.get('choices') or [{}])[0].get('message') or {}).get('content',''); print('NEXORA_OMNIROUTE_FREE_CHAT_RESPONSE='+c[:500]); assert 'OK' in c.upper()"
 echo NEXORA_OMNIROUTE_REAL_FREE_TIER_CHAT_OK=1'
 
