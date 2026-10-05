@@ -72,7 +72,7 @@ for i in $(seq 1 120); do
 done
 printf '%s' "$INITIAL_PASSWORD" | /usr/bin/python3 -c "import json,sys; print(json.dumps({chr(112)+chr(97)+chr(115)+chr(115)+chr(119)+chr(111)+chr(114)+chr(100):sys.stdin.read()}))" > /tmp/omniroute-login-payload.json
 /usr/bin/curl -fsS --max-time 30 -c /tmp/omniroute-cookie -X POST http://127.0.0.1:20129/api/auth/login -H "Content-Type: application/json" --data-binary @/tmp/omniroute-login-payload.json -o /tmp/omniroute-login.json
-/usr/bin/python3 -c "import json; x=json.load(open('/tmp/omniroute-login.json')); assert x.get('success') is True, x"
+/usr/bin/python3 -c "import json,sys; x=json.load(open(sys.argv[1])); assert x.get(chr(115)+chr(117)+chr(99)+chr(99)+chr(101)+chr(115)+chr(115)) is True, x" /tmp/omniroute-login.json
 test -s /tmp/omniroute-cookie
 /usr/bin/curl -fsS --max-time 30 -b /tmp/omniroute-cookie -X POST http://127.0.0.1:20129/api/keys -H "Content-Type: application/json" --data '{"name":"nexora-free-tier-ci","scopes":["chat"]}' -o /tmp/omniroute-key.json
 /usr/bin/python3 -c "import json; x=json.load(open('/tmp/omniroute-key.json')); k=x.get('key',''); assert x.get('id') and k.startswith('sk-'); open('/tmp/omniroute-api-key','w').write(k)"
