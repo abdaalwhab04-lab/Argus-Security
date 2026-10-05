@@ -75,7 +75,7 @@ printf '%s' "$INITIAL_PASSWORD" | /usr/bin/python3 -c "import json,sys; print(js
 /usr/bin/python3 -c "import json,sys; x=json.load(open(sys.argv[1])); assert x.get(chr(115)+chr(117)+chr(99)+chr(99)+chr(101)+chr(115)+chr(115)) is True, x" /tmp/omniroute-login.json
 test -s /tmp/omniroute-cookie
 /usr/bin/curl -fsS --max-time 30 -b /tmp/omniroute-cookie -X POST http://127.0.0.1:20129/api/keys -H "Content-Type: application/json" --data-binary "{\"name\":\"nexora-free-tier-ci\",\"scopes\":[\"chat\"]}" -o /tmp/omniroute-key.json
-/usr/bin/python3 -c "import json; x=json.load(open('/tmp/omniroute-key.json')); k=x.get('key',''); assert x.get('id') and k.startswith('sk-'); open('/tmp/omniroute-api-key','w').write(k)"
+/usr/bin/python3 -c "import json,sys; x=json.load(open(sys.argv[1])); k=x.get(chr(107)+chr(101)+chr(121),chr(0)); assert x.get(chr(105)+chr(100)) and k.startswith(chr(115)+chr(107)+chr(45)); open(sys.argv[2],chr(119)).write(k)" /tmp/omniroute-key.json /tmp/omniroute-api-key
 chmod 600 /tmp/omniroute-api-key
 echo NEXORA_OMNIROUTE_PERSISTENT_INSTALL_OK=1'
 
