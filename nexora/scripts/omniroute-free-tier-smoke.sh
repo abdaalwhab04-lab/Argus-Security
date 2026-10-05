@@ -114,26 +114,59 @@ sudo chroot "$ROOTFS" /usr/bin/bash -lc 'API_KEY="$(cat /tmp/omniroute-api-key)"
 sudo chroot "$ROOTFS" /usr/local/bin/node --input-type=module <<'NODE'
 import fs from "node:fs";
 const x=JSON.parse(fs.readFileSync("/tmp/omniroute-models.json","utf8"));
-const ids=(x.data||[]).map(x=>String(x.id));
+const data=Array.isArray(x.data) ? x.data : [];
+const ids=data.map(v=>String(v?.id||"")).filter(Boolean);
 console.log("NEXORA_OMNIROUTE_MODEL_COUNT="+ids.length);
-const aihordeIds=ids.filter(id=>id.toLowerCase().startsWith("aihorde/"));
-console.log("NEXORA_AIHORDE_MODEL_IDS="+aihordeIds.join(","));
-const model=aihordeIds.find(id=>!/image|stable-diffusion|flux|sdxl|sd-/i.test(id));
-if(!model) throw new Error("No AI Horde chat model exposed");
-fs.writeFileSync("/tmp/nexora-aider-model",model+"\n");
-console.log("NEXORA_AIHORDE_CHAT_MODEL="+model);
+
+// AI Horde is image-generation in this Free Tier catalog; exclude it from chat.
+const imagePattern=/image|stable[ _-]?diffusion|sdxl|sd[ _-]?1|sd[ _-]?2|flux|inpaint|pony|illustrious|dreamshaper|animagine|juggernaut/i;
+const chatProviderPattern=/^(cloudflare-playground|opencode|theoldllm|uncloseai|chipotle)\//i;
+const candidates=ids.filter(id=>chatProviderPattern.test(id)&&!imagePattern.test(id));
+
+console.log("NEXORA_CHAT_CANDIDATE_COUNT="+candidates.length);
+console.log("NEXORA_CHAT_CANDIDATES="+candidates.slice(0,50).join(","));
+if(!candidates.length) throw new Error("No non-image Free Tier chat candidates exposed");
+
+// Keep an ordered candidate list; the shell smoke test will validate the
+// actual /v1/chat/completions capability and advance if a model rejects chat.
+fs.writeFileSync("/tmp/nexora-chat-candidates.json",JSON.stringify(candidates));
+fs.writeFileSync("/tmp/nexora-aider-model",candidates[0]+"\n");
+console.log("NEXORA_FREE_CHAT_MODEL_CANDIDATE="+candidates[0]);
 NODE
 
 sudo chroot "$ROOTFS" /usr/bin/bash -lc 'set -euo pipefail
 API_KEY="$(cat /tmp/omniroute-api-key)"
-MODEL="$(cat /tmp/nexora-aider-model)"
-  printf '%s' "$MODEL" | python3 -c "import json,sys; m=sys.stdin.read().strip(); print(json.dumps({chr(109)+chr(111)+chr(100)+chr(101)+chr(108):m,chr(109)+chr(101)+chr(115)+chr(115)+chr(97)+chr(103)+chr(101)+chr(115):[{chr(114)+chr(111)+chr(108)+chr(101):chr(117)+chr(115)+chr(101)+chr(114),chr(99)+chr(111)+chr(110)+chr(116)+chr(101)+chr(110)+chr(116):chr(82)+chr(101)+chr(112)+chr(108)+chr(121)+chr(32)+chr(119)+chr(105)+chr(116)+chr(104)+chr(32)+chr(116)+chr(104)+chr(101)+chr(32)+chr(115)+chr(105)+chr(110)+chr(103)+chr(108)+chr(101)+chr(32)+chr(119)+chr(111)+chr(114)+chr(100)+chr(32)+chr(79)+chr(75)+chr(46)}],chr(115)+chr(116)+chr(114)+chr(101)+chr(97)+chr(109):False}))" > /tmp/omniroute-chat-payload.json
-  HTTP_CODE="$(curl -sS --max-time 180 -X POST http://127.0.0.1:20129/v1/chat/completions -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" --data-binary @/tmp/omniroute-chat-payload.json -o /tmp/omniroute-chat.json -w "%{http_code}")"
+CANDIDATES="$(cat /tmp/nexora-chat-candidates.json)"
+
+printf "%s" "$CANDIDATES" | /usr/bin/python3 -c "import json,sys; x=json.load(sys.stdin); [print(v) for v in x[:20]]" > /tmp/nexora-chat-candidate-list
+
+CHAT_OK=0
+while IFS= read -r MODEL; do
+  [ -n "$MODEL" ] || continue
+  echo "NEXORA_CHAT_MODEL_TEST=$MODEL"
+
+  printf "%s" "$MODEL" | /usr/bin/python3 -c "import json,sys; m=sys.stdin.read().strip(); print(json.dumps({chr(109)+chr(111)+chr(100)+chr(101)+chr(108):m,chr(109)+chr(101)+chr(115)+chr(115)+chr(97)+chr(103)+chr(101)+chr(115):[{chr(114)+chr(111)+chr(108)+chr(101):chr(117)+chr(115)+chr(101)+chr(114),chr(99)+chr(111)+chr(110)+chr(116)+chr(101)+chr(110)+chr(116):chr(82)+chr(101)+chr(112)+chr(108)+chr(121)+chr(32)+chr(119)+chr(105)+chr(116)+chr(104)+chr(32)+chr(116)+chr(104)+chr(101)+chr(32)+chr(115)+chr(105)+chr(110)+chr(103)+chr(108)+chr(101)+chr(32)+chr(119)+chr(111)+chr(114)+chr(100)+chr(32)+chr(79)+chr(75)+chr(46)}],chr(115)+chr(116)+chr(114)+chr(101)+chr(97)+chr(109):False}))" > /tmp/omniroute-chat-payload.json
+
+  HTTP_CODE="$(curl -sS --max-time 90 -X POST http://127.0.0.1:20129/v1/chat/completions -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" --data-binary @/tmp/omniroute-chat-payload.json -o /tmp/omniroute-chat.json -w "%{http_code}")"
   echo "NEXORA_OMNIROUTE_CHAT_HTTP_CODE=$HTTP_CODE"
-  echo "NEXORA_OMNIROUTE_CHAT_RESPONSE="
+
+  if [ "$HTTP_CODE" = "200" ]; then
+    /usr/bin/python3 -c "import json,sys; x=json.load(open(sys.argv[1])); c=((x.get(chr(99)+chr(104)+chr(111)+chr(105)+chr(99)+chr(101)+chr(115)) or [{}])[0].get(chr(109)+chr(101)+chr(115)+chr(115)+chr(97)+chr(103)+chr(101)) or {}).get(chr(99)+chr(111)+chr(110)+chr(116)+chr(101)+chr(110)+chr(116),chr(0)); print(chr(78)+chr(69)+chr(88)+chr(79)+chr(82)+chr(65)+chr(95)+chr(79)+chr(77)+chr(78)+chr(73)+chr(82)+chr(79)+chr(85)+chr(84)+chr(69)+chr(95)+chr(70)+chr(82)+chr(69)+chr(69)+chr(95)+chr(67)+chr(72)+chr(65)+chr(84)+chr(95)+chr(82)+chr(69)+chr(83)+chr(80)+chr(79)+chr(78)+chr(83)+chr(69)+chr(61)+c[:500]); assert chr(79)+chr(75) in c.upper()" /tmp/omniroute-chat.json
+    printf "%s\n" "$MODEL" > /tmp/nexora-aider-model
+    echo "NEXORA_FREE_CHAT_MODEL=$MODEL"
+    echo NEXORA_OMNIROUTE_REAL_FREE_TIER_CHAT_OK=1
+    CHAT_OK=1
+    break
+  fi
+
+  echo "NEXORA_CHAT_MODEL_REJECTED=$MODEL"
   cat /tmp/omniroute-chat.json
-  if [ "$HTTP_CODE" != "200" ]; then exit 1; fi
-python3 -c "import json; x=json.load(open('/tmp/omniroute-chat.json')); c=((x.get('choices') or [{}])[0].get('message') or {}).get('content',''); print('NEXORA_OMNIROUTE_FREE_CHAT_RESPONSE='+c[:500]); assert 'OK' in c.upper()"
-echo NEXORA_OMNIROUTE_REAL_FREE_TIER_CHAT_OK=1'
+done < /tmp/nexora-chat-candidate-list
+
+if [ "$CHAT_OK" != "1" ]; then
+  echo "NEXORA_CHAT_NO_WORKING_FREE_MODEL=1"
+  exit 1
+fi
+'
 
 echo NEXORA_OMNIROUTE_FREE_TIER_SMOKE_OK=1
