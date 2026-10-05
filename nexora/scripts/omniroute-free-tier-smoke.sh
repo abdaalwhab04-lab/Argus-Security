@@ -57,7 +57,9 @@ sudo chroot "$ROOTFS" test -x /persist/debian-workspace/software/omniroute/node_
 sudo chroot "$ROOTFS" test -f /persist/debian-workspace/data/omniroute/server.env
 
 sudo chroot "$ROOTFS" /usr/bin/bash -lc 'set -euo pipefail
+set -a
 . /persist/debian-workspace/data/omniroute/server.env
+set +a
 export PORT=20129 HOSTNAME=127.0.0.1 NODE_ENV=test NEXT_TELEMETRY_DISABLED=1 OMNIROUTE_USE_TURBOPACK=0
 nohup /persist/debian-workspace/software/omniroute/node_modules/.bin/omniroute serve --no-open --no-tray >/tmp/omniroute-nexora.log 2>&1 &
 for i in $(seq 1 120); do
