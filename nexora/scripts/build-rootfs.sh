@@ -431,6 +431,9 @@ if [ ! -x "${RUNTIME_ROOT}/node_modules/.bin/omniroute" ] || [ ! -f "${MARKER}" 
   mkdir -p "${BUILD_ROOT}"
   rsync -a --delete --exclude 'node_modules' --exclude '.next' --exclude 'dist' "${SOURCE_ROOT}/" "${BUILD_ROOT}/"
   cd "${BUILD_ROOT}"
+  # Keep Next.js page-data generation within the hosted runner memory envelope.
+  export OMNIROUTE_BUILD_MEMORY_MB="${OMNIROUTE_BUILD_MEMORY_MB:-4096}"
+  export NEXT_PRIVATE_BUILD_WORKER="${NEXT_PRIVATE_BUILD_WORKER:-1}"
   npm install --include=dev --ignore-scripts --workspaces=false
   npm run build:release
   npm prune --omit=dev --ignore-scripts
