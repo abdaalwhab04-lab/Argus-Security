@@ -70,7 +70,7 @@ for i in $(seq 1 120); do
   if [ "$i" -eq 120 ]; then cat /tmp/omniroute-nexora.log || true; exit 1; fi
   sleep 2
 done
-/usr/bin/python3 -c "import json,os; open('/tmp/omniroute-login-payload.json','w').write(json.dumps({chr(112)+chr(97)+chr(115)+chr(115)+chr(119)+chr(111)+chr(114)+chr(100):os.environ['INITIAL_PASSWORD']}))"
+printf '%s' "$INITIAL_PASSWORD" | /usr/bin/python3 -c "import json,sys; print(json.dumps({'password':sys.stdin.read()}))" > /tmp/omniroute-login-payload.json
 /usr/bin/curl -fsS --max-time 30 -c /tmp/omniroute-cookie -X POST http://127.0.0.1:20129/api/auth/login -H "Content-Type: application/json" --data-binary @/tmp/omniroute-login-payload.json -o /tmp/omniroute-login.json
 /usr/bin/python3 -c "import json; x=json.load(open('/tmp/omniroute-login.json')); assert x.get('success') is True, x"
 test -s /tmp/omniroute-cookie
