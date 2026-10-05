@@ -421,24 +421,39 @@ if [ ! -x "${RUNTIME_ROOT}/node_modules/.bin/omniroute" ] || [ ! -f "${MARKER}" 
   echo "NEXORA_OMNIROUTE_INSTALL_START"
   rm -rf "${RUNTIME_ROOT}/node_modules" "${RUNTIME_ROOT}/package.json" "${RUNTIME_ROOT}/package-lock.json"
   rm -rf "${SOURCE_ROOT}/node_modules"
-  # Build the release from the repository source before pruning development
-  # dependencies. The CLI serve command intentionally boots the generated
-  # dist/server.js (with app/server.js as a legacy fallback); a source-only
-  # npm install cannot provide that runtime artifact.
-  cd "${SOURCE_ROOT}"
+  # Build the release in the NEXORA rootfs, not inside the small persistent
+  # ext4 workspace. Development dependencies and Next.js build intermediates
+  # can be several gigabytes and previously caused ENOSPC / long-running builds
+  # inside /persist. Only the final runtime dependency tree and release output
+  # are copied back to persistent storage.
+  BUILD_ROOT="/opt/nexora/build/omniroute"
+  rm -rf "${BUILD_ROOT}"
+  mkdir -p "${BUILD_ROOT}"
+  rsync -a --delete --exclude 'node_modules' --exclude '.next' --exclude 'dist' "${SOURCE_ROOT}/" "${BUILD_ROOT}/"
+  cd "${BUILD_ROOT}"
   npm install --include=dev --ignore-scripts --workspaces=false
   npm run build:release
   npm prune --omit=dev --ignore-scripts
+
   rm -rf "${RUNTIME_ROOT}/node_modules"
-  mv "${SOURCE_ROOT}/node_modules" "${RUNTIME_ROOT}/node_modules"
+  mv "${BUILD_ROOT}/node_modules" "${RUNTIME_ROOT}/node_modules"
   rm -rf "${RUNTIME_ROOT}/package.json" "${RUNTIME_ROOT}/package-lock.json"
-  cp "${SOURCE_ROOT}/package.json" "${RUNTIME_ROOT}/package.json"
-  if [ -f "${SOURCE_ROOT}/package-lock.json" ]; then
-    cp "${SOURCE_ROOT}/package-lock.json" "${RUNTIME_ROOT}/package-lock.json"
+  cp "${BUILD_ROOT}/package.json" "${RUNTIME_ROOT}/package.json"
+  if [ -f "${BUILD_ROOT}/package-lock.json" ]; then
+    cp "${BUILD_ROOT}/package-lock.json" "${RUNTIME_ROOT}/package-lock.json"
   fi
+
+  # The CLI serve path resolves dist/server.js from SOURCE_ROOT, so persist
+  # only the release artifact(s) produced by the build. Keep source immutable
+  # apart from these generated runtime artifacts.
+  rm -rf "${SOURCE_ROOT}/dist"
+  if [ -d "${BUILD_ROOT}/dist" ]; then
+    cp -a "${BUILD_ROOT}/dist" "${SOURCE_ROOT}/dist"
+  fi
+  test -f "${SOURCE_ROOT}/dist/server.js"
+  rm -rf "${BUILD_ROOT}"
   ln -s "${RUNTIME_ROOT}/node_modules" "${SOURCE_ROOT}/node_modules"
   test -f "${RUNTIME_ROOT}/node_modules/tsx/package.json"
-  test -f "${SOURCE_ROOT}/dist/server.js"
   # npm does not create a self-bin entry when installing the current project
   # from its own package.json. Provide the persistent CLI launcher explicitly.
   mkdir -p "${RUNTIME_ROOT}/node_modules/.bin"
