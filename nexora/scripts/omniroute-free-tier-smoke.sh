@@ -118,20 +118,54 @@ const data=Array.isArray(x.data) ? x.data : [];
 const ids=data.map(v=>String(v?.id||"")).filter(Boolean);
 console.log("NEXORA_OMNIROUTE_MODEL_COUNT="+ids.length);
 
-// AI Horde is image-generation in this Free Tier catalog; exclude it from chat.
+// AI Horde is image-generation in this Free Tier catalog; exclude image models.
 const imagePattern=/image|stable[ _-]?diffusion|sdxl|sd[ _-]?1|sd[ _-]?2|flux|inpaint|pony|illustrious|dreamshaper|animagine|juggernaut/i;
-const chatProviderPattern=/^(cloudflare-playground|opencode|theoldllm|uncloseai|chipotle)\//i;
-const candidates=ids.filter(id=>chatProviderPattern.test(id)&&!imagePattern.test(id));
+
+// OmniRoute model IDs are not guaranteed to contain the provider ID.
+// Prefer explicit provider metadata, then fall back to the model ID prefix.
+const freeProviders=new Set([
+  "cloudflare-playground",
+  "opencode",
+  "theoldllm",
+  "uncloseai",
+  "chipotle"
+]);
+
+const providerOf=v=>String(
+  v?.providerId ??
+  v?.provider ??
+  v?.provider_id ??
+  v?.owned_by ??
+  v?.ownedBy ??
+  ""
+).toLowerCase();
+
+const candidates=data
+  .filter(v=>{
+    const id=String(v?.id||"");
+    const provider=providerOf(v);
+    const prefix=id.split("/")[0].toLowerCase();
+    const free=freeProviders.has(provider)||freeProviders.has(prefix);
+    return id && free && !imagePattern.test(id);
+  })
+  .map(v=>String(v?.id||""))
+  .filter(Boolean);
 
 console.log("NEXORA_CHAT_CANDIDATE_COUNT="+candidates.length);
 console.log("NEXORA_CHAT_CANDIDATES="+candidates.slice(0,50).join(","));
-if(!candidates.length) throw new Error("No non-image Free Tier chat candidates exposed");
 
-// Keep an ordered candidate list; the shell smoke test will validate the
-// actual /v1/chat/completions capability and advance if a model rejects chat.
-fs.writeFileSync("/tmp/nexora-chat-candidates.json",JSON.stringify(candidates));
-fs.writeFileSync("/tmp/nexora-aider-model",candidates[0]+"\n");
-console.log("NEXORA_FREE_CHAT_MODEL_CANDIDATE="+candidates[0]);
+if(!candidates.length) {
+  console.log("NEXORA_MODEL_SAMPLE="+ids.slice(0,50).join(","));
+  console.log("NEXORA_MODEL_METADATA_SAMPLE="+JSON.stringify(data.slice(0,10).map(v=>({
+    id:v?.id,
+    providerId:v?.providerId,
+    provider:v?.provider,
+    provider_id:v?.provider_id,
+    owned_by:v?.owned_by,
+    ownedBy:v?.ownedBy
+  }))));
+  throw new Error("No non-image Free Tier chat candidates exposed");
+}
 NODE
 
 sudo chroot "$ROOTFS" /usr/bin/bash -lc 'set -euo pipefail
