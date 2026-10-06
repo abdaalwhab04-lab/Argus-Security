@@ -23,8 +23,8 @@ for helper in nexora-omniroute-install.sh nexora-omniroute-env.sh nexora-persist
 done
 '
 
-echo "=== Prepare NEXORA persistent workspace image (8G for OmniRoute release build) ==="
-sudo truncate -s 4G "$PERSIST_IMG"
+echo "=== Prepare NEXORA persistent workspace image (3G working size; shrink after install) ==="
+sudo truncate -s 3G "$PERSIST_IMG"
 ls -lh "$PERSIST_IMG"
 sudo mkfs.ext4 -F -q "$PERSIST_IMG"
 sudo mkdir -p "$ROOTFS/persist"
@@ -207,3 +207,40 @@ fi
 '
 
 echo NEXORA_OMNIROUTE_FREE_TIER_SMOKE_OK=1
+
+echo "=== Aider through NEXORA OmniRoute ==="
+sudo chroot "$ROOTFS" /usr/bin/bash -lc 'set -euo pipefail
+command -v aider
+aider --version
+API_KEY="$(cat /tmp/omniroute-api-key)"
+MODEL="$(cat /tmp/nexora-aider-model)"
+export OPENAI_API_BASE="http://127.0.0.1:20129/v1"
+export OPENAI_API_KEY="$API_KEY"
+export AIDER_MODEL="$MODEL"
+mkdir -p /tmp/nexora-aider-smoke
+cd /tmp/nexora-aider-smoke
+if [ ! -d .git ]; then /usr/bin/git init -q; fi
+printf "# NEXORA Aider smoke\\n" > smoke.md
+set +e
+aider --message "Reply with exactly the single word OK. Do not edit files." --model "$MODEL" --no-auto-commits --yes-always --no-show-model-warnings > /tmp/aider-nexora-smoke.log 2>&1
+status=$?
+set -e
+cat /tmp/aider-nexora-smoke.log
+test "$status" -eq 0
+grep -Eiq "\\bOK\\b" /tmp/aider-nexora-smoke.log
+echo NEXORA_AIDER_OMNIROUTE_SMOKE_OK=1
+'
+
+echo "=== Compact NEXORA persistent image ==="
+sudo umount "$ROOTFS/persist"
+trap - EXIT
+sudo e2fsck -pf "$PERSIST_IMG"
+sudo resize2fs -M "$PERSIST_IMG"
+BLOCKS="$(sudo tune2fs -l "$PERSIST_IMG" | awk -F: '/Block count:/ {gsub(/ /,"",$2); print $2; exit}')"
+BLOCK_SIZE="$(sudo tune2fs -l "$PERSIST_IMG" | awk -F: '/Block size:/ {gsub(/ /,"",$2); print $2; exit}')"
+test -n "$BLOCKS" -a -n "$BLOCK_SIZE"
+COMPACT_BYTES=$((BLOCKS * BLOCK_SIZE))
+sudo truncate -s "$COMPACT_BYTES" "$PERSIST_IMG"
+echo "NEXORA_PERSISTENT_IMAGE_COMPACT_BYTES=$COMPACT_BYTES"
+ls -lh "$PERSIST_IMG"
+echo NEXORA_PERSISTENT_IMAGE_COMPACT_OK=1
