@@ -569,6 +569,16 @@ raise SystemExit(entry.load()())
           grep -q "NEXORA_HOST_DISK_SYNC_DONE" "${SECOND_BOOT_LOG}"
           echo "NEXORA_PERSISTENCE_REBOOT_OK"
 
+      - name: Upload NEXORA persistent Debian workspace
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: nexora-persistent-data-${{ github.run_id }}
+          path: nexora/build/persistent-data.img
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+
       - name: Validate Argus Python test environment
         run: |
           set -euo pipefail
