@@ -26,25 +26,30 @@ jobs:
       - name: Run NEXORA OmniRoute Free Tier and Aider smoke
         run: bash nexora/scripts/omniroute-free-tier-smoke.sh
 
-      - name: Split NEXORA persistent workspace into transport chunks
+      - name: Persist small NEXORA runtime manifest only
         if: success()
         run: |
           set -euo pipefail
-          rm -rf nexora/persistent-workspace-parts
-          mkdir -p nexora/persistent-workspace-parts
-          split -b 400M -d -a 2 nexora/persistent-workspace.ext4 nexora/persistent-workspace-parts/part-
-          sha256sum nexora/persistent-workspace.ext4 > nexora/persistent-workspace-parts/SHA256SUMS
-          ls -lh nexora/persistent-workspace-parts
-          du -h nexora/persistent-workspace.ext4
+          {
+            echo "NEXORA_PERSISTENCE_MODE=rebuild-from-repo"
+            echo "NEXORA_ARCHIVE=nexora/debian/debian-12-generic-amd64.tar.xz"
+            echo "NEXORA_ARCHIVE_SHA256=$(sha256sum nexora/debian/debian-12-generic-amd64.tar.xz | cut -d' ' -f1)"
+            echo "NEXORA_PERSISTENT_WORKSPACE_SIZE=$(stat -c%s nexora/persistent-workspace.ext4)"
+            echo "NEXORA_OMNIROUTE_VERSION=$(sudo chroot nexora/rootfs /usr/local/bin/node -p "require('/persist/debian-workspace/source/omniroute/package.json').version")"
+            echo "NEXORA_FREE_ONBOARDING_IDS=$(sudo chroot nexora/rootfs /usr/bin/cat /tmp/omniroute-free-ids.json)"
+            echo "NEXORA_FREE_CHAT_MODEL=$(sudo chroot nexora/rootfs /usr/bin/cat /tmp/nexora-aider-model)"
+            echo "NEXORA_PERSISTENT_INSTALL_OK=1"
+          } > nexora/nexora-runtime-manifest.env
+          rm -f nexora/persistent-workspace.ext4
+          ls -lh nexora/nexora-runtime-manifest.env
 
-      - name: Upload NEXORA persistent workspace parts
+      - name: Upload small NEXORA runtime manifest
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: nexora-persistent-workspace-parts
-          path: nexora/persistent-workspace-parts/
+          name: nexora-runtime-manifest
+          path: nexora/nexora-runtime-manifest.env
           if-no-files-found: error
-          compression-level: 0
           retention-days: 30
 
       - name: Show diagnostics on failure
