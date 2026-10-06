@@ -128,7 +128,9 @@ const freeProviders=new Set([
   "opencode",
   "theoldllm",
   "uncloseai",
-  "chipotle"
+  "chipotle",
+  "felo-web",
+  "duckduckgo-web"
 ]);
 
 const providerOf=v=>String(
