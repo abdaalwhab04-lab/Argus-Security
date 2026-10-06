@@ -153,6 +153,7 @@ const candidates=data
 
 console.log("NEXORA_CHAT_CANDIDATE_COUNT="+candidates.length);
 console.log("NEXORA_CHAT_CANDIDATES="+candidates.slice(0,50).join(","));
+fs.writeFileSync("/tmp/nexora-chat-candidates.json",JSON.stringify(candidates));
 
 if(!candidates.length) {
   console.log("NEXORA_MODEL_SAMPLE="+ids.slice(0,50).join(","));
