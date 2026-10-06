@@ -26,12 +26,23 @@ jobs:
       - name: Run NEXORA OmniRoute Free Tier and Aider smoke
         run: bash nexora/scripts/omniroute-free-tier-smoke.sh
 
-      - name: Upload NEXORA persistent workspace
+      - name: Split NEXORA persistent workspace into transport chunks
+        if: success()
+        run: |
+          set -euo pipefail
+          rm -rf nexora/persistent-workspace-parts
+          mkdir -p nexora/persistent-workspace-parts
+          split -b 400M -d -a 2 nexora/persistent-workspace.ext4 nexora/persistent-workspace-parts/part-
+          sha256sum nexora/persistent-workspace.ext4 > nexora/persistent-workspace-parts/SHA256SUMS
+          ls -lh nexora/persistent-workspace-parts
+          du -h nexora/persistent-workspace.ext4
+
+      - name: Upload NEXORA persistent workspace parts
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: nexora-persistent-workspace
-          path: nexora/persistent-workspace.ext4
+          name: nexora-persistent-workspace-parts
+          path: nexora/persistent-workspace-parts/
           if-no-files-found: error
           compression-level: 0
           retention-days: 30
