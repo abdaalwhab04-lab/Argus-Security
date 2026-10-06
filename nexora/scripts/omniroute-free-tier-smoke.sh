@@ -173,7 +173,7 @@ sudo chroot "$ROOTFS" /usr/bin/bash -lc 'set -euo pipefail
 API_KEY="$(cat /tmp/omniroute-api-key)"
 CANDIDATES="$(cat /tmp/nexora-chat-candidates.json)"
 
-printf "%s" "$CANDIDATES" | /usr/bin/python3 -c "import json,sys; x=json.load(sys.stdin); [print(v) for v in x[:20]]" > /tmp/nexora-chat-candidate-list
+printf "%s" "$CANDIDATES" | /usr/bin/python3 -c "import json,sys; x=json.load(sys.stdin); [print(v) for v in x]" > /tmp/nexora-chat-candidate-list
 
 CHAT_OK=0
 while IFS= read -r MODEL; do
