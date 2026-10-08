@@ -12,7 +12,7 @@ OUTPUT_DIR="${BUILD_DIR}/output"
 KERNEL_VERSION="${KERNEL_VERSION:-6.12.50}"
 ISO_NAME="${ISO_NAME:-nexora.iso}"
 
-KERNEL_IMAGE="${BUILD_DIR}/linux-${KERNEL_VERSION}/arch/x86/boot/bzImage"
+KERNEL_IMAGE="${BUILD_DIR}/linux-${KERNEL_VERSION}-clang/arch/x86/boot/bzImage"
 INITRAMFS_IMAGE="${BUILD_DIR}/nexora-initramfs.cpio.gz"
 
 echo "=== NEXORA BOOTABLE ISO BUILD ==="
