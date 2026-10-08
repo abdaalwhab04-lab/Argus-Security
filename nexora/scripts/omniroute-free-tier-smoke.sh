@@ -241,7 +241,7 @@ from pathlib import Path
 log = Path("/tmp/aider-nexora-smoke.log").read_text(errors="replace")
 if "litellm.BadRequestError" in log or "Error communicating with the model" in log:
     raise SystemExit("Aider logged an API/provider error")
-if not re.search(r"(?im)^\\s*NEXORA_AIDER_OK\\s*[.!]?\\s*$", log):
+if not re.search(r"(?im)^\s*NEXORA_AIDER_OK\s*[.!]?\s*$", log):
     raise SystemExit("Aider did not produce the expected standalone response")
 PY
 echo NEXORA_AIDER_OMNIROUTE_SMOKE_OK=1
@@ -260,14 +260,16 @@ sudo chroot "$ROOTFS" /usr/bin/bash -lc '
   fi
 '
 echo "=== Compact NEXORA persistent image ==="
-for i in $(seq 1 20); do
+for i in $(seq 1 10); do
   if sudo umount "$ROOTFS/persist" 2>/dev/null; then
     break
   fi
-  if [ "$i" -eq 20 ]; then
-    echo "NEXORA_PERSIST_UNMOUNT_FAILED"
+  if [ "$i" -eq 10 ]; then
+    echo "NEXORA_PERSIST_MOUNT_HOLDERS_BEFORE_CLEANUP"
     sudo fuser -vm "$ROOTFS/persist" || true
-    exit 1
+    sudo fuser -km "$ROOTFS/persist" || true
+    sleep 2
+    sudo umount "$ROOTFS/persist"
   fi
   sleep 1
 done
