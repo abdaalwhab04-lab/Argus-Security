@@ -221,7 +221,7 @@ chroot "${ROOTFS_DIR}" /usr/bin/python3.11 -c 'import sys; sys.path.insert(0, "/
 cat > "${ROOTFS_DIR}/usr/local/bin/aider" <<'AIDER_WRAPPER'
 #!/bin/sh
 export PYTHONPATH="/opt/nexora/aider-site${PYTHONPATH:+:${PYTHONPATH}}"
-exec /usr/bin/python3.11 -c 'import sys; from aider.main import main; sys.exit(main())' -- "$@"
+exec /usr/bin/python3.11 -c 'import sys; from aider.main import main; sys.argv=["aider"]+sys.argv[2:]; sys.exit(main())' -- "$@"
 AIDER_WRAPPER
 chmod 0755 "${ROOTFS_DIR}/usr/local/bin/aider"
 if ! chroot "${ROOTFS_DIR}" /usr/local/bin/aider --version; then
