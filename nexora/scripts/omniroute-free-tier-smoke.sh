@@ -66,6 +66,7 @@ set -a
 set +a
 export PORT=20129 HOSTNAME=127.0.0.1 NODE_ENV=test NEXT_TELEMETRY_DISABLED=1 OMNIROUTE_USE_TURBOPACK=0
 nohup /persist/debian-workspace/software/omniroute/node_modules/.bin/omniroute serve --no-open --no-tray >/tmp/omniroute-nexora.log 2>&1 &
+echo "$!" >/tmp/omniroute-nexora.pid
 for i in $(seq 1 120); do
   if /usr/bin/curl -fsS --max-time 2 http://127.0.0.1:20129/healthz >/dev/null 2>&1 || /usr/bin/curl -fsS --max-time 2 http://127.0.0.1:20129/api/health >/dev/null 2>&1; then
     echo OMNIROUTE_NEXORA_DEBIAN_HEALTH_OK
@@ -220,23 +221,56 @@ API_KEY="$(cat /tmp/omniroute-api-key)"
 MODEL="$(cat /tmp/nexora-aider-model)"
 export OPENAI_API_BASE="http://127.0.0.1:20129/v1"
 export OPENAI_API_KEY="$API_KEY"
-export AIDER_MODEL="$MODEL"
+# LiteLLM requires an explicit provider for OmniRoute's nonstandard model IDs.
+# Its OpenAI provider strips this prefix before forwarding the original model ID.
+AIDER_MODEL_ID="openai/$MODEL"
+export AIDER_MODEL="$AIDER_MODEL_ID"
 mkdir -p /tmp/nexora-aider-smoke
 cd /tmp/nexora-aider-smoke
 if [ ! -d .git ]; then /usr/bin/git init -q; fi
 printf "# NEXORA Aider smoke\\n" > smoke.md
 set +e
-aider --message "Reply with exactly the single word OK. Do not edit files." --model "$MODEL" --no-auto-commits --yes-always --no-show-model-warnings > /tmp/aider-nexora-smoke.log 2>&1
+aider --message "Reply with exactly the single word NEXORA_AIDER_OK. Do not edit files." --model "$AIDER_MODEL_ID" --no-auto-commits --yes-always --no-show-model-warnings > /tmp/aider-nexora-smoke.log 2>&1
 status=$?
 set -e
 cat /tmp/aider-nexora-smoke.log
 test "$status" -eq 0
-grep -Eiq "\\bOK\\b" /tmp/aider-nexora-smoke.log
+/usr/bin/python3 - <<'PY'
+import re
+from pathlib import Path
+log = Path("/tmp/aider-nexora-smoke.log").read_text(errors="replace")
+if "litellm.BadRequestError" in log or "Error communicating with the model" in log:
+    raise SystemExit("Aider logged an API/provider error")
+if not re.search(r"(?im)^\\s*NEXORA_AIDER_OK\\s*[.!]?\\s*$", log):
+    raise SystemExit("Aider did not produce the expected standalone response")
+PY
 echo NEXORA_AIDER_OMNIROUTE_SMOKE_OK=1
 '
-
+echo "=== Stop OmniRoute and release persistent workspace ==="
+sudo chroot "$ROOTFS" /usr/bin/bash -lc '
+  if [ -s /tmp/omniroute-nexora.pid ]; then
+    pid="$(cat /tmp/omniroute-nexora.pid)"
+    kill "$pid" 2>/dev/null || true
+    for i in $(seq 1 30); do
+      kill -0 "$pid" 2>/dev/null || break
+      sleep 1
+    done
+    kill -KILL "$pid" 2>/dev/null || true
+    rm -f /tmp/omniroute-nexora.pid
+  fi
+'
 echo "=== Compact NEXORA persistent image ==="
-sudo umount "$ROOTFS/persist"
+for i in $(seq 1 20); do
+  if sudo umount "$ROOTFS/persist" 2>/dev/null; then
+    break
+  fi
+  if [ "$i" -eq 20 ]; then
+    echo "NEXORA_PERSIST_UNMOUNT_FAILED"
+    sudo fuser -vm "$ROOTFS/persist" || true
+    exit 1
+  fi
+  sleep 1
+done
 trap - EXIT
 sudo e2fsck -pf "$PERSIST_IMG"
 sudo resize2fs -M "$PERSIST_IMG"
