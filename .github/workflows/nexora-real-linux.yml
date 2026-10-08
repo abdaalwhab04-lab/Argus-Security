@@ -361,13 +361,26 @@ raise SystemExit(entry.load()())
           set -euo pipefail
           bash nexora/scripts/build-kernel.sh
 
+      - name: Normalize NEXORA Kernel Artifact Path
+        run: |
+          set -euo pipefail
+          KERNEL_VERSION="${KERNEL_VERSION:-6.12.50}"
+          LEGACY_DIR="nexora/build/linux-${KERNEL_VERSION}"
+          CLANG_DIR="nexora/build/linux-${KERNEL_VERSION}-clang"
+          if [ -d "${LEGACY_DIR}" ] && [ ! -d "${CLANG_DIR}" ]; then
+            mv "${LEGACY_DIR}" "${CLANG_DIR}"
+          fi
+          test -f "${CLANG_DIR}/arch/x86/boot/bzImage"
+          test -f "${CLANG_DIR}/.config"
+          echo "NEXORA_KERNEL_ARTIFACT_PATH=${CLANG_DIR}"
+
       - name: Verify NEXORA Kernel
         run: |
           set -euo pipefail
           KERNEL_VERSION="${KERNEL_VERSION:-6.12.50}"
-          KERNEL_IMAGE="nexora/build/linux-${KERNEL_VERSION}/arch/x86/boot/bzImage"
+          KERNEL_IMAGE="nexora/build/linux-${KERNEL_VERSION}-clang/arch/x86/boot/bzImage"
           test -f "${KERNEL_IMAGE}"
-          KERNEL_CONFIG="nexora/build/linux-${KERNEL_VERSION}/.config"
+          KERNEL_CONFIG="nexora/build/linux-${KERNEL_VERSION}-clang/.config"
           test -f "${KERNEL_CONFIG}"
           echo "=== Verify Required NEXORA Kernel Configuration ==="
           config_failed=0
@@ -476,7 +489,7 @@ raise SystemExit(entry.load()())
             # observed on the GitHub-hosted QEMU BIOS path ("out of range pointer").
             qemu-system-x86_64 \
               -m 1024 \
-              -machine q35 \
+              -machine pc \
               -display none \
               -serial stdio \
               -kernel "${KERNEL_IMAGE}" \
