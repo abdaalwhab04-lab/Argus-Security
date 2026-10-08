@@ -23,8 +23,12 @@ for helper in nexora-omniroute-install.sh nexora-omniroute-env.sh nexora-persist
 done
 '
 
-echo "=== Prepare NEXORA persistent workspace image (3G working size; shrink after install) ==="
-sudo truncate -s 3G "$PERSIST_IMG"
+echo "=== Prepare NEXORA persistent workspace image (5G working size; shrink after install) ==="
+# OmniRoute 3.8.50 npm extraction can temporarily require more than 3G
+# once the Debian rootfs, npm cache, and package tree coexist. The image is
+# compacted with resize2fs -M after the smoke test, so the final artifact
+# contains only the blocks actually used by the persistent workspace.
+sudo truncate -s 5G "$PERSIST_IMG"
 ls -lh "$PERSIST_IMG"
 sudo mkfs.ext4 -F -q "$PERSIST_IMG"
 sudo mkdir -p "$ROOTFS/persist"
