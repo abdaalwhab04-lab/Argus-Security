@@ -216,6 +216,19 @@ if ! chroot "${ROOTFS_DIR}" /usr/bin/python3.11 -c 'import sys; sys.path.insert(
     exit 1
 fi
 chroot "${ROOTFS_DIR}" /usr/bin/python3.11 -c 'import sys; sys.path.insert(0, "/opt/nexora/aider-site"); import aider.main; sys.argv=["aider","--version"]; raise SystemExit(aider.main.main())'
+# The pip --target install does not create a global console-script launcher.
+# Add a stable Debian-side entry point so scripts and interactive shells can run "aider".
+cat > "${ROOTFS_DIR}/usr/local/bin/aider" <<'AIDER_WRAPPER'
+#!/bin/sh
+export PYTHONPATH="/opt/nexora/aider-site${PYTHONPATH:+:${PYTHONPATH}}"
+exec /usr/bin/python3.11 -c 'import sys; from aider.main import main; sys.exit(main())' -- "$@"
+AIDER_WRAPPER
+chmod 0755 "${ROOTFS_DIR}/usr/local/bin/aider"
+if ! chroot "${ROOTFS_DIR}" /usr/local/bin/aider --version; then
+    echo "ERROR: Aider console launcher failed."
+    exit 1
+fi
+echo "NEXORA_AIDER_LAUNCHER_OK"
 
 echo "=== Install pinned global npm tools from Debian manifest ==="
 mapfile -t NPM_GLOBAL_PACKAGES < <(grep -Ev '^[[:space:]]*(#|$)' "${NEXORA_DIR}/config/termux-npm-global.txt")
