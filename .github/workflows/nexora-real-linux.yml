@@ -248,7 +248,7 @@ jobs:
           check_exec nexora/rootfs/usr/local/bin/pnpm
           check_exec nexora/rootfs/usr/local/bin/nexora-userspace-start.sh
           check_exec nexora/rootfs/usr/local/bin/docker-compose
-          check_exec nexora/rootfs/opt/nexora/aider-venv/bin/aider
+          check_dir nexora/rootfs/opt/nexora/aider-site
 
           echo "=== NEXORA NODE TOOLCHAIN LINKS ==="
           for p in \
@@ -326,12 +326,7 @@ jobs:
           run_chroot NEXORA_NEXORA_PYTHON_VERSION /opt/nexora/python-venv/bin/python --version
           run_chroot NEXORA_NEXORA_PIP_VERSION /opt/nexora/python-venv/bin/pip --version
           run_chroot NEXORA_OMNIROUTE_VERSION /usr/local/bin/omniroute --version
-          run_chroot NEXORA_AIDER_VERSION env PYTHONPATH=/opt/nexora/aider-site /usr/bin/python3.11 -c '
-import importlib.metadata, sys
-entry = next(e for e in importlib.metadata.distribution("aider-chat").entry_points if e.name == "aider")
-sys.argv = ["aider", "--version"]
-raise SystemExit(entry.load()())
-'
+          run_chroot NEXORA_AIDER_VERSION env PYTHONPATH=/opt/nexora/aider-site /usr/bin/python3.11 -c 'import importlib.metadata, sys; entry = next(e for e in importlib.metadata.distribution("aider-chat").entry_points if e.name == "aider"); sys.argv = ["aider", "--version"]; raise SystemExit(entry.load()())'
           run_chroot NEXORA_PRISMA_VERSION /usr/local/bin/prisma --version
           run_chroot NEXORA_DOCKER_COMPOSE /usr/local/bin/docker-compose version
           run_chroot NEXORA_NPM_GLOBAL_LIST /usr/local/bin/npm ls --global --depth=0
