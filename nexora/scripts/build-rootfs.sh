@@ -408,8 +408,8 @@ if ! touch "${PERSIST_ROOT}/.nexora-write-test" 2>/dev/null; then
 fi
 rm -f "${PERSIST_ROOT}/.nexora-write-test"
 echo "NEXORA_DEBIAN_PERSISTENT_WORKSPACE_OK" > /dev/console
-if [ -f "${MARKER}" ]; then sync; echo "NEXORA_PERSISTENCE_RESTORED" ; else printf '%s\n' "NEXORA_PERSISTENCE_OK" > "${MARKER}"; sync; echo "NEXORA_PERSISTENCE_SYNCED" ; echo "NEXORA_PERSISTENCE_INITIALIZED" ; fi
-echo "NEXORA_PERSISTENCE_TEST_DONE" 
+if [ -f "${MARKER}" ]; then sync; echo "NEXORA_PERSISTENCE_RESTORED" > /dev/console; else printf '%s\n' "NEXORA_PERSISTENCE_OK" > "${MARKER}"; sync; echo "NEXORA_PERSISTENCE_SYNCED" > /dev/console; echo "NEXORA_PERSISTENCE_INITIALIZED" > /dev/console; fi
+echo "NEXORA_PERSISTENCE_TEST_DONE" > /dev/console
 PERSISTTEST
 chmod +x "${ROOTFS_DIR}/usr/local/bin/nexora-persistence-test.sh"
 
