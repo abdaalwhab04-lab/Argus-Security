@@ -221,7 +221,7 @@ API_KEY="$(cat /tmp/omniroute-api-key)"
 MODEL="$(cat /tmp/nexora-aider-model)"
 export OPENAI_API_BASE="http://127.0.0.1:20129/v1"
 export OPENAI_API_KEY="$API_KEY"
-# LiteLLM requires an explicit provider for OmniRoute's nonstandard model IDs.
+# LiteLLM requires an explicit provider prefix for nonstandard OmniRoute model IDs.
 # Its OpenAI provider strips this prefix before forwarding the original model ID.
 AIDER_MODEL_ID="openai/$MODEL"
 export AIDER_MODEL="$AIDER_MODEL_ID"
