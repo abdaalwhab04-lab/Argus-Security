@@ -365,14 +365,14 @@ mkdir -p "${PERSISTENT_WORKSPACE}/source" "${PERSISTENT_WORKSPACE}/software" "${
 if [ -d "${REPO_ROOT}/autogpt" ]; then rsync -a --delete "${REPO_ROOT}/autogpt/" "${PERSISTENT_WORKSPACE}/source/autogpt/"; fi
 if [ -d "${REPO_ROOT}/omniroute" ]; then rsync -a --delete "${REPO_ROOT}/omniroute/" "${PERSISTENT_WORKSPACE}/source/omniroute/"; fi
 # Preinstall OmniRoute during image construction, not during guest boot.
-if [ -f "\${PERSISTENT_WORKSPACE}/source/omniroute/package.json" ]; then
+if [ -f "${PERSISTENT_WORKSPACE}/source/omniroute/package.json" ]; then
     echo "=== Preinstall OmniRoute runtime into Debian RootFS ==="
-    mkdir -p "\${PERSISTENT_WORKSPACE}/software/omniroute"
+    mkdir -p "${PERSISTENT_WORKSPACE}/software/omniroute"
     chroot "\${ROOTFS_DIR}" /usr/local/bin/npm install --prefix /opt/nexora/debian-workspace/software/omniroute --omit=dev --ignore-scripts --no-fund --no-audit "omniroute@3.8.50"
-    test -f "\${PERSISTENT_WORKSPACE}/software/omniroute/node_modules/omniroute/package.json"
-    test -f "\${PERSISTENT_WORKSPACE}/software/omniroute/node_modules/omniroute/dist/server.js"
-    test -x "\${PERSISTENT_WORKSPACE}/software/omniroute/node_modules/.bin/omniroute"
-    printf '%s\n' "3.8.50" > "\${PERSISTENT_WORKSPACE}/software/omniroute/.nexora-omniroute-version"
+    test -f "${PERSISTENT_WORKSPACE}/software/omniroute/node_modules/omniroute/package.json"
+    test -f "${PERSISTENT_WORKSPACE}/software/omniroute/node_modules/omniroute/dist/server.js"
+    test -x "${PERSISTENT_WORKSPACE}/software/omniroute/node_modules/.bin/omniroute"
+    printf '%s\n' "3.8.50" > "${PERSISTENT_WORKSPACE}/software/omniroute/.nexora-omniroute-version"
     echo "NEXORA_OMNIROUTE_PREINSTALLED_OK"
 fi
 cat > "${ROOTFS_DIR}/etc/nexora-persistent-workspace.conf" <<'WORKSPACE'
@@ -397,6 +397,14 @@ SOURCE_ROOT="/opt/nexora/debian-workspace/source"
 MARKER="/persist/nexora-persistence-marker"
 mkdir -p "${PERSIST_ROOT}/software" "${PERSIST_ROOT}/data" "${PERSIST_ROOT}/source"
 echo "NEXORA_PERSISTENCE_SEED_START" > /dev/console
+# Seed the preinstalled OmniRoute runtime into persistent storage on first boot.
+# Keep the image's runtime as the source of truth; do not run npm during guest boot.
+OMNIROUTE_SEED="/opt/nexora/debian-workspace/software/omniroute"
+if [ -d "${OMNIROUTE_SEED}/node_modules" ]; then
+  mkdir -p "${PERSIST_ROOT}/software/omniroute"
+  rsync -a --delete "${OMNIROUTE_SEED}/" "${PERSIST_ROOT}/software/omniroute/"
+  echo "NEXORA_OMNIROUTE_RUNTIME_SEEDED" > /dev/console
+fi
 for project in autogpt omniroute; do
   if [ -d "${SOURCE_ROOT}/${project}" ]; then
     mkdir -p "${PERSIST_ROOT}/source/${project}"
@@ -424,7 +432,7 @@ echo "NEXORA_PERSISTENCE_TEST_DONE" > /dev/console
 PERSISTTEST
 chmod +x "${ROOTFS_DIR}/usr/local/bin/nexora-persistence-test.sh"
 
-cat > "\${ROOTFS_DIR}/usr/local/bin/nexora-omniroute-install.sh" <<'OMNIINSTALL'
+cat > "${ROOTFS_DIR}/usr/local/bin/nexora-omniroute-install.sh" <<'OMNIINSTALL'
 #!/bin/sh
 set -eu
 PERSIST_ROOT="/persist/debian-workspace"
