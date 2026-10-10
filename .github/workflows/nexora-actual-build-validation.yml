@@ -63,8 +63,9 @@ jobs:
           set -euo pipefail
           sudo bash nexora/scripts/build-rootfs.sh
           test -x nexora/rootfs/sbin/init
-          test -x nexora/rootfs/usr/local/bin/omniroute
-          test -x nexora/rootfs/opt/nexora/aider-venv/bin/aider
+          test -x nexora/rootfs/usr/local/bin/aider
+          test -x nexora/rootfs/usr/local/bin/nexora-omniroute-install.sh
+          test -s nexora/rootfs/etc/systemd/system/nexora-omniroute.service
           echo "NEXORA_DEBIAN_ROOTFS_BUILD_OK"
 
       - name: Build Linux kernel
