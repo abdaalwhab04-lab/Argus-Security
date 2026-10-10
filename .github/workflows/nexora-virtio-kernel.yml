@@ -8,6 +8,11 @@ on:
         required: true
         default: "omniroute-v3.8.50-integration"
         type: string
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/nexora-virtio-kernel.yml"
 
 permissions:
   contents: read
@@ -21,7 +26,7 @@ jobs:
       - name: Checkout NEXORA source branch
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source_ref }}
+          ref: ${{ inputs.source_ref || 'omniroute-v3.8.50-integration' }}
           lfs: false
 
       - name: Install build and smoke-test dependencies
@@ -57,9 +62,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test_init="$(mktemp)"
           initrd_dir="$(mktemp -d)"
-          trap 'rm -f "$test_init"; rm -rf "$initrd_dir"' EXIT
+          trap 'rm -rf "$initrd_dir"' EXIT
           mkdir -p "$initrd_dir/bin" "$initrd_dir/dev" "$initrd_dir/proc" "$initrd_dir/sys"
           busybox="$(command -v busybox)"
           file "$busybox" | grep -q "x86-64"
