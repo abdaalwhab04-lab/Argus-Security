@@ -75,7 +75,7 @@ jobs:
             ./busybox --install -s .
           )
           cat > "$initrd_dir/init" <<'INIT'
-          #!/bin/sh
+          #!/bin/busybox sh
           mount -t proc proc /proc
           mount -t sysfs sysfs /sys
           mount -t devtmpfs devtmpfs /dev
@@ -93,7 +93,47 @@ jobs:
           exec /bin/busybox sh
           INIT
           chmod +x "$initrd_dir/init"
+          test -x "$initrd_dir/bin/busybox"
+          test -x "$initrd_dir/init"
           (cd "$initrd_dir" && find . -print0 | cpio --null -o -H newc | gzip -9) > output/virtio-smoke-initramfs.cpio.gz
+          gzip -t output/virtio-smoke-initramfs.cpio.gz
+          gzip -dc output/virtio-smoke-initramfs.cpio.gz | cpio -it 2>/dev/null | grep -Eq '^\.?/?init
+          echo "NEXORA_ISOLATED_SMOKE_INPUTS_OK"
+
+      - name: Boot kernel against temporary VirtIO disk
+        shell: bash
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          log="output/virtio-smoke.log"
+          set +e
+          timeout --signal=TERM 45s qemu-system-x86_64 \
+            -m 1024 -smp 2 -machine pc -display none -serial stdio \
+            -kernel output/bzImage \
+            -initrd output/virtio-smoke-initramfs.cpio.gz \
+            -append "console=ttyS0,115200 panic=1" \
+            -drive "file=output/virtio-smoke-disk.img,format=raw,if=virtio" \
+            -no-reboot >"$log" 2>&1
+          rc=$?
+          set -e
+          if ! grep -q "NEXORA_VIRTIO_BLOCK_DEVICE_OK" "$log"; then
+            cat "$log"
+            echo "NEXORA_VIRTIO_SMOKE_FAILED (qemu exit $rc)"
+            exit 1
+          fi
+          echo "NEXORA_VIRTIO_SMOKE_OK"
+
+      - name: Upload tested kernel and diagnostics
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: nexora-virtio-kernel-${{ github.run_number }}
+          path: |
+            output/bzImage
+            output/kernel.config
+            output/virtio-smoke.log
+          if-no-files-found: error
+          retention-days: 14
+ || { echo 'NEXORA_INITRAMFS_MISSING_INIT'; exit 1; }
           truncate -s 64M output/virtio-smoke-disk.img
           echo "NEXORA_ISOLATED_SMOKE_INPUTS_OK"
 
