@@ -436,25 +436,25 @@ cat > "${ROOTFS_DIR}/usr/local/bin/nexora-omniroute-install.sh" <<'OMNIINSTALL'
 #!/bin/sh
 set -eu
 PERSIST_ROOT="/persist/debian-workspace"
-SOURCE_ROOT="\${PERSIST_ROOT}/source/omniroute"
-RUNTIME_ROOT="\${PERSIST_ROOT}/software/omniroute"
-MARKER="\${RUNTIME_ROOT}/.nexora-omniroute-version"
-OMNIROUTE_VERSION="\${OMNIROUTE_VERSION:-3.8.50}"
-test -f "\${SOURCE_ROOT}/package.json"
-if [ ! -x "\${RUNTIME_ROOT}/node_modules/.bin/omniroute" ] || [ ! -f "\${MARKER}" ] || [ "$(cat "\${MARKER}" 2>/dev/null || true)" != "\${OMNIROUTE_VERSION}" ]; then
+SOURCE_ROOT="${PERSIST_ROOT}/source/omniroute"
+RUNTIME_ROOT="${PERSIST_ROOT}/software/omniroute"
+MARKER="${RUNTIME_ROOT}/.nexora-omniroute-version"
+OMNIROUTE_VERSION="${OMNIROUTE_VERSION:-3.8.50}"
+test -f "${SOURCE_ROOT}/package.json"
+if [ ! -x "${RUNTIME_ROOT}/node_modules/.bin/omniroute" ] || [ ! -f "${MARKER}" ] || [ "$(cat "${MARKER}" 2>/dev/null || true)" != "${OMNIROUTE_VERSION}" ]; then
   echo "NEXORA_OMNIROUTE_RUNTIME_MISSING: prebuilt runtime not seeded into /persist" > /dev/console
   exit 1
 fi
-test -f "\${RUNTIME_ROOT}/node_modules/omniroute/dist/server.js"
-if [ ! -L "\${SOURCE_ROOT}/node_modules" ]; then
-  rm -rf "\${SOURCE_ROOT}/node_modules"
-  ln -s "\${RUNTIME_ROOT}/node_modules" "\${SOURCE_ROOT}/node_modules"
+test -f "${RUNTIME_ROOT}/node_modules/omniroute/dist/server.js"
+if [ ! -L "${SOURCE_ROOT}/node_modules" ]; then
+  rm -rf "${SOURCE_ROOT}/node_modules"
+  ln -s "${RUNTIME_ROOT}/node_modules" "${SOURCE_ROOT}/node_modules"
 fi
-if [ ! -L "\${SOURCE_ROOT}/dist" ]; then
-  rm -rf "\${SOURCE_ROOT}/dist"
-  ln -s "\${RUNTIME_ROOT}/node_modules/omniroute/dist" "\${SOURCE_ROOT}/dist"
+if [ ! -L "${SOURCE_ROOT}/dist" ]; then
+  rm -rf "${SOURCE_ROOT}/dist"
+  ln -s "${RUNTIME_ROOT}/node_modules/omniroute/dist" "${SOURCE_ROOT}/dist"
 fi
-"\${RUNTIME_ROOT}/node_modules/.bin/omniroute" --version
+"${RUNTIME_ROOT}/node_modules/.bin/omniroute" --version
 echo "NEXORA_OMNIROUTE_INSTALL_REUSED"
 OMNIINSTALL
 chmod +x "${ROOTFS_DIR}/usr/local/bin/nexora-omniroute-install.sh"
