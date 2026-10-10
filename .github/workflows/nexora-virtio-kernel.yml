@@ -1,0 +1,128 @@
+name: NEXORA VirtIO Kernel Build (Safe)
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: "Branch containing NEXORA kernel config and build script"
+        required: true
+        default: "omniroute-v3.8.50-integration"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test-kernel:
+    name: Build kernel and test VirtIO without touching persistent data
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout NEXORA source branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ inputs.source_ref }}
+          lfs: false
+
+      - name: Install build and smoke-test dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y build-essential bc bison flex libssl-dev libelf-dev libdw-dev cpio gzip busybox-static qemu-system-x86 e2fsprogs file
+
+      - name: Build kernel using repository configuration
+        shell: bash
+        env:
+          NEXORA_KERNEL_JOBS: "2"
+          KERNEL_VERSION: "6.12.50"
+        run: |
+          set -euo pipefail
+          bash nexora/scripts/build-kernel.sh
+          kernel="nexora/build/linux-6.12.50/arch/x86/boot/bzImage"
+          config="nexora/build/linux-6.12.50/.config"
+          test -s "$kernel"
+          test -s "$config"
+          for option in CONFIG_VIRTIO=y CONFIG_VIRTIO_PCI=y CONFIG_VIRTIO_BLK=y CONFIG_DEVTMPFS=y CONFIG_EXT4_FS=y; do
+            grep -qxF "$option" "$config" || { echo "MISSING_REQUIRED_KERNEL_OPTION $option"; exit 1; }
+            echo "KERNEL_CONFIG_OK $option"
+          done
+          mkdir -p output
+          cp "$kernel" output/bzImage
+          cp "$config" output/kernel.config
+          file output/bzImage
+          echo "NEXORA_KERNEL_BUILD_OK"
+
+      - name: Create isolated initramfs and temporary VirtIO disk
+        shell: bash
+        run: |
+          set -euo pipefail
+          test_init="$(mktemp)"
+          initrd_dir="$(mktemp -d)"
+          trap 'rm -f "$test_init"; rm -rf "$initrd_dir"' EXIT
+          mkdir -p "$initrd_dir/bin" "$initrd_dir/dev" "$initrd_dir/proc" "$initrd_dir/sys"
+          busybox="$(command -v busybox)"
+          file "$busybox" | grep -q "x86-64"
+          file "$busybox" | grep -q "statically linked"
+          cp -L "$busybox" "$initrd_dir/bin/busybox"
+          chmod +x "$initrd_dir/bin/busybox"
+          (
+            cd "$initrd_dir/bin"
+            ./busybox --install -s .
+          )
+          cat > "$initrd_dir/init" <<'INIT'
+          #!/bin/sh
+          mount -t proc proc /proc
+          mount -t sysfs sysfs /sys
+          mount -t devtmpfs devtmpfs /dev
+          echo NEXORA_VIRTIO_SMOKE_STARTED
+          i=0
+          while [ ! -b /dev/vda ] && [ "$i" -lt 20 ]; do
+            sleep 1
+            i=$((i + 1))
+          done
+          if [ -b /dev/vda ]; then
+            echo NEXORA_VIRTIO_BLOCK_DEVICE_OK
+            /bin/busybox poweroff -f
+          fi
+          echo NEXORA_VIRTIO_BLOCK_DEVICE_FAILED
+          exec /bin/busybox sh
+          INIT
+          chmod +x "$initrd_dir/init"
+          (cd "$initrd_dir" && find . -print0 | cpio --null -o -H newc | gzip -9) > output/virtio-smoke-initramfs.cpio.gz
+          truncate -s 64M output/virtio-smoke-disk.img
+          echo "NEXORA_ISOLATED_SMOKE_INPUTS_OK"
+
+      - name: Boot kernel against temporary VirtIO disk
+        shell: bash
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          log="output/virtio-smoke.log"
+          set +e
+          timeout --signal=TERM 45s qemu-system-x86_64 \
+            -m 1024 -smp 2 -machine pc -display none -serial stdio \
+            -kernel output/bzImage \
+            -initrd output/virtio-smoke-initramfs.cpio.gz \
+            -append "console=ttyS0,115200 panic=1" \
+            -drive "file=output/virtio-smoke-disk.img,format=raw,if=virtio" \
+            -no-reboot >"$log" 2>&1
+          rc=$?
+          set -e
+          if ! grep -q "NEXORA_VIRTIO_BLOCK_DEVICE_OK" "$log"; then
+            cat "$log"
+            echo "NEXORA_VIRTIO_SMOKE_FAILED (qemu exit $rc)"
+            exit 1
+          fi
+          echo "NEXORA_VIRTIO_SMOKE_OK"
+
+      - name: Upload tested kernel and diagnostics
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: nexora-virtio-kernel-${{ github.run_number }}
+          path: |
+            output/bzImage
+            output/kernel.config
+            output/virtio-smoke.log
+          if-no-files-found: error
+          retention-days: 14
