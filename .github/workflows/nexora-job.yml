@@ -120,7 +120,7 @@ jobs:
           mkdir -p output
           log="output/nexora-boot-smoke.log"
           set +e
-          timeout --signal=TERM 120s qemu-system-x86_64 \
+          sudo timeout --signal=TERM 120s qemu-system-x86_64 \
             -m 3072 -smp 2 -machine pc -display none -serial stdio \
             -kernel "nexora/build/linux-${KERNEL_VERSION:-6.12.50}-clang/arch/x86/boot/bzImage" \
             -initrd nexora/build/nexora-initramfs.cpio.gz \
