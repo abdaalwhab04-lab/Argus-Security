@@ -116,6 +116,32 @@ jobs:
           e2fsck -fn "$image" || test "$?" -eq 1
           echo "NEXORA_PERSISTENT_DISK_CHECK_OK"
 
+      - name: Boot NEXORA and verify persistent disk mounts
+        shell: bash
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          mkdir -p output
+          log="output/nexora-boot-smoke.log"
+          set +e
+          timeout --signal=TERM 120s qemu-system-x86_64 \\
+            -m 3072 -smp 2 -machine pc -display none -serial stdio \\
+            -kernel "nexora/build/linux-${KERNEL_VERSION:-6.12.50}-clang/arch/x86/boot/bzImage" \\
+            -initrd nexora/build/nexora-initramfs.cpio.gz \\
+            -append "root=/dev/ram0 rw console=ttyS0,115200 systemd.mask=serial-getty@ttyS0.service" \\
+            -drive "file=nexora/build/output/nexora.iso,media=cdrom,if=ide,readonly=on" \\
+            -drive "file=nexora/build/persistent-data.img,format=raw,if=virtio" \\
+            -no-reboot >"$log" 2>&1
+          rc=$?
+          set -e
+          if [ "$rc" -ne 0 ] && [ "$rc" -ne 124 ] && [ "$rc" -ne 143 ]; then
+            cat "$log"
+            exit "$rc"
+          fi
+          grep -q 'NEXORA_PERSISTENT_STORAGE_OK' "$log" || { cat "$log"; echo 'NEXORA_BOOT_PERSISTENCE_MOUNT_FAILED'; exit 1; }
+          grep -q 'NEXORA_ROOTFS_SWITCH' "$log" || { cat "$log"; echo 'NEXORA_BOOT_ROOTFS_SWITCH_FAILED'; exit 1; }
+          echo 'NEXORA_BOOT_PERSISTENCE_SMOKE_OK'
+
       - name: Upload build reports only
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
