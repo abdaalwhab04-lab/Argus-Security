@@ -1,0 +1,91 @@
+name: NEXORA Linux Job Recovery
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - omniroute-v3.8.50-integration
+      - nexora-real-test
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nexora-real-linux-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  argus-nexora:
+    name: Argus + NEXORA Linux Environment
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout repository with Git LFS
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          lfs: true
+
+      - name: Validate NEXORA source files before build
+        shell: bash
+        run: |
+          set -euo pipefail
+          for script in \
+            nexora/scripts/build-rootfs.sh \
+            nexora/scripts/build-kernel.sh \
+            nexora/scripts/build-initramfs.sh \
+            nexora/scripts/build-iso.sh \
+            nexora/scripts/build-persistent-storage.sh \
+            nexora/scripts/integrate-argus.sh; do
+            test -f "$script"
+            bash -n "$script"
+            echo "SYNTAX_OK $script"
+          done
+          test -f nexora/rootfs/initramfs/init
+          test -x nexora/rootfs/initramfs/init
+          test -f nexora/config/kernel.conf
+          echo "NEXORA_SOURCE_PREFLIGHT_OK"
+
+      - name: Install NEXORA build dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential bc bison flex libssl-dev libelf-dev libdw-dev \
+            cpio gzip xorriso grub-pc-bin grub-efi-amd64-bin grub-efi-amd64 \
+            mtools rsync busybox-static qemu-system-x86 debootstrap e2fsprogs \
+            git-lfs
+
+      - name: Verify runner tools and Debian archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          for tool in gcc make bc bison flex cpio gzip xorriso grub-mkrescue rsync busybox qemu-system-x86_64; do
+            command -v "$tool"
+          done
+          test -s nexora/debian/debian-12-generic-amd64.tar.xz
+          file nexora/debian/debian-12-generic-amd64.tar.xz
+          qemu-system-x86_64 --version
+          echo "NEXORA_RUNNER_PREFLIGHT_OK"
+
+      - name: Verify Debian rootfs build prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -qx 'CONFIG_EXT4_FS=y' nexora/config/kernel.conf
+          grep -qx 'CONFIG_OVERLAY_FS=y' nexora/config/kernel.conf
+          grep -qx 'CONFIG_VIRTIO_BLK=y' nexora/config/kernel.conf
+          grep -qx 'CONFIG_BRIDGE=y' nexora/config/kernel.conf
+          grep -qx 'CONFIG_VETH=y' nexora/config/kernel.conf
+          grep -qx 'CONFIG_NF_NAT=y' nexora/config/kernel.conf
+          echo "NEXORA_KERNEL_CONFIG_PREFLIGHT_OK"
+
+      - name: Confirm NEXORA job is executing
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "NEXORA_JOB_STARTED"
+          echo "ref=${GITHUB_REF}"
+          echo "sha=${GITHUB_SHA}"
+          echo "event=${GITHUB_EVENT_NAME}"
+          echo "NEXORA_JOB_OK"
