@@ -1,0 +1,3 @@
+Requested GitHub Actions push-trigger for NEXORA end-to-end validation.
+Purpose: trigger .github/workflows/nexora-real-linux.yml on branch omniroute-v3.8.50-integration.
+This marker does not contain credentials or runtime data.
