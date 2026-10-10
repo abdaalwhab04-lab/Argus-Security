@@ -385,15 +385,17 @@ PERSIST_ROOT="/persist/debian-workspace"
 SOURCE_ROOT="/opt/nexora/debian-workspace/source"
 MARKER="/persist/nexora-persistence-marker"
 mkdir -p "${PERSIST_ROOT}/software" "${PERSIST_ROOT}/data" "${PERSIST_ROOT}/source"
-echo "NEXORA_PERSISTENCE_SEED_START" 
+echo "NEXORA_PERSISTENCE_SEED_START" > /dev/console
 for project in autogpt omniroute; do
   if [ -d "${SOURCE_ROOT}/${project}" ]; then
     mkdir -p "${PERSIST_ROOT}/source/${project}"
-    rsync -a --delete --exclude '.nexora-seeded' "${SOURCE_ROOT}/${project}/" "${PERSIST_ROOT}/source/${project}/"
+    echo "NEXORA_PERSISTENCE_COPY_START=${project}" > /dev/console
+    rsync -a --delete --exclude '.nexora-seeded' --exclude '.git/' --exclude 'node_modules/' --exclude '.next/' --exclude '.turbo/' --exclude '.cache/' --exclude 'coverage/' --exclude 'dist/' "${SOURCE_ROOT}/${project}/" "${PERSIST_ROOT}/source/${project}/"
     touch "${PERSIST_ROOT}/source/${project}/.nexora-seeded"
+    echo "NEXORA_PERSISTENCE_COPY_DONE=${project}" > /dev/console
   fi
 done
-echo "NEXORA_PERSISTENCE_SEED_DONE" 
+echo "NEXORA_PERSISTENCE_SEED_DONE" > /dev/console
 ln -sfn "${PERSIST_ROOT}/source" /opt/nexora/workspace
 ln -sfn "${PERSIST_ROOT}/software" /opt/nexora/software
 ln -sfn "${PERSIST_ROOT}/data" /opt/nexora/data
@@ -405,7 +407,7 @@ if ! touch "${PERSIST_ROOT}/.nexora-write-test" 2>/dev/null; then
   exit 1
 fi
 rm -f "${PERSIST_ROOT}/.nexora-write-test"
-echo "NEXORA_DEBIAN_PERSISTENT_WORKSPACE_OK" 
+echo "NEXORA_DEBIAN_PERSISTENT_WORKSPACE_OK" > /dev/console
 if [ -f "${MARKER}" ]; then sync; echo "NEXORA_PERSISTENCE_RESTORED" ; else printf '%s\n' "NEXORA_PERSISTENCE_OK" > "${MARKER}"; sync; echo "NEXORA_PERSISTENCE_SYNCED" ; echo "NEXORA_PERSISTENCE_INITIALIZED" ; fi
 echo "NEXORA_PERSISTENCE_TEST_DONE" 
 PERSISTTEST
@@ -429,10 +431,12 @@ mkdir -p "${RUNTIME_ROOT}" "${DATA_ROOT}"
 # the multi-gigabyte Next.js source build on every smoke test. This is the
 # durable alternative to the repeatedly terminated hosted-runner builds.
 if [ ! -x "${RUNTIME_ROOT}/node_modules/.bin/omniroute" ] || [ ! -f "${MARKER}" ] || [ "$(cat "${MARKER}" 2>/dev/null || true)" != "${OMNIROUTE_VERSION}" ]; then
-  echo "NEXORA_OMNIROUTE_INSTALL_START"
+  echo "NEXORA_OMNIROUTE_INSTALL_START" > /dev/console
   rm -rf "${RUNTIME_ROOT}/node_modules" "${RUNTIME_ROOT}/package.json" "${RUNTIME_ROOT}/package-lock.json"
   rm -rf "${SOURCE_ROOT}/node_modules"
-  npm install --prefix "${RUNTIME_ROOT}" --omit=dev --ignore-scripts --no-fund --no-audit "omniroute@${OMNIROUTE_VERSION}"
+  echo "NEXORA_OMNIROUTE_NPM_INSTALL_START" > /dev/console
+  timeout --signal=TERM --kill-after=10s 150s npm install --prefix "${RUNTIME_ROOT}" --omit=dev --ignore-scripts --no-fund --no-audit "omniroute@${OMNIROUTE_VERSION}"
+  echo "NEXORA_OMNIROUTE_NPM_INSTALL_DONE" > /dev/console
   test -f "${RUNTIME_ROOT}/node_modules/omniroute/package.json"
   test -f "${RUNTIME_ROOT}/node_modules/omniroute/dist/server.js"
   test -x "${RUNTIME_ROOT}/node_modules/.bin/omniroute"
@@ -440,7 +444,7 @@ if [ ! -x "${RUNTIME_ROOT}/node_modules/.bin/omniroute" ] || [ ! -f "${MARKER}" 
   ln -s "${RUNTIME_ROOT}/node_modules/omniroute/dist" "${SOURCE_ROOT}/dist"
   ln -s "${RUNTIME_ROOT}/node_modules" "${SOURCE_ROOT}/node_modules"
   printf '%s\\n' "${OMNIROUTE_VERSION}" > "${MARKER}"
-  echo "NEXORA_OMNIROUTE_INSTALL_DONE"
+  echo "NEXORA_OMNIROUTE_INSTALL_DONE" > /dev/console
 else
   if [ ! -L "${SOURCE_ROOT}/node_modules" ]; then
     rm -rf "${SOURCE_ROOT}/node_modules"
@@ -450,7 +454,7 @@ else
     rm -rf "${SOURCE_ROOT}/dist"
     ln -s "${RUNTIME_ROOT}/node_modules/omniroute/dist" "${SOURCE_ROOT}/dist"
   fi
-  echo "NEXORA_OMNIROUTE_INSTALL_REUSED"
+  echo "NEXORA_OMNIROUTE_INSTALL_REUSED" > /dev/console
 fi
 
 test -x "${RUNTIME_ROOT}/node_modules/.bin/omniroute"
@@ -604,6 +608,7 @@ Before=multi-user.target
 [Service]
 Type=oneshot
 ExecStart=/usr/local/bin/nexora-userspace-start.sh
+TimeoutStartSec=210s
 RemainAfterExit=yes
 
 [Install]
