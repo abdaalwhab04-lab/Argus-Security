@@ -2,7 +2,7 @@
 set -eu
 
 REPO_ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
-BUILD_DIR="$REPO_ROOT/build"
+BUILD_DIR="$REPO_ROOT/nexora/build"
 ISO_IMAGE="$BUILD_DIR/output/nexora.iso"
 PERSISTENT_DISK="$BUILD_DIR/persistent-data.img"
 KERNEL_IMAGE="$BUILD_DIR/linux-${KERNEL_VERSION:-6.12.50}-clang/arch/x86/boot/bzImage"
