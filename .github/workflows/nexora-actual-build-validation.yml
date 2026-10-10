@@ -1,0 +1,127 @@
+name: NEXORA Actual Linux Build Validation
+
+on:
+  push:
+    branches:
+      - omniroute-v3.8.50-integration
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nexora-actual-build-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-validate:
+    name: Build Debian RootFS, Kernel, Initramfs and ISO
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout repository with Debian LFS archive
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          lfs: true
+
+      - name: Validate source scripts and repository Debian archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in nexora/scripts/build-rootfs.sh nexora/scripts/build-kernel.sh nexora/scripts/build-initramfs.sh nexora/scripts/build-iso.sh nexora/scripts/build-persistent-storage.sh nexora/scripts/integrate-argus.sh; do
+            test -s "$f"
+            bash -n "$f"
+            echo "SCRIPT_SYNTAX_OK $f"
+          done
+          test -s nexora/debian/debian-12-generic-amd64.tar.xz
+          test -x nexora/rootfs/initramfs/init
+          test -s nexora/config/kernel.conf
+          echo "NEXORA_SOURCE_PREFLIGHT_OK"
+
+      - name: Install Linux build dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y build-essential bc bison flex libssl-dev libelf-dev libdw-dev cpio gzip xorriso grub-pc-bin grub-efi-amd64-bin grub-efi-amd64 mtools rsync busybox-static qemu-system-x86 debootstrap e2fsprogs git-lfs
+
+      - name: Verify Debian archive and runner capabilities
+        shell: bash
+        run: |
+          set -euo pipefail
+          file nexora/debian/debian-12-generic-amd64.tar.xz
+          command -v losetup
+          command -v mount
+          command -v debootstrap
+          qemu-system-x86_64 --version
+          df -h
+          echo "NEXORA_BUILD_TOOLS_OK"
+
+      - name: Build Debian RootFS from the repository archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo bash nexora/scripts/build-rootfs.sh
+          test -x nexora/rootfs/sbin/init
+          test -x nexora/rootfs/usr/local/bin/omniroute
+          test -x nexora/rootfs/opt/nexora/aider-venv/bin/aider
+          echo "NEXORA_DEBIAN_ROOTFS_BUILD_OK"
+
+      - name: Build Linux kernel
+        shell: bash
+        env:
+          NEXORA_KERNEL_JOBS: "2"
+        run: |
+          set -euo pipefail
+          bash nexora/scripts/build-kernel.sh
+          KERNEL_VERSION="${KERNEL_VERSION:-6.12.50}"
+          test -s "nexora/build/linux-${KERNEL_VERSION}/arch/x86/boot/bzImage"
+          echo "NEXORA_KERNEL_BUILD_OK"
+
+      - name: Normalize kernel artifact path
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${KERNEL_VERSION:-6.12.50}"
+          legacy="nexora/build/linux-${version}"
+          normalized="nexora/build/linux-${version}-clang"
+          if [ -d "$legacy" ] && [ ! -e "$normalized" ]; then mv "$legacy" "$normalized"; fi
+          test -s "$normalized/arch/x86/boot/bzImage"
+          echo "NEXORA_KERNEL_PATH_OK=$normalized"
+
+      - name: Build initramfs and ISO
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash nexora/scripts/build-initramfs.sh
+          gzip -t nexora/build/nexora-initramfs.cpio.gz
+          sudo bash nexora/scripts/build-iso.sh
+          test -s nexora/build/output/nexora.iso
+          file nexora/build/output/nexora.iso
+          echo "NEXORA_ISO_BUILD_OK"
+
+      - name: Prepare a fresh CI-only persistent disk safely
+        shell: bash
+        run: |
+          set -euo pipefail
+          image="nexora/build/persistent-data.img"
+          if [ -e "$image" ]; then
+            echo "Existing persistent disk detected; preserving it without formatting."
+          else
+            sudo bash nexora/scripts/build-persistent-storage.sh
+          fi
+          test -s "$image"
+          file "$image"
+          e2fsck -fn "$image" || test "$?" -eq 1
+          echo "NEXORA_PERSISTENT_DISK_CHECK_OK"
+
+      - name: Upload build reports only
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        continue-on-error: true
+        with:
+          name: nexora-build-validation-reports
+          path: |
+            output/
+          if-no-files-found: warn
+          compression-level: 0
