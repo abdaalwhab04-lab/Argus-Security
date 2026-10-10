@@ -368,7 +368,7 @@ if [ -d "${REPO_ROOT}/omniroute" ]; then rsync -a --delete "${REPO_ROOT}/omnirou
 if [ -f "${PERSISTENT_WORKSPACE}/source/omniroute/package.json" ]; then
     echo "=== Preinstall OmniRoute runtime into Debian RootFS ==="
     mkdir -p "${PERSISTENT_WORKSPACE}/software/omniroute"
-    chroot "\${ROOTFS_DIR}" /usr/local/bin/npm install --prefix /opt/nexora/debian-workspace/software/omniroute --omit=dev --ignore-scripts --no-fund --no-audit "omniroute@3.8.50"
+    chroot "${ROOTFS_DIR}" /usr/local/bin/npm install --prefix /opt/nexora/debian-workspace/software/omniroute --omit=dev --ignore-scripts --no-fund --no-audit "omniroute@3.8.50"
     test -f "${PERSISTENT_WORKSPACE}/software/omniroute/node_modules/omniroute/package.json"
     test -f "${PERSISTENT_WORKSPACE}/software/omniroute/node_modules/omniroute/dist/server.js"
     test -x "${PERSISTENT_WORKSPACE}/software/omniroute/node_modules/.bin/omniroute"
