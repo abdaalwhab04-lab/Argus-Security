@@ -1,4 +1,4 @@
-name: NEXORA Full Linux Validation
+name: NEXORA Full Linux Build and Persistence Validation
 
 on:
   workflow_dispatch:
@@ -471,7 +471,7 @@ raise SystemExit(entry.load()())
         run: |
           set -euo pipefail
           ISO_IMAGE="nexora/build/output/nexora.iso"
-          KERNEL_IMAGE="nexora/build/linux-${KERNEL_VERSION:-6.12.50}/arch/x86/boot/bzImage"
+          KERNEL_IMAGE="nexora/build/linux-${KERNEL_VERSION:-6.12.50}-clang/arch/x86/boot/bzImage"
           INITRAMFS_IMAGE="nexora/build/nexora-initramfs.cpio.gz"
           PERSISTENT_DISK="nexora/build/persistent-data.img"
           OUTPUT_DIR="output"
@@ -618,9 +618,7 @@ raise SystemExit(entry.load()())
         continue-on-error: true
         with:
           name: argus-nexora-test-results
-          path: |
-            output/
-            nexora/build/persistent-data.img
+          path: output/
           if-no-files-found: warn
           compression-level: 0
 
