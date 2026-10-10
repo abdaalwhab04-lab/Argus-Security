@@ -364,6 +364,17 @@ PERSISTENT_WORKSPACE="${ROOTFS_DIR}/opt/nexora/debian-workspace"
 mkdir -p "${PERSISTENT_WORKSPACE}/source" "${PERSISTENT_WORKSPACE}/software" "${PERSISTENT_WORKSPACE}/data"
 if [ -d "${REPO_ROOT}/autogpt" ]; then rsync -a --delete "${REPO_ROOT}/autogpt/" "${PERSISTENT_WORKSPACE}/source/autogpt/"; fi
 if [ -d "${REPO_ROOT}/omniroute" ]; then rsync -a --delete "${REPO_ROOT}/omniroute/" "${PERSISTENT_WORKSPACE}/source/omniroute/"; fi
+# Preinstall OmniRoute during image construction, not during guest boot.
+if [ -f "\${PERSISTENT_WORKSPACE}/source/omniroute/package.json" ]; then
+    echo "=== Preinstall OmniRoute runtime into Debian RootFS ==="
+    mkdir -p "\${PERSISTENT_WORKSPACE}/software/omniroute"
+    chroot "\${ROOTFS_DIR}" /usr/local/bin/npm install --prefix /opt/nexora/debian-workspace/software/omniroute --omit=dev --ignore-scripts --no-fund --no-audit "omniroute@3.8.50"
+    test -f "\${PERSISTENT_WORKSPACE}/software/omniroute/node_modules/omniroute/package.json"
+    test -f "\${PERSISTENT_WORKSPACE}/software/omniroute/node_modules/omniroute/dist/server.js"
+    test -x "\${PERSISTENT_WORKSPACE}/software/omniroute/node_modules/.bin/omniroute"
+    printf '%s\n' "3.8.50" > "\${PERSISTENT_WORKSPACE}/software/omniroute/.nexora-omniroute-version"
+    echo "NEXORA_OMNIROUTE_PREINSTALLED_OK"
+fi
 cat > "${ROOTFS_DIR}/etc/nexora-persistent-workspace.conf" <<'WORKSPACE'
 NEXORA_PERSISTENT_WORKSPACE=/persist/debian-workspace
 NEXORA_REPOSITORY_SOURCE=/opt/nexora/debian-workspace/source
@@ -413,53 +424,30 @@ echo "NEXORA_PERSISTENCE_TEST_DONE" > /dev/console
 PERSISTTEST
 chmod +x "${ROOTFS_DIR}/usr/local/bin/nexora-persistence-test.sh"
 
-cat > "${ROOTFS_DIR}/usr/local/bin/nexora-omniroute-install.sh" <<'OMNIINSTALL'
+cat > "\${ROOTFS_DIR}/usr/local/bin/nexora-omniroute-install.sh" <<'OMNIINSTALL'
 #!/bin/sh
 set -eu
 PERSIST_ROOT="/persist/debian-workspace"
-SOURCE_ROOT="${PERSIST_ROOT}/source/omniroute"
-RUNTIME_ROOT="${PERSIST_ROOT}/software/omniroute"
-DATA_ROOT="${PERSIST_ROOT}/data/omniroute"
-MARKER="${RUNTIME_ROOT}/.nexora-omniroute-version"
-OMNIROUTE_VERSION="${OMNIROUTE_VERSION:-3.8.50}"
-
-test -f "${SOURCE_ROOT}/package.json"
-mkdir -p "${RUNTIME_ROOT}" "${DATA_ROOT}"
-
-# Use the published OmniRoute npm package. Version 3.8.50 ships its
-# production dist/ tree in the npm tarball, so NEXORA does not need to run
-# the multi-gigabyte Next.js source build on every smoke test. This is the
-# durable alternative to the repeatedly terminated hosted-runner builds.
-if [ ! -x "${RUNTIME_ROOT}/node_modules/.bin/omniroute" ] || [ ! -f "${MARKER}" ] || [ "$(cat "${MARKER}" 2>/dev/null || true)" != "${OMNIROUTE_VERSION}" ]; then
-  echo "NEXORA_OMNIROUTE_INSTALL_START" > /dev/console
-  rm -rf "${RUNTIME_ROOT}/node_modules" "${RUNTIME_ROOT}/package.json" "${RUNTIME_ROOT}/package-lock.json"
-  rm -rf "${SOURCE_ROOT}/node_modules"
-  echo "NEXORA_OMNIROUTE_NPM_INSTALL_START" > /dev/console
-  timeout --signal=TERM --kill-after=10s 150s npm install --prefix "${RUNTIME_ROOT}" --omit=dev --ignore-scripts --no-fund --no-audit "omniroute@${OMNIROUTE_VERSION}"
-  echo "NEXORA_OMNIROUTE_NPM_INSTALL_DONE" > /dev/console
-  test -f "${RUNTIME_ROOT}/node_modules/omniroute/package.json"
-  test -f "${RUNTIME_ROOT}/node_modules/omniroute/dist/server.js"
-  test -x "${RUNTIME_ROOT}/node_modules/.bin/omniroute"
-  rm -rf "${SOURCE_ROOT}/dist"
-  ln -s "${RUNTIME_ROOT}/node_modules/omniroute/dist" "${SOURCE_ROOT}/dist"
-  ln -s "${RUNTIME_ROOT}/node_modules" "${SOURCE_ROOT}/node_modules"
-  printf '%s\\n' "${OMNIROUTE_VERSION}" > "${MARKER}"
-  echo "NEXORA_OMNIROUTE_INSTALL_DONE" > /dev/console
-else
-  if [ ! -L "${SOURCE_ROOT}/node_modules" ]; then
-    rm -rf "${SOURCE_ROOT}/node_modules"
-    ln -s "${RUNTIME_ROOT}/node_modules" "${SOURCE_ROOT}/node_modules"
-  fi
-  if [ ! -L "${SOURCE_ROOT}/dist" ]; then
-    rm -rf "${SOURCE_ROOT}/dist"
-    ln -s "${RUNTIME_ROOT}/node_modules/omniroute/dist" "${SOURCE_ROOT}/dist"
-  fi
-  echo "NEXORA_OMNIROUTE_INSTALL_REUSED" > /dev/console
+SOURCE_ROOT="\${PERSIST_ROOT}/source/omniroute"
+RUNTIME_ROOT="\${PERSIST_ROOT}/software/omniroute"
+MARKER="\${RUNTIME_ROOT}/.nexora-omniroute-version"
+OMNIROUTE_VERSION="\${OMNIROUTE_VERSION:-3.8.50}"
+test -f "\${SOURCE_ROOT}/package.json"
+if [ ! -x "\${RUNTIME_ROOT}/node_modules/.bin/omniroute" ] || [ ! -f "\${MARKER}" ] || [ "$(cat "\${MARKER}" 2>/dev/null || true)" != "\${OMNIROUTE_VERSION}" ]; then
+  echo "NEXORA_OMNIROUTE_RUNTIME_MISSING: prebuilt runtime not seeded into /persist" > /dev/console
+  exit 1
 fi
-
-test -x "${RUNTIME_ROOT}/node_modules/.bin/omniroute"
-test -f "${RUNTIME_ROOT}/node_modules/omniroute/dist/server.js"
-"${RUNTIME_ROOT}/node_modules/.bin/omniroute" --version
+test -f "\${RUNTIME_ROOT}/node_modules/omniroute/dist/server.js"
+if [ ! -L "\${SOURCE_ROOT}/node_modules" ]; then
+  rm -rf "\${SOURCE_ROOT}/node_modules"
+  ln -s "\${RUNTIME_ROOT}/node_modules" "\${SOURCE_ROOT}/node_modules"
+fi
+if [ ! -L "\${SOURCE_ROOT}/dist" ]; then
+  rm -rf "\${SOURCE_ROOT}/dist"
+  ln -s "\${RUNTIME_ROOT}/node_modules/omniroute/dist" "\${SOURCE_ROOT}/dist"
+fi
+"\${RUNTIME_ROOT}/node_modules/.bin/omniroute" --version
+echo "NEXORA_OMNIROUTE_INSTALL_REUSED"
 OMNIINSTALL
 chmod +x "${ROOTFS_DIR}/usr/local/bin/nexora-omniroute-install.sh"
 
