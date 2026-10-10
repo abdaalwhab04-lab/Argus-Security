@@ -106,9 +106,11 @@ jobs:
             sudo bash nexora/scripts/build-persistent-storage.sh
           fi
           test -s "$image"
-          # The image may be created by the root-owned build script; QEMU runs as the runner user.
-          sudo chmod 0644 "$image"
-          test -r "$image"
+          # Root-run build scripts may leave parent directories inaccessible to the runner.
+          sudo chmod 0755 nexora nexora/build nexora/build/output
+          sudo chmod 0644 "$image" nexora/build/output/nexora.iso
+          test -x nexora/build && test -x nexora/build/output
+          test -r "$image" && test -r nexora/build/output/nexora.iso
           file "$image"
           echo "NEXORA_PERSISTENT_DISK_CHECK_OK"
 
