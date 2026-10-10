@@ -1,0 +1,27 @@
+name: NEXORA Actions Job Diagnostic
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - omniroute-v3.8.50-integration
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostic:
+    name: Verify GitHub Actions schedules a job
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Report runner and workflow context
+        run: |
+          set -euo pipefail
+          echo "NEXORA_ACTIONS_JOB_DIAGNOSTIC_STARTED"
+          echo "repository=${GITHUB_REPOSITORY}"
+          echo "ref=${GITHUB_REF}"
+          echo "sha=${GITHUB_SHA}"
+          echo "event=${GITHUB_EVENT_NAME}"
+          test -n "${GITHUB_RUN_ID}"
+          echo "NEXORA_ACTIONS_JOB_DIAGNOSTIC_OK"
