@@ -116,13 +116,13 @@ jobs:
           mkdir -p output
           log="output/nexora-boot-smoke.log"
           set +e
-          timeout --signal=TERM 120s qemu-system-x86_64 \\
-            -m 3072 -smp 2 -machine pc -display none -serial stdio \\
-            -kernel "nexora/build/linux-${KERNEL_VERSION:-6.12.50}-clang/arch/x86/boot/bzImage" \\
-            -initrd nexora/build/nexora-initramfs.cpio.gz \\
-            -append "root=/dev/ram0 rw console=ttyS0,115200 systemd.mask=serial-getty@ttyS0.service" \\
-            -drive "file=nexora/build/output/nexora.iso,media=cdrom,if=ide,readonly=on" \\
-            -drive "file=nexora/build/persistent-data.img,format=raw,if=virtio" \\
+          timeout --signal=TERM 120s qemu-system-x86_64 \
+            -m 3072 -smp 2 -machine pc -display none -serial stdio \
+            -kernel "nexora/build/linux-${KERNEL_VERSION:-6.12.50}-clang/arch/x86/boot/bzImage" \
+            -initrd nexora/build/nexora-initramfs.cpio.gz \
+            -append "root=/dev/ram0 rw console=ttyS0,115200 systemd.mask=serial-getty@ttyS0.service" \
+            -drive "file=nexora/build/output/nexora.iso,media=cdrom,if=ide,readonly=on" \
+            -drive "file=nexora/build/persistent-data.img,format=raw,if=virtio" \
             -no-reboot >"$log" 2>&1
           rc=$?
           set -e
