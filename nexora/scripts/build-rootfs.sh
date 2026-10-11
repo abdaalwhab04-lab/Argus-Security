@@ -400,18 +400,25 @@ echo "NEXORA_PERSISTENCE_SEED_START" > /dev/console
 # Seed the preinstalled OmniRoute runtime into persistent storage on first boot.
 # Keep the image's runtime as the source of truth; do not run npm during guest boot.
 OMNIROUTE_SEED="/opt/nexora/debian-workspace/software/omniroute"
-if [ -d "${OMNIROUTE_SEED}/node_modules" ]; then
+if [ -d "${OMNIROUTE_SEED}/node_modules" ] && [ ! -x "${PERSIST_ROOT}/software/omniroute/node_modules/.bin/omniroute" ]; then
   mkdir -p "${PERSIST_ROOT}/software/omniroute"
+  echo "NEXORA_OMNIROUTE_RUNTIME_SEED_START" > /dev/console
   rsync -a --delete "${OMNIROUTE_SEED}/" "${PERSIST_ROOT}/software/omniroute/"
   echo "NEXORA_OMNIROUTE_RUNTIME_SEEDED" > /dev/console
+elif [ -x "${PERSIST_ROOT}/software/omniroute/node_modules/.bin/omniroute" ]; then
+  echo "NEXORA_OMNIROUTE_RUNTIME_ALREADY_PERSISTENT" > /dev/console
 fi
 for project in autogpt omniroute; do
   if [ -d "${SOURCE_ROOT}/${project}" ]; then
     mkdir -p "${PERSIST_ROOT}/source/${project}"
-    echo "NEXORA_PERSISTENCE_COPY_START=${project}" > /dev/console
-    rsync -a --delete --exclude '.nexora-seeded' --exclude '.git/' --exclude 'node_modules/' --exclude '.next/' --exclude '.turbo/' --exclude '.cache/' --exclude 'coverage/' --exclude 'dist/' "${SOURCE_ROOT}/${project}/" "${PERSIST_ROOT}/source/${project}/"
-    touch "${PERSIST_ROOT}/source/${project}/.nexora-seeded"
-    echo "NEXORA_PERSISTENCE_COPY_DONE=${project}" > /dev/console
+    if [ -f "${PERSIST_ROOT}/source/${project}/.nexora-seeded" ]; then
+      echo "NEXORA_PERSISTENCE_COPY_REUSED=${project}" > /dev/console
+    else
+      echo "NEXORA_PERSISTENCE_COPY_START=${project}" > /dev/console
+      rsync -a --delete --exclude '.nexora-seeded' --exclude '.git/' --exclude 'node_modules/' --exclude '.next/' --exclude '.turbo/' --exclude '.cache/' --exclude 'coverage/' --exclude 'dist/' "${SOURCE_ROOT}/${project}/" "${PERSIST_ROOT}/source/${project}/"
+      touch "${PERSIST_ROOT}/source/${project}/.nexora-seeded"
+      echo "NEXORA_PERSISTENCE_COPY_DONE=${project}" > /dev/console
+    fi
   fi
 done
 echo "NEXORA_PERSISTENCE_SEED_DONE" > /dev/console
