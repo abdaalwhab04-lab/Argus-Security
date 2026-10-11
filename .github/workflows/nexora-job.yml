@@ -112,6 +112,22 @@ jobs:
           test -x nexora/build && test -x nexora/build/output
           test -r "$image" && test -r nexora/build/output/nexora.iso
           file "$image"
+          # Pre-seed the persistent ext4 image on the build host. Copying the
+          # large npm dependency tree during systemd startup can exceed the
+          # guest's boot timeout, so make the runtime durable before QEMU.
+          mount_dir="$(mktemp -d)"
+          cleanup_mount() { sudo umount "$mount_dir" 2>/dev/null || true; rmdir "$mount_dir" 2>/dev/null || true; }
+          trap cleanup_mount EXIT
+          sudo mount -o loop "$image" "$mount_dir"
+          sudo mkdir -p "$mount_dir/debian-workspace/software" "$mount_dir/debian-workspace/source" "$mount_dir/debian-workspace/data"
+          sudo rsync -a --delete nexora/rootfs/opt/nexora/debian-workspace/software/ "$mount_dir/debian-workspace/software/"
+          sudo rsync -a --delete --exclude '.git/' --exclude 'node_modules/' --exclude '.next/' --exclude '.turbo/' --exclude '.cache/' --exclude 'coverage/' --exclude 'dist/' nexora/rootfs/opt/nexora/debian-workspace/source/ "$mount_dir/debian-workspace/source/"
+          sudo chmod 0755 "$mount_dir/debian-workspace" "$mount_dir/debian-workspace/software" "$mount_dir/debian-workspace/source" "$mount_dir/debian-workspace/data"
+          test -x "$mount_dir/debian-workspace/software/omniroute/node_modules/.bin/omniroute"
+          test -f "$mount_dir/debian-workspace/software/omniroute/.nexora-omniroute-version"
+          echo "NEXORA_PERSISTENT_WORKSPACE_PRESEEDED_OK"
+          cleanup_mount
+          trap - EXIT
           echo "NEXORA_PERSISTENT_DISK_CHECK_OK"
 
       - name: First boot and verify Debian userspace, Docker, OmniRoute and persistence
