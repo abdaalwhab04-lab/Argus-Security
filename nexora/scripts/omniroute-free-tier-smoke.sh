@@ -158,6 +158,12 @@ const candidates=data
   .map(v=>String(v?.id||""))
   .filter(Boolean);
 
+// Prefer Cloudflare Playground and other independent free endpoints before
+// DuckDuckGo. The direct OpenAI-compatible request can pass for DuckDuckGo
+// while Aider/LiteLLM's request shape is rejected with ERR_BAD_REQUEST.
+const providerPriority = id => ({ cfp: 0, felo: 1, tllm: 2, ddgw: 3, oc: 4 }[String(id).split("/")[0].toLowerCase()] ?? 99);
+candidates.sort((a, b) => providerPriority(a) - providerPriority(b));
+
 console.log("NEXORA_CHAT_CANDIDATE_COUNT="+candidates.length);
 console.log("NEXORA_CHAT_CANDIDATES="+candidates.slice(0,50).join(","));
 fs.writeFileSync("/tmp/nexora-chat-candidates.json",JSON.stringify(candidates));
