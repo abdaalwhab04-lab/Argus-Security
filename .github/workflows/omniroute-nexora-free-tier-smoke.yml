@@ -6,6 +6,7 @@ name: OmniRoute NEXORA Free Tier Smoke Test
     branches:
       - main
       - omniroute-v3.8.50-integration
+      - fix/nexora-aider-provider-fallback
   workflow_dispatch:
 
 permissions:
@@ -19,7 +20,7 @@ jobs:
       - name: Checkout integration branch
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: omniroute-v3.8.50-integration
+          ref: ${{ github.ref }}
           lfs: true
       - name: Run NEXORA OmniRoute Free Tier and Aider smoke
         run: bash nexora/scripts/omniroute-free-tier-smoke.sh

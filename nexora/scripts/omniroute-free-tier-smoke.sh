@@ -56,6 +56,18 @@ sudo chroot "$ROOTFS" /usr/local/bin/nexora-persistence-test.sh
 sudo chroot "$ROOTFS" test -f /persist/debian-workspace/source/omniroute/package.json
 
 sudo chroot "$ROOTFS" /usr/local/bin/nexora-omniroute-install.sh
+
+echo "=== Install Chromium for browser-backed Free Tier providers ==="
+sudo chroot "$ROOTFS" /usr/bin/bash -lc '
+set -euo pipefail
+APP=/persist/debian-workspace/source/omniroute
+test -x "$APP/node_modules/.bin/playwright" || { echo "NEXORA_PLAYWRIGHT_CLI_MISSING=$APP/node_modules/.bin/playwright"; exit 1; }
+cd "$APP"
+PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright "$APP/node_modules/.bin/playwright" install --with-deps chromium
+test -x /root/.cache/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-linux64/chrome-headless-shell
+echo NEXORA_PLAYWRIGHT_CHROMIUM_READY=1
+'
+
 sudo chroot "$ROOTFS" /usr/local/bin/nexora-omniroute-env.sh
 sudo chroot "$ROOTFS" test -x /persist/debian-workspace/software/omniroute/node_modules/.bin/omniroute
 sudo chroot "$ROOTFS" test -f /persist/debian-workspace/data/omniroute/server.env
