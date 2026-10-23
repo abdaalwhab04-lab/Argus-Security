@@ -39,17 +39,19 @@ describe("DuckDuckGoWebExecutor", () => {
   });
 
   describe("execute method validation", () => {
-    it("normalizes only role-bearing request messages without dropping metadata", () => {
+    it("reduces OpenAI messages to plain Duck.ai user/assistant text turns", () => {
       assert.deepEqual(
         normalizeDuckDuckGoMessages([
-          { role: "user", content: "hello", name: "caller" },
-          { role: "assistant", tool_calls: [{ id: "call-1" }] },
+          { role: "user", content: "hello", name: "caller", cache_control: { type: "ephemeral" } },
+          { role: "assistant", content: [{ type: "text", text: "ready" }], tool_calls: [{ id: "call-1" }] },
+          { role: "tool", content: "tool output" },
+          { role: "assistant", content: null },
           { content: "missing role" },
           null,
         ]),
         [
-          { role: "user", content: "hello", name: "caller" },
-          { role: "assistant", content: undefined, tool_calls: [{ id: "call-1" }] },
+          { role: "user", content: "hello" },
+          { role: "assistant", content: "ready" },
         ]
       );
     });
