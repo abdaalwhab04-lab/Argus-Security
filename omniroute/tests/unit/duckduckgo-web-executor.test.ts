@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { FETCH_TIMEOUT_MS } from "../../open-sse/config/constants.ts";
+import { prepareToolMessages } from "../../open-sse/translator/webTools.ts";
 import {
   DuckDuckGoWebExecutor,
   DUCKDUCKGO_BASE,
@@ -80,6 +81,33 @@ describe("DuckDuckGoWebExecutor", () => {
         normalizeDuckDuckGoMessages([{ role: "system", content: "Be concise." }]),
         [{ role: "user", content: "Instructions for the assistant:\nBe concise." }]
       );
+    });
+
+    it("removes the system tool contract added after initial Duck.ai normalization", () => {
+      const initial = normalizeDuckDuckGoMessages([
+        { role: "user", content: "Find the current version." },
+      ]);
+      const prepared = prepareToolMessages(
+        {
+          tools: [
+            {
+              type: "function",
+              function: {
+                name: "lookup",
+                description: "Look up a version",
+                parameters: { type: "object", properties: {} },
+              },
+            },
+          ],
+        },
+        initial
+      );
+      assert.ok(prepared.effectiveMessages.some((message) => message.role === "system"));
+
+      const finalMessages = normalizeDuckDuckGoMessages(prepared.effectiveMessages);
+      assert.ok(finalMessages.every((message) => message.role === "user" || message.role === "assistant"));
+      assert.ok(finalMessages.some((message) => String(message.content).includes("Client protocol reminder")));
+      assert.ok(finalMessages.some((message) => String(message.content).includes("Available tools:")));
     });
 
     it("should reject empty messages array", async () => {
