@@ -146,12 +146,54 @@ let durablePublicKey: JsonWebKey | null = null;
 
 export function normalizeDuckDuckGoMessages(value: unknown): DuckDuckGoRequestMessage[] {
   if (!Array.isArray(value)) return [];
-  return value.flatMap((message) => {
-    if (!message || typeof message !== "object" || Array.isArray(message)) return [];
+
+  const conversation: DuckDuckGoRequestMessage[] = [];
+  const instructions: string[] = [];
+
+  for (const message of value) {
+    if (!message || typeof message !== "object" || Array.isArray(message)) continue;
     const record = message as Record<string, unknown>;
-    if (typeof record.role !== "string") return [];
-    return [{ ...record, role: record.role, content: record.content }];
-  });
+    if (typeof record.role !== "string") continue;
+
+    // Duck.ai's private chat endpoint accepts user/assistant turns, not OpenAI
+    // system/developer roles. Aider sends a substantial system prompt, which
+    // previously reached Duck.ai unchanged and caused HTTP 400 ERR_BAD_REQUEST.
+    if (record.role === "system" || record.role === "developer") {
+      if (typeof record.content === "string" && record.content.trim()) {
+        instructions.push(record.content.trim());
+      } else if (Array.isArray(record.content)) {
+        const text = record.content
+          .map((part) => {
+            if (!part || typeof part !== "object") return "";
+            const item = part as Record<string, unknown>;
+            return typeof item.text === "string" ? item.text : "";
+          })
+          .filter(Boolean)
+          .join("\\n");
+        if (text.trim()) instructions.push(text.trim());
+      }
+      continue;
+    }
+
+    conversation.push({ ...record, role: record.role, content: record.content });
+  }
+
+  if (instructions.length) {
+    const instructionText = `Instructions for the assistant:\\n${instructions.join("\\n\\n")}\\n\\n`;
+    const firstUser = conversation.findIndex((message) => message.role === "user");
+    if (firstUser >= 0) {
+      const content = conversation[firstUser].content;
+      const userText = typeof content === "string" ? content : JSON.stringify(content ?? "");
+      conversation[firstUser] = {
+        ...conversation[firstUser],
+        content: instructionText + userText,
+      };
+    } else {
+      conversation.unshift({ role: "user", content: instructionText.trim() });
+    }
+  }
+
+  return conversation;
 }
 
 function extractDuckDuckGoContent(data: unknown): string {
