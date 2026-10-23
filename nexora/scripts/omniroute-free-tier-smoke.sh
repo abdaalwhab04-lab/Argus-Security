@@ -231,21 +231,20 @@ cd /tmp/nexora-aider-smoke
 if [ ! -d .git ]; then /usr/bin/git init -q; fi
 printf "# NEXORA Aider smoke\\n" > smoke.md
 
-# The Aider run is a separate chroot invocation. Recreate the list from
-# the persistent JSON file if the text list was removed between invocations.
-if [ ! -s /tmp/nexora-chat-candidate-list ] && [ -s /tmp/nexora-chat-candidates.json ]; then
-  /usr/bin/python3 -c "import json; [print(v) for v in json.load(open('/tmp/nexora-chat-candidates.json'))]" > /tmp/nexora-chat-candidate-list
+# Load candidate IDs into memory before Aider starts; do not redirect the loop
+# from a temporary file that may disappear during the Aider invocation.
+if [ ! -s /tmp/nexora-chat-candidates.json ]; then
+  echo "NEXORA_AIDER_CANDIDATE_JSON_MISSING=1"
+  exit 1
 fi
-if [ ! -s /tmp/nexora-chat-candidate-list ]; then
-  echo "NEXORA_AIDER_CANDIDATE_LIST_MISSING=1"
+mapfile -t AIDER_CANDIDATES < <(/usr/bin/python3 -c 'import json; [print(v) for v in json.load(open("/tmp/nexora-chat-candidates.json"))]')
+if [ "${#AIDER_CANDIDATES[@]}" -eq 0 ]; then
+  echo "NEXORA_AIDER_CANDIDATE_LIST_EMPTY=1"
   exit 1
 fi
 
-# Test each model that passed OmniRoute's direct chat check. Some free web
-# providers accept the OpenAI-compatible request but reject LiteLLM/Aider's
-# request format, so one provider failure must not abort the whole smoke test.
 AIDER_OK=0
-while IFS= read -r MODEL; do
+for MODEL in "${AIDER_CANDIDATES[@]}"; do
   [ -n "$MODEL" ] || continue
   echo "NEXORA_AIDER_MODEL_TEST=$MODEL"
   AIDER_MODEL_ID="openai/$MODEL"
@@ -261,7 +260,7 @@ from pathlib import Path
 log = Path("/tmp/aider-nexora-smoke.log").read_text(errors="replace")
 if "litellm.BadRequestError" in log or "Error communicating with the model" in log:
     raise SystemExit(1)
-if not re.search(r"(?im)^\s*NEXORA_AIDER_OK\s*[.!]?\s*$", log):
+if not re.search(r"(?im)^\\s*NEXORA_AIDER_OK\\s*[.!]?\\s*$", log):
     raise SystemExit(1)
 PY
   then
@@ -270,7 +269,7 @@ PY
     break
   fi
   echo "NEXORA_AIDER_MODEL_REJECTED=$MODEL"
-done < /tmp/nexora-chat-candidate-list
+done
 
 if [ "$AIDER_OK" != "1" ]; then
   echo NEXORA_AIDER_NO_COMPATIBLE_FREE_MODEL=1
