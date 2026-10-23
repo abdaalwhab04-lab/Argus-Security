@@ -166,7 +166,7 @@ candidates.sort((a, b) => providerPriority(a) - providerPriority(b));
 
 console.log("NEXORA_CHAT_CANDIDATE_COUNT="+candidates.length);
 console.log("NEXORA_CHAT_CANDIDATES="+candidates.slice(0,50).join(","));
-fs.writeFileSync("/persist/nexora-chat-candidates.json",JSON.stringify(candidates));
+fs.writeFileSync("/tmp/nexora-chat-candidates.json",JSON.stringify(candidates));
 
 if(!candidates.length) {
   console.log("NEXORA_MODEL_SAMPLE="+ids.slice(0,50).join(","));
@@ -184,9 +184,9 @@ NODE
 
 sudo chroot "$ROOTFS" /usr/bin/bash -lc 'set -euo pipefail
 API_KEY="$(cat /tmp/omniroute-api-key)"
-CANDIDATES="$(cat /persist/nexora-chat-candidates.json)"
+CANDIDATES="$(cat /tmp/nexora-chat-candidates.json)"
 
-printf "%s" "$CANDIDATES" | /usr/bin/python3 -c "import json,sys; x=json.load(sys.stdin); [print(v) for v in x]" > /persist/nexora-chat-candidate-list
+printf "%s" "$CANDIDATES" | /usr/bin/python3 -c "import json,sys; x=json.load(sys.stdin); [print(v) for v in x]" > /tmp/nexora-chat-candidate-list
 
 CHAT_OK=0
 while IFS= read -r MODEL; do
@@ -209,7 +209,7 @@ while IFS= read -r MODEL; do
 
   echo "NEXORA_CHAT_MODEL_REJECTED=$MODEL"
   cat /tmp/omniroute-chat.json
-done < /persist/nexora-chat-candidate-list
+done < /tmp/nexora-chat-candidate-list
 
 if [ "$CHAT_OK" != "1" ]; then
   echo "NEXORA_CHAT_NO_WORKING_FREE_MODEL=1"
@@ -233,10 +233,10 @@ printf "# NEXORA Aider smoke\\n" > smoke.md
 
 # The Aider run is a separate chroot invocation. Recreate the list from
 # the persistent JSON file if the text list was removed between invocations.
-if [ ! -s /persist/nexora-chat-candidate-list ] && [ -s /persist/nexora-chat-candidates.json ]; then
-  /usr/bin/python3 -c "import json; [print(v) for v in json.load(open('/persist/nexora-chat-candidates.json'))]" > /persist/nexora-chat-candidate-list
+if [ ! -s /tmp/nexora-chat-candidate-list ] && [ -s /tmp/nexora-chat-candidates.json ]; then
+  /usr/bin/python3 -c "import json; [print(v) for v in json.load(open('/tmp/nexora-chat-candidates.json'))]" > /tmp/nexora-chat-candidate-list
 fi
-if [ ! -s /persist/nexora-chat-candidate-list ]; then
+if [ ! -s /tmp/nexora-chat-candidate-list ]; then
   echo "NEXORA_AIDER_CANDIDATE_LIST_MISSING=1"
   exit 1
 fi
@@ -270,7 +270,7 @@ PY
     break
   fi
   echo "NEXORA_AIDER_MODEL_REJECTED=$MODEL"
-done < /persist/nexora-chat-candidate-list
+done < /tmp/nexora-chat-candidate-list
 
 if [ "$AIDER_OK" != "1" ]; then
   echo NEXORA_AIDER_NO_COMPATIBLE_FREE_MODEL=1
