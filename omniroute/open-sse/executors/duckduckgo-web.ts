@@ -169,7 +169,7 @@ export function normalizeDuckDuckGoMessages(value: unknown): DuckDuckGoRequestMe
             return typeof item.text === "string" ? item.text : "";
           })
           .filter(Boolean)
-          .join("\\n");
+          .join("\n");
         if (text.trim()) instructions.push(text.trim());
       }
       continue;
@@ -179,7 +179,7 @@ export function normalizeDuckDuckGoMessages(value: unknown): DuckDuckGoRequestMe
   }
 
   if (instructions.length) {
-    const instructionText = `Instructions for the assistant:\\n${instructions.join("\\n\\n")}\\n\\n`;
+    const instructionText = `Instructions for the assistant:\n${instructions.join("\n\n")}\n\n`;
     const firstUser = conversation.findIndex((message) => message.role === "user");
     if (firstUser >= 0) {
       const content = conversation[firstUser].content;
