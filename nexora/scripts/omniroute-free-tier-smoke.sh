@@ -220,37 +220,52 @@ fi
 echo NEXORA_OMNIROUTE_FREE_TIER_SMOKE_OK=1
 
 echo "=== Aider through NEXORA OmniRoute ==="
-sudo chroot "$ROOTFS" /usr/bin/bash -lc 'set -euo pipefail
+sudo chroot "$ROOTFS" /usr/bin/bash -lc 'set -uo pipefail
 command -v aider
 aider --version
 API_KEY="$(cat /tmp/omniroute-api-key)"
-MODEL="$(cat /tmp/nexora-aider-model)"
 export OPENAI_API_BASE="http://127.0.0.1:20129/v1"
 export OPENAI_API_KEY="$API_KEY"
-# LiteLLM requires an explicit provider prefix for nonstandard OmniRoute model IDs.
-# Its OpenAI provider strips this prefix before forwarding the original model ID.
-AIDER_MODEL_ID="openai/$MODEL"
-export AIDER_MODEL="$AIDER_MODEL_ID"
 mkdir -p /tmp/nexora-aider-smoke
 cd /tmp/nexora-aider-smoke
 if [ ! -d .git ]; then /usr/bin/git init -q; fi
 printf "# NEXORA Aider smoke\\n" > smoke.md
-set +e
-# Free web-backed providers may not implement the streaming variant of the OpenAI API.
-aider --message "Reply with exactly the single word NEXORA_AIDER_OK. Do not edit files." --model "$AIDER_MODEL_ID" --no-stream --no-auto-commits --yes-always --no-show-model-warnings > /tmp/aider-nexora-smoke.log 2>&1
-status=$?
-set -e
-cat /tmp/aider-nexora-smoke.log
-test "$status" -eq 0
-/usr/bin/python3 - <<'PY'
+
+# Test each model that passed OmniRoute's direct chat check. Some free web
+# providers accept the OpenAI-compatible request but reject LiteLLM/Aider's
+# request format, so one provider failure must not abort the whole smoke test.
+AIDER_OK=0
+while IFS= read -r MODEL; do
+  [ -n "$MODEL" ] || continue
+  echo "NEXORA_AIDER_MODEL_TEST=$MODEL"
+  AIDER_MODEL_ID="openai/$MODEL"
+  export AIDER_MODEL="$AIDER_MODEL_ID"
+  set +e
+  aider --message "Reply with exactly the single word NEXORA_AIDER_OK. Do not edit files." --model "$AIDER_MODEL_ID" --no-stream --no-auto-commits --yes-always --no-show-model-warnings > /tmp/aider-nexora-smoke.log 2>&1
+  status=$?
+  set -e
+  cat /tmp/aider-nexora-smoke.log
+  if [ "$status" -eq 0 ] && /usr/bin/python3 - <<'PY'
 import re
 from pathlib import Path
 log = Path("/tmp/aider-nexora-smoke.log").read_text(errors="replace")
 if "litellm.BadRequestError" in log or "Error communicating with the model" in log:
-    raise SystemExit("Aider logged an API/provider error")
-if not re.search(r"(?im)^\s*NEXORA_AIDER_OK\s*[.!]?\s*$", log):
-    raise SystemExit("Aider did not produce the expected standalone response")
+    raise SystemExit(1)
+if not re.search(r"(?im)^\\s*NEXORA_AIDER_OK\\s*[.!]?\\s*$", log):
+    raise SystemExit(1)
 PY
+  then
+    echo "NEXORA_AIDER_SELECTED_MODEL=$MODEL"
+    AIDER_OK=1
+    break
+  fi
+  echo "NEXORA_AIDER_MODEL_REJECTED=$MODEL"
+done < /tmp/nexora-chat-candidate-list
+
+if [ "$AIDER_OK" != "1" ]; then
+  echo NEXORA_AIDER_NO_COMPATIBLE_FREE_MODEL=1
+  exit 1
+fi
 echo NEXORA_AIDER_OMNIROUTE_SMOKE_OK=1
 '
 echo "=== Stop OmniRoute and release persistent workspace ==="
