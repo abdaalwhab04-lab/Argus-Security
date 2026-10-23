@@ -231,6 +231,16 @@ cd /tmp/nexora-aider-smoke
 if [ ! -d .git ]; then /usr/bin/git init -q; fi
 printf "# NEXORA Aider smoke\\n" > smoke.md
 
+# The Aider run is a separate chroot invocation. Recreate the list from
+# the persistent JSON file if the text list was removed between invocations.
+if [ ! -s /persist/nexora-chat-candidate-list ] && [ -s /persist/nexora-chat-candidates.json ]; then
+  /usr/bin/python3 -c "import json; [print(v) for v in json.load(open('/persist/nexora-chat-candidates.json'))]" > /persist/nexora-chat-candidate-list
+fi
+if [ ! -s /persist/nexora-chat-candidate-list ]; then
+  echo "NEXORA_AIDER_CANDIDATE_LIST_MISSING=1"
+  exit 1
+fi
+
 # Test each model that passed OmniRoute's direct chat check. Some free web
 # providers accept the OpenAI-compatible request but reject LiteLLM/Aider's
 # request format, so one provider failure must not abort the whole smoke test.
