@@ -66,7 +66,7 @@ describe("DuckDuckGoWebExecutor", () => {
           {
             role: "user",
             content:
-              "Instructions for the assistant:\\nYou are a precise coding assistant.\\n\\nAnswer with one word.\\n\\nSay OK.",
+              "Instructions for the assistant:\nYou are a precise coding assistant.\n\nAnswer with one word.\n\nSay OK.",
           },
           { role: "assistant", content: "Ready." },
         ]
@@ -76,7 +76,7 @@ describe("DuckDuckGoWebExecutor", () => {
     it("creates a user turn when the request contains only system instructions", () => {
       assert.deepEqual(
         normalizeDuckDuckGoMessages([{ role: "system", content: "Be concise." }]),
-        [{ role: "user", content: "Instructions for the assistant:\\nBe concise." }]
+        [{ role: "user", content: "Instructions for the assistant:\nBe concise." }]
       );
     });
 
