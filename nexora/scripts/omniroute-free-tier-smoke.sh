@@ -260,7 +260,7 @@ from pathlib import Path
 log = Path("/tmp/aider-nexora-smoke.log").read_text(errors="replace")
 if "litellm.BadRequestError" in log or "Error communicating with the model" in log:
     raise SystemExit(1)
-if not re.search(r"(?im)^\\s*NEXORA_AIDER_OK\\s*[.!]?\\s*$", log):
+if not re.search(r"(?im)^\s*NEXORA_AIDER_OK\s*[.!]?\s*$", log):
     raise SystemExit(1)
 PY
   then
