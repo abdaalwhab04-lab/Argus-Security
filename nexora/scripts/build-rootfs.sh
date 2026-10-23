@@ -156,6 +156,11 @@ if ! chroot "${ROOTFS_DIR}" command -v gpgv >/dev/null 2>&1; then
 fi
 DEBIAN_FRONTEND=noninteractive chroot "${ROOTFS_DIR}" apt-get update
 DEBIAN_FRONTEND=noninteractive chroot "${ROOTFS_DIR}" apt-get install -y --no-install-recommends "${TERMUX_DEBIAN_PACKAGES[@]}" python3.11 python3.11-venv
+# Cloudflare Playground requires a real Chromium executable at runtime; install Debian's
+# system browser instead of downloading a second Playwright browser cache.
+DEBIAN_FRONTEND=noninteractive chroot "${ROOTFS_DIR}" apt-get install -y --no-install-recommends chromium
+if [ ! -x "${ROOTFS_DIR}/usr/bin/chromium" ]; then echo "ERROR: Chromium executable is missing from NEXORA rootfs."; exit 1; fi
+echo "NEXORA_CLOUDFLARE_CHROMIUM_OK"
 
 echo "=== Verify mirrored Termux CLI tools ==="
 for cmd in "${TERMUX_REQUIRED_COMMANDS[@]}"; do
@@ -506,6 +511,7 @@ EnvironmentFile=/persist/debian-workspace/data/omniroute/server.env
 Environment=HOME=/persist/debian-workspace/data/omniroute/home
 Environment=XDG_CONFIG_HOME=/persist/debian-workspace/data/omniroute/config
 Environment=XDG_DATA_HOME=/persist/debian-workspace/data/omniroute/data
+Environment=CLOUDFLARE_PLAYGROUND_CHROME_PATH=/usr/bin/chromium
 ExecStart=/persist/debian-workspace/software/omniroute/node_modules/.bin/omniroute
 Restart=on-failure
 RestartSec=5
