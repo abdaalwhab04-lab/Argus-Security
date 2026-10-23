@@ -254,16 +254,9 @@ for MODEL in "${AIDER_CANDIDATES[@]}"; do
   status=$?
   set -e
   cat /tmp/aider-nexora-smoke.log
-  if [ "$status" -eq 0 ] && /usr/bin/python3 - <<'PY'
-import re
-from pathlib import Path
-log = Path("/tmp/aider-nexora-smoke.log").read_text(errors="replace")
-if "litellm.BadRequestError" in log or "Error communicating with the model" in log:
-    raise SystemExit(1)
-if not re.search(r"(?im)^\s*NEXORA_AIDER_OK\s*[.!]?\s*$", log):
-    raise SystemExit(1)
-PY
-  then
+  if [ "$status" -eq 0 ] && \
+    ! grep -Eq 'litellm.BadRequestError|Error communicating with the model' /tmp/aider-nexora-smoke.log && \
+    grep -Eiq '^[[:space:]]*NEXORA_AIDER_OK[.!]?[[:space:]]*$' /tmp/aider-nexora-smoke.log; then
     echo "NEXORA_AIDER_SELECTED_MODEL=$MODEL"
     AIDER_OK=1
     break
