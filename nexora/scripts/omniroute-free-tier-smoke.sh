@@ -255,8 +255,8 @@ for MODEL in "${AIDER_CANDIDATES[@]}"; do
   set -e
   cat /tmp/aider-nexora-smoke.log
   if [ "$status" -eq 0 ] && \
-    ! grep -Eq 'litellm.BadRequestError|Error communicating with the model' /tmp/aider-nexora-smoke.log && \
-    grep -Eiq '^[[:space:]]*NEXORA_AIDER_OK[.!]?[[:space:]]*$' /tmp/aider-nexora-smoke.log; then
+    ! grep -Eq "litellm.BadRequestError|Error communicating with the model" /tmp/aider-nexora-smoke.log && \
+    grep -Eiq "^[[:space:]]*NEXORA_AIDER_OK[.!]?[[:space:]]*$" /tmp/aider-nexora-smoke.log; then
     echo "NEXORA_AIDER_SELECTED_MODEL=$MODEL"
     AIDER_OK=1
     break
