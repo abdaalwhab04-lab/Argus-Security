@@ -149,44 +149,48 @@ export function normalizeDuckDuckGoMessages(value: unknown): DuckDuckGoRequestMe
 
   const conversation: DuckDuckGoRequestMessage[] = [];
   const instructions: string[] = [];
+  const textContent = (content: unknown): string => {
+    if (typeof content === "string") return content;
+    if (!Array.isArray(content)) return "";
+    return content
+      .map((part) => {
+        if (typeof part === "string") return part;
+        if (!part || typeof part !== "object") return "";
+        const item = part as Record<string, unknown>;
+        return typeof item.text === "string" ? item.text : "";
+      })
+      .filter(Boolean)
+      .join("\n");
+  };
 
   for (const message of value) {
     if (!message || typeof message !== "object" || Array.isArray(message)) continue;
     const record = message as Record<string, unknown>;
     if (typeof record.role !== "string") continue;
 
-    // Duck.ai's private chat endpoint accepts user/assistant turns, not OpenAI
-    // system/developer roles. Aider sends a substantial system prompt, which
-    // previously reached Duck.ai unchanged and caused HTTP 400 ERR_BAD_REQUEST.
+    // Duck.ai's private endpoint only accepts plain user/assistant text turns.
+    // OpenAI-compatible callers such as Aider/LiteLLM can add content-part arrays,
+    // names, tool_calls, or tool-role messages; forwarding those fields upstream
+    // is not compatible with Duck.ai and causes ERR_BAD_REQUEST.
     if (record.role === "system" || record.role === "developer") {
-      if (typeof record.content === "string" && record.content.trim()) {
-        instructions.push(record.content.trim());
-      } else if (Array.isArray(record.content)) {
-        const text = record.content
-          .map((part) => {
-            if (!part || typeof part !== "object") return "";
-            const item = part as Record<string, unknown>;
-            return typeof item.text === "string" ? item.text : "";
-          })
-          .filter(Boolean)
-          .join("\n");
-        if (text.trim()) instructions.push(text.trim());
-      }
+      const text = textContent(record.content).trim();
+      if (text) instructions.push(text);
       continue;
     }
+    if (record.role !== "user" && record.role !== "assistant") continue;
 
-    conversation.push({ ...record, role: record.role, content: record.content });
+    const content = textContent(record.content);
+    if (!content.trim()) continue;
+    conversation.push({ role: record.role, content });
   }
 
   if (instructions.length) {
     const instructionText = `Instructions for the assistant:\n${instructions.join("\n\n")}\n\n`;
     const firstUser = conversation.findIndex((message) => message.role === "user");
     if (firstUser >= 0) {
-      const content = conversation[firstUser].content;
-      const userText = typeof content === "string" ? content : JSON.stringify(content ?? "");
       conversation[firstUser] = {
-        ...conversation[firstUser],
-        content: instructionText + userText,
+        role: "user",
+        content: instructionText + String(conversation[firstUser].content),
       };
     } else {
       conversation.unshift({ role: "user", content: instructionText.trim() });
