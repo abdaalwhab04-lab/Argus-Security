@@ -508,7 +508,10 @@ export class DuckDuckGoWebExecutor extends BaseExecutor {
       bodyObj,
       rawMessages
     );
-    const messages = effectiveMessages;
+    // prepareToolMessages appends a system-role tool contract after the initial
+    // normalization. Duck.ai accepts only user/assistant plain-text turns, so
+    // normalize the final message list again after tool-contract injection.
+    const messages = normalizeDuckDuckGoMessages(effectiveMessages);
     const isStreaming = stream !== false;
     const upstreamHeaders = upstreamExtraHeaders || {};
 
