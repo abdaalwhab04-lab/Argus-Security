@@ -239,7 +239,10 @@ if [ ! -s /tmp/nexora-chat-candidates.json ]; then
 fi
 MODEL="$(/usr/bin/cat /tmp/nexora-aider-model)"
 printf "%s\n" "$MODEL" > /tmp/nexora-aider-candidate-list
-grep -E "^(ddgw|oc)/" /tmp/nexora-chat-candidate-list | grep -Fxv "$MODEL" | head -n 4 >> /tmp/nexora-aider-candidate-list || true
+  # Try OpenCode-backed models before DuckDuckGo: direct chat succeeds for DDG,
+  # but Aider/LiteLLM requests currently receive upstream ERR_BAD_REQUEST.
+  grep -E "^oc/" /tmp/nexora-chat-candidate-list | grep -Fxv "$MODEL" | head -n 3 >> /tmp/nexora-aider-candidate-list || true
+  grep -E "^ddgw/" /tmp/nexora-chat-candidate-list | grep -Fxv "$MODEL" | head -n 1 >> /tmp/nexora-aider-candidate-list || true
 mapfile -t AIDER_CANDIDATES < /tmp/nexora-aider-candidate-list
 if [ "${#AIDER_CANDIDATES[@]}" -eq 0 ]; then
   echo "NEXORA_AIDER_CANDIDATE_LIST_EMPTY=1"
