@@ -237,7 +237,8 @@ if [ ! -s /tmp/nexora-chat-candidates.json ]; then
   echo "NEXORA_AIDER_CANDIDATE_JSON_MISSING=1"
   exit 1
 fi
-mapfile -t AIDER_CANDIDATES < <(/usr/bin/python3 -c "import json,sys; [print(v) for v in json.load(open(sys.argv[1]))]" /tmp/nexora-chat-candidates.json)
+/usr/bin/python3 -c "import json,sys; [print(v) for v in json.load(open(sys.argv[1]))]" /tmp/nexora-chat-candidates.json > /tmp/nexora-aider-candidate-list
+mapfile -t AIDER_CANDIDATES < /tmp/nexora-aider-candidate-list
 if [ "${#AIDER_CANDIDATES[@]}" -eq 0 ]; then
   echo "NEXORA_AIDER_CANDIDATE_LIST_EMPTY=1"
   exit 1
