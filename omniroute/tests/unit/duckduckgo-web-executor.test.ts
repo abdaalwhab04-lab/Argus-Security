@@ -106,7 +106,7 @@ describe("DuckDuckGoWebExecutor", () => {
 
       const finalMessages = normalizeDuckDuckGoMessages(prepared.effectiveMessages);
       assert.ok(finalMessages.every((message) => message.role === "user" || message.role === "assistant"));
-      assert.ok(finalMessages.some((message) => String(message.content).includes("Client protocol reminder")));
+      assert.ok(finalMessages.some((message) => String(message.content).includes("The client application provides tools")));
       assert.ok(finalMessages.some((message) => String(message.content).includes("Available tools:")));
     });
 
