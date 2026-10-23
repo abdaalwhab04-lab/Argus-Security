@@ -54,6 +54,32 @@ describe("DuckDuckGoWebExecutor", () => {
       );
     });
 
+    it("folds OpenAI system/developer prompts into a user turn for Duck.ai", () => {
+      assert.deepEqual(
+        normalizeDuckDuckGoMessages([
+          { role: "system", content: "You are a precise coding assistant." },
+          { role: "developer", content: "Answer with one word." },
+          { role: "user", content: "Say OK." },
+          { role: "assistant", content: "Ready." },
+        ]),
+        [
+          {
+            role: "user",
+            content:
+              "Instructions for the assistant:\\nYou are a precise coding assistant.\\n\\nAnswer with one word.\\n\\nSay OK.",
+          },
+          { role: "assistant", content: "Ready." },
+        ]
+      );
+    });
+
+    it("creates a user turn when the request contains only system instructions", () => {
+      assert.deepEqual(
+        normalizeDuckDuckGoMessages([{ role: "system", content: "Be concise." }]),
+        [{ role: "user", content: "Instructions for the assistant:\\nBe concise." }]
+      );
+    });
+
     it("should reject empty messages array", async () => {
       const executor = new DuckDuckGoWebExecutor();
 
