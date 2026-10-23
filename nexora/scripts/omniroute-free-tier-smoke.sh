@@ -237,7 +237,7 @@ if [ ! -s /tmp/nexora-chat-candidates.json ]; then
   echo "NEXORA_AIDER_CANDIDATE_JSON_MISSING=1"
   exit 1
 fi
-/usr/bin/python3 -c "import json,sys; [print(v) for v in json.load(open(sys.argv[1]))]" /tmp/nexora-chat-candidates.json > /tmp/nexora-aider-candidate-list
+/usr/bin/python3 -c 'import json,sys; xs=json.load(open(sys.argv[1])); s=open("/tmp/nexora-aider-model").read().strip(); ys=([s] if s in xs else [])+[x for x in xs if x!=s and x.split("/",1)[0].lower() in {"ddgw","oc"}]; [print(x) for x in ys[:5]]' /tmp/nexora-chat-candidates.json > /tmp/nexora-aider-candidate-list
 mapfile -t AIDER_CANDIDATES < /tmp/nexora-aider-candidate-list
 if [ "${#AIDER_CANDIDATES[@]}" -eq 0 ]; then
   echo "NEXORA_AIDER_CANDIDATE_LIST_EMPTY=1"
@@ -251,7 +251,7 @@ for MODEL in "${AIDER_CANDIDATES[@]}"; do
   AIDER_MODEL_ID="openai/$MODEL"
   export AIDER_MODEL="$AIDER_MODEL_ID"
   set +e
-  aider --message "Reply with exactly the single word NEXORA_AIDER_OK. Do not edit files." --model "$AIDER_MODEL_ID" --no-stream --no-auto-commits --yes-always --no-show-model-warnings > /tmp/aider-nexora-smoke.log 2>&1
+  timeout 75s aider --message "Reply with exactly the single word NEXORA_AIDER_OK. Do not edit files." --model "$AIDER_MODEL_ID" --no-stream --no-auto-commits --yes-always --no-show-model-warnings > /tmp/aider-nexora-smoke.log 2>&1
   status=$?
   set -e
   cat /tmp/aider-nexora-smoke.log
