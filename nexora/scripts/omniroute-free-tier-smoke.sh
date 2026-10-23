@@ -236,7 +236,8 @@ cd /tmp/nexora-aider-smoke
 if [ ! -d .git ]; then /usr/bin/git init -q; fi
 printf "# NEXORA Aider smoke\\n" > smoke.md
 set +e
-aider --message "Reply with exactly the single word NEXORA_AIDER_OK. Do not edit files." --model "$AIDER_MODEL_ID" --no-auto-commits --yes-always --no-show-model-warnings > /tmp/aider-nexora-smoke.log 2>&1
+# Free web-backed providers may not implement the streaming variant of the OpenAI API.
+aider --message "Reply with exactly the single word NEXORA_AIDER_OK. Do not edit files." --model "$AIDER_MODEL_ID" --no-stream --no-auto-commits --yes-always --no-show-model-warnings > /tmp/aider-nexora-smoke.log 2>&1
 status=$?
 set -e
 cat /tmp/aider-nexora-smoke.log
