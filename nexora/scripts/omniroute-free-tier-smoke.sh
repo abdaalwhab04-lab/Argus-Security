@@ -166,7 +166,7 @@ candidates.sort((a, b) => providerPriority(a) - providerPriority(b));
 
 console.log("NEXORA_CHAT_CANDIDATE_COUNT="+candidates.length);
 console.log("NEXORA_CHAT_CANDIDATES="+candidates.slice(0,50).join(","));
-fs.writeFileSync("/tmp/nexora-chat-candidates.json",JSON.stringify(candidates));
+fs.writeFileSync("/persist/nexora-chat-candidates.json",JSON.stringify(candidates));
 
 if(!candidates.length) {
   console.log("NEXORA_MODEL_SAMPLE="+ids.slice(0,50).join(","));
@@ -184,9 +184,9 @@ NODE
 
 sudo chroot "$ROOTFS" /usr/bin/bash -lc 'set -euo pipefail
 API_KEY="$(cat /tmp/omniroute-api-key)"
-CANDIDATES="$(cat /tmp/nexora-chat-candidates.json)"
+CANDIDATES="$(cat /persist/nexora-chat-candidates.json)"
 
-printf "%s" "$CANDIDATES" | /usr/bin/python3 -c "import json,sys; x=json.load(sys.stdin); [print(v) for v in x]" > /tmp/nexora-chat-candidate-list
+printf "%s" "$CANDIDATES" | /usr/bin/python3 -c "import json,sys; x=json.load(sys.stdin); [print(v) for v in x]" > /persist/nexora-chat-candidate-list
 
 CHAT_OK=0
 while IFS= read -r MODEL; do
@@ -209,7 +209,7 @@ while IFS= read -r MODEL; do
 
   echo "NEXORA_CHAT_MODEL_REJECTED=$MODEL"
   cat /tmp/omniroute-chat.json
-done < /tmp/nexora-chat-candidate-list
+done < /persist/nexora-chat-candidate-list
 
 if [ "$CHAT_OK" != "1" ]; then
   echo "NEXORA_CHAT_NO_WORKING_FREE_MODEL=1"
@@ -260,7 +260,7 @@ PY
     break
   fi
   echo "NEXORA_AIDER_MODEL_REJECTED=$MODEL"
-done < /tmp/nexora-chat-candidate-list
+done < /persist/nexora-chat-candidate-list
 
 if [ "$AIDER_OK" != "1" ]; then
   echo NEXORA_AIDER_NO_COMPATIBLE_FREE_MODEL=1
