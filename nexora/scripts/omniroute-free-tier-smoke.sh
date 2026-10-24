@@ -158,10 +158,20 @@ const candidates=data
   .map(v=>String(v?.id||""))
   .filter(Boolean);
 
-// Prefer Cloudflare Playground and other independent free endpoints before
-// DuckDuckGo. The direct OpenAI-compatible request can pass for DuckDuckGo
-// while Aider/LiteLLM's request shape is rejected with ERR_BAD_REQUEST.
-const providerPriority = id => ({ cfp: 0, felo: 1, tllm: 2, ddgw: 3, oc: 4 }[String(id).split("/")[0].toLowerCase()] ?? 99);
+// Prefer providers that can be called through OmniRoute's OpenAI-compatible
+// endpoint without a provider-specific client. OpenCode's free endpoint rejects
+// third-party clients (403), so do not rank it as a viable Aider fallback.
+const providerPriority = id => {
+  const prefix = String(id).split("/")[0].toLowerCase();
+  if (["cfp", "cloudflare-playground"].includes(prefix)) return 0;
+  if (["felo", "felo-web"].includes(prefix)) return 1;
+  if (["uncloseai"].includes(prefix)) return 2;
+  if (["chipotle"].includes(prefix)) return 3;
+  if (["tllm", "theoldllm"].includes(prefix)) return 4;
+  if (["ddgw", "duckduckgo-web"].includes(prefix)) return 5;
+  if (["oc", "opencode"].includes(prefix)) return 99;
+  return 50;
+};
 candidates.sort((a, b) => providerPriority(a) - providerPriority(b));
 
 console.log("NEXORA_CHAT_CANDIDATE_COUNT="+candidates.length);
@@ -238,11 +248,22 @@ if [ ! -s /tmp/nexora-chat-candidates.json ]; then
   exit 1
 fi
 MODEL="$(/usr/bin/cat /tmp/nexora-aider-model)"
+# Try the model that passed the direct chat smoke first, then other free chat
+# models. Do not retry OpenCode's endpoint: its own response explicitly rejects
+# use outside the OpenCode client, and it may require a user API key.
 printf "%s\n" "$MODEL" > /tmp/nexora-aider-candidate-list
-  # Try OpenCode-backed models before DuckDuckGo: direct chat succeeds for DDG,
-  # but Aider/LiteLLM requests currently receive upstream ERR_BAD_REQUEST.
-  grep -E "^oc/" /tmp/nexora-chat-candidate-list | grep -Fxv "$MODEL" | head -n 3 >> /tmp/nexora-aider-candidate-list || true
-  grep -E "^ddgw/" /tmp/nexora-chat-candidate-list | grep -Fxv "$MODEL" | head -n 1 >> /tmp/nexora-aider-candidate-list || true
+/usr/bin/python3 - <<'PY' >> /tmp/nexora-aider-candidate-list
+import json
+from pathlib import Path
+selected = Path("/tmp/nexora-aider-model").read_text().strip()
+for model in json.loads(Path("/tmp/nexora-chat-candidates.json").read_text()):
+    prefix = model.split("/", 1)[0].lower()
+    if model == selected or prefix in {"oc", "opencode"}:
+        continue
+    print(model)
+PY
+awk '!seen[$0]++' /tmp/nexora-aider-candidate-list > /tmp/nexora-aider-candidate-list.unique
+mv /tmp/nexora-aider-candidate-list.unique /tmp/nexora-aider-candidate-list
 mapfile -t AIDER_CANDIDATES < /tmp/nexora-aider-candidate-list
 if [ "${#AIDER_CANDIDATES[@]}" -eq 0 ]; then
   echo "NEXORA_AIDER_CANDIDATE_LIST_EMPTY=1"
