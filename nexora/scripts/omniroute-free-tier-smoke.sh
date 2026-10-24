@@ -64,7 +64,9 @@ sudo chroot "$ROOTFS" /usr/bin/bash -lc 'set -euo pipefail
 set -a
 . /persist/debian-workspace/data/omniroute/server.env
 set +a
-export PORT=20129 HOSTNAME=127.0.0.1 NODE_ENV=test NEXT_TELEMETRY_DISABLED=1 OMNIROUTE_USE_TURBOPACK=0
+export PORT=20129 HOSTNAME=127.0.0.1 NODE_ENV=test NEXT_TELEMETRY_DISABLED=1 OMNIROUTE_USE_TURBOPACK=0 CLOUDFLARE_PLAYGROUND_CHROME_PATH=/usr/bin/chromium
+if [ ! -x "$CLOUDFLARE_PLAYGROUND_CHROME_PATH" ]; then echo "NEXORA_CLOUDFLARE_CHROMIUM_MISSING=$CLOUDFLARE_PLAYGROUND_CHROME_PATH"; exit 1; fi
+echo "NEXORA_CLOUDFLARE_CHROMIUM_OK=$CLOUDFLARE_PLAYGROUND_CHROME_PATH"
 nohup /persist/debian-workspace/software/omniroute/node_modules/.bin/omniroute serve --no-open --no-tray >/tmp/omniroute-nexora.log 2>&1 &
 echo "$!" >/tmp/omniroute-nexora.pid
 for i in $(seq 1 120); do
