@@ -252,7 +252,7 @@ MODEL="$(/usr/bin/cat /tmp/nexora-aider-model)"
 # models. Do not retry OpenCode's endpoint: its own response explicitly rejects
 # use outside the OpenCode client, and it may require a user API key.
 printf "%s\n" "$MODEL" > /tmp/nexora-aider-candidate-list
-/usr/bin/python3 - <<'PY' >> /tmp/nexora-aider-candidate-list
+/usr/bin/python3 - <<PY >> /tmp/nexora-aider-candidate-list
 import json
 from pathlib import Path
 selected = Path("/tmp/nexora-aider-model").read_text().strip()
@@ -262,7 +262,7 @@ for model in json.loads(Path("/tmp/nexora-chat-candidates.json").read_text()):
         continue
     print(model)
 PY
-awk '!seen[$0]++' /tmp/nexora-aider-candidate-list > /tmp/nexora-aider-candidate-list.unique
+/usr/bin/python3 -c "import sys; seen=set(); [print(x) for x in sys.stdin.read().splitlines() if x and not (x in seen or seen.add(x))]" < /tmp/nexora-aider-candidate-list > /tmp/nexora-aider-candidate-list.unique
 mv /tmp/nexora-aider-candidate-list.unique /tmp/nexora-aider-candidate-list
 mapfile -t AIDER_CANDIDATES < /tmp/nexora-aider-candidate-list
 if [ "${#AIDER_CANDIDATES[@]}" -eq 0 ]; then
