@@ -34,6 +34,7 @@
  *     binary when Playwright's bundled Chromium gets fingerprint-blocked.
  */
 import { randomUUID } from "crypto";
+import { existsSync } from "node:fs";
 import { BaseExecutor, type ExecuteInput } from "./base.ts";
 import { makeExecutorErrorResult as makeErrorResult } from "../utils/error.ts";
 import type { Browser, Page } from "playwright";
@@ -297,8 +298,16 @@ export class PlaywrightCfTransport implements CfTransport {
   ): Promise<{ ok: true } | { ok: false; status: number; message: string }> {
     try {
       const playwright = await importPlaywright();
-      const executablePath =
+      // Prefer explicit configuration, then the environment, then Debian's
+      // system Chromium. In minimal NEXORA rootfs images Playwright's bundled
+      // chrome-headless-shell may not be installed, even when /usr/bin/chromium is.
+      const configuredPath =
         this.chromeExecutablePath ?? process.env.CLOUDFLARE_PLAYGROUND_CHROME_PATH;
+      const executablePath =
+        configuredPath ||
+        ["/usr/bin/chromium", "/usr/bin/chromium-browser", "/usr/bin/google-chrome"].find(
+          (candidate) => existsSync(candidate)
+        );
       this.browser = await playwright.chromium.launch({
         ...(executablePath ? { executablePath } : {}),
         headless: true,
