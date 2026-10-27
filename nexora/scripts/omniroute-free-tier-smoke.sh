@@ -1,14 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOTFS="nexora/rootfs"
-ARCHIVE="nexora/debian/debian-12-generic-amd64.tar.xz"
-PERSIST_IMG="nexora/persistent-workspace.ext4"
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+ROOTFS="${NEXORA_ROOTFS:-${REPO_ROOT}/nexora/rootfs}"
+ARCHIVE="${REPO_ROOT}/nexora/debian/debian-12-generic-amd64.tar.xz"
+PERSIST_IMG="${NEXORA_PERSIST_IMG:-${REPO_ROOT}/nexora/persistent-workspace.ext4}"
+case "$ROOTFS" in /*) ;; *) echo "ERROR: ROOTFS must be an absolute path."; exit 1 ;; esac
+case "$PERSIST_IMG" in /*) ;; *) echo "ERROR: PERSIST_IMG must be an absolute path."; exit 1 ;; esac
+case "$ROOTFS" in "${REPO_ROOT}"|"${REPO_ROOT}"/*) if [ -n "${NEXORA_ROOTFS:-}" ]; then echo "ERROR: NEXORA_ROOTFS points inside the repository."; exit 1; fi ;; esac
 
 test -f "$ARCHIVE"
 sudo apt-get update
 sudo apt-get install -y debootstrap rsync e2fsprogs
-sudo bash nexora/scripts/build-rootfs.sh
+sudo env NEXORA_ROOTFS="$ROOTFS" bash "${REPO_ROOT}/nexora/scripts/build-rootfs.sh"
 echo "=== Verify NEXORA helper payload ==="
 sudo chroot "$ROOTFS" /usr/local/bin/node --version
 sudo chroot "$ROOTFS" /usr/bin/ls -l /usr/local/bin/nexora-omniroute-install.sh /usr/local/bin/nexora-omniroute-env.sh /usr/local/bin/nexora-persistence-test.sh
@@ -23,14 +27,26 @@ for helper in nexora-omniroute-install.sh nexora-omniroute-env.sh nexora-persist
 done
 '
 
-echo "=== Prepare NEXORA persistent workspace image (5G working size; shrink after install) ==="
-# OmniRoute 3.8.50 npm extraction can temporarily require more than 3G
-# once the Debian rootfs, npm cache, and package tree coexist. The image is
-# compacted with resize2fs -M after the smoke test, so the final artifact
-# contains only the blocks actually used by the persistent workspace.
-sudo truncate -s 5G "$PERSIST_IMG"
+echo "=== Prepare NEXORA persistent workspace image ==="
+mkdir -p "$(dirname "$PERSIST_IMG")"
+if [ -f "$PERSIST_IMG" ]; then
+  echo "NEXORA_PERSISTENT_IMAGE_RESTORED=1"
+  # Fail closed: never format or silently discard an existing image.
+  if ! sudo e2fsck -fn "$PERSIST_IMG"; then
+    echo "NEXORA_PERSISTENT_IMAGE_CHECK_FAILED; refusing to reformat"
+    exit 1
+  fi
+  CURRENT_SIZE="$(stat -c%s "$PERSIST_IMG")"
+  if [ "$CURRENT_SIZE" -lt 5368709120 ]; then
+    sudo truncate -s 5G "$PERSIST_IMG"
+    sudo resize2fs "$PERSIST_IMG"
+  fi
+else
+  echo "NEXORA_PERSISTENT_IMAGE_INITIALIZED=1"
+  sudo truncate -s 5G "$PERSIST_IMG"
+  sudo mkfs.ext4 -F -q "$PERSIST_IMG"
+fi
 ls -lh "$PERSIST_IMG"
-sudo mkfs.ext4 -F -q "$PERSIST_IMG"
 sudo mkdir -p "$ROOTFS/persist"
 echo "NEXORA_PERSIST_MOUNT_ATTEMPT"
 if ! sudo mount -o loop "$PERSIST_IMG" "$ROOTFS/persist"; then
@@ -213,6 +229,8 @@ while IFS= read -r MODEL; do
   if [ "$HTTP_CODE" = "200" ]; then
     /usr/bin/python3 -c "import json,sys; x=json.load(open(sys.argv[1])); c=((x.get(chr(99)+chr(104)+chr(111)+chr(105)+chr(99)+chr(101)+chr(115)) or [{}])[0].get(chr(109)+chr(101)+chr(115)+chr(115)+chr(97)+chr(103)+chr(101)) or {}).get(chr(99)+chr(111)+chr(110)+chr(116)+chr(101)+chr(110)+chr(116),chr(0)); print(chr(78)+chr(69)+chr(88)+chr(79)+chr(82)+chr(65)+chr(95)+chr(79)+chr(77)+chr(78)+chr(73)+chr(82)+chr(79)+chr(85)+chr(84)+chr(69)+chr(95)+chr(70)+chr(82)+chr(69)+chr(69)+chr(95)+chr(67)+chr(72)+chr(65)+chr(84)+chr(95)+chr(82)+chr(69)+chr(83)+chr(80)+chr(79)+chr(78)+chr(83)+chr(69)+chr(61)+c[:500]); assert chr(79)+chr(75) in c.upper()" /tmp/omniroute-chat.json
     printf "%s\n" "$MODEL" > /tmp/nexora-aider-model
+    mkdir -p /persist/debian-workspace/data/omniroute
+    printf "%s\n" "$MODEL" > /persist/debian-workspace/data/omniroute/nexora-aider-model
     echo "NEXORA_FREE_CHAT_MODEL=$MODEL"
     echo NEXORA_OMNIROUTE_REAL_FREE_TIER_CHAT_OK=1
     CHAT_OK=1
@@ -236,6 +254,12 @@ sudo chroot "$ROOTFS" /usr/bin/bash -lc 'set -uo pipefail
 command -v aider
 aider --version
 API_KEY="$(cat /tmp/omniroute-api-key)"
+MODEL="$(cat /persist/debian-workspace/data/omniroute/nexora-aider-model 2>/dev/null || cat /tmp/nexora-aider-model 2>/dev/null || true)"
+if [ -z "$MODEL" ]; then
+  echo "NEXORA_AIDER_MODEL_STATE_MISSING=1"
+  echo "No model was saved by the successful chat test; refusing to run Aider with an empty model."
+  exit 1
+fi
 export OPENAI_API_BASE="http://127.0.0.1:20129/v1"
 export OPENAI_API_KEY="$API_KEY"
 mkdir -p /tmp/nexora-aider-smoke
@@ -249,15 +273,15 @@ if [ ! -s /tmp/nexora-chat-candidates.json ]; then
   echo "NEXORA_AIDER_CANDIDATE_JSON_MISSING=1"
   exit 1
 fi
-MODEL="$(/usr/bin/cat /tmp/nexora-aider-model)"
+MODEL="$(/usr/bin/cat /persist/debian-workspace/data/omniroute/nexora-aider-model 2>/dev/null || /usr/bin/cat /tmp/nexora-aider-model 2>/dev/null || true)"
 # Try the model that passed the direct chat smoke first, then other free chat
-# models. Do not retry OpenCode's endpoint: its own response explicitly rejects
+# models. Do not retry the OpenCode endpoint: its own response explicitly rejects
 # use outside the OpenCode client, and it may require a user API key.
 printf "%s\n" "${MODEL:-}" > /tmp/nexora-aider-candidate-list
 /usr/bin/python3 - <<PY >> /tmp/nexora-aider-candidate-list
 import json
 from pathlib import Path
-selected = Path("/tmp/nexora-aider-model").read_text().strip()
+selected = next((p.read_text().strip() for p in (Path("/persist/debian-workspace/data/omniroute/nexora-aider-model"), Path("/tmp/nexora-aider-model")) if p.is_file()), "")
 for model in json.loads(Path("/tmp/nexora-chat-candidates.json").read_text()):
     prefix = model.split("/", 1)[0].lower()
     if model == selected or prefix in {"oc", "opencode"}:
