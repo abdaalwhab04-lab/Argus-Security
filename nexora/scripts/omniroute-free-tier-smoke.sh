@@ -253,7 +253,7 @@ MODEL="$(/usr/bin/cat /tmp/nexora-aider-model)"
 # Try the model that passed the direct chat smoke first, then other free chat
 # models. Do not retry OpenCode's endpoint: its own response explicitly rejects
 # use outside the OpenCode client, and it may require a user API key.
-printf "%s\n" "$MODEL" > /tmp/nexora-aider-candidate-list
+printf "%s\n" "${MODEL:-}" > /tmp/nexora-aider-candidate-list
 /usr/bin/python3 - <<PY >> /tmp/nexora-aider-candidate-list
 import json
 from pathlib import Path
