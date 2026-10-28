@@ -32,14 +32,23 @@ mkdir -p "$(dirname "$PERSIST_IMG")"
 if [ -f "$PERSIST_IMG" ]; then
   echo "NEXORA_PERSISTENT_IMAGE_RESTORED=1"
   # Fail closed: never format or silently discard an existing image.
-  if ! sudo e2fsck -fn "$PERSIST_IMG"; then
-    echo "NEXORA_PERSISTENT_IMAGE_CHECK_FAILED; refusing to reformat"
-    exit 1
-  fi
   CURRENT_SIZE="$(stat -c%s "$PERSIST_IMG")"
   if [ "$CURRENT_SIZE" -lt 5368709120 ]; then
+    # resize2fs requires a forced, read-write fsck before growing a restored image.
+    # Accept e2fsck status 1 (errors corrected); reject serious/uncorrected errors.
+    set +e
+    sudo e2fsck -f -p "$PERSIST_IMG"
+    FSCK_STATUS=$?
+    set -e
+    if [ "$FSCK_STATUS" -gt 1 ]; then
+      echo "NEXORA_PERSISTENT_IMAGE_REPAIR_FAILED status=$FSCK_STATUS; refusing to resize"
+      exit 1
+    fi
     sudo truncate -s 5G "$PERSIST_IMG"
     sudo resize2fs "$PERSIST_IMG"
+  elif ! sudo e2fsck -fn "$PERSIST_IMG"; then
+    echo "NEXORA_PERSISTENT_IMAGE_CHECK_FAILED; refusing to reformat"
+    exit 1
   fi
 else
   echo "NEXORA_PERSISTENT_IMAGE_INITIALIZED=1"
