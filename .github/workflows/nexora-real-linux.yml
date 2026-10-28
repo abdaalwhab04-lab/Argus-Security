@@ -1,10 +1,6 @@
 name: Argus NEXORA Linux Full Build and Persistence Test
 
 on:
-  push:
-    branches:
-      - omniroute-v3.8.50-integration
-      - nexora-real-test
   workflow_dispatch:
 
 permissions:

@@ -2,9 +2,6 @@ name: NEXORA Actual Linux Build Validation
 
 on:
   workflow_call:
-  push:
-    branches:
-      - omniroute-v3.8.50-integration
   workflow_dispatch:
 
 permissions:
