@@ -119,7 +119,12 @@ const x = JSON.parse(fs.readFileSync("/tmp/omniroute-free.json","utf8"));
 const providers = Array.isArray(x.providers) ? x.providers : [];
 const ids = providers.map(p => typeof p === "string" ? p : p.id).filter(Boolean);
 console.log("NEXORA_FREE_ONBOARDING_IDS=" + ids.join(","));
-if (!ids.includes("aihorde")) throw new Error("AI Horde is not present in OmniRoute Free Tier catalog");
+if (ids.length === 0) {
+  // The endpoint intentionally returns only eligible providers that are not
+  // configured yet. An empty list is valid after a prior successful onboarding
+  // has persisted provider connections; model/chat smoke below verifies they work.
+  console.log("NEXORA_FREE_ONBOARDING_ALREADY_CONFIGURED=1");
+}
 fs.writeFileSync("/tmp/omniroute-free-ids.json", JSON.stringify(ids));
 NODE
 
@@ -132,6 +137,10 @@ if(!cookieLine) throw new Error("auth_token cookie not found");
 const cookieParts=cookieLine.split("\t");
 const cookie="auth_token="+cookieParts[cookieParts.length-1];
 const ids=JSON.parse(fs.readFileSync("/tmp/omniroute-free-ids.json","utf8"));
+if (ids.length === 0) {
+  console.log("NEXORA_FREE_ONBOARDING_SKIPPED_NO_UNCONFIGURED_PROVIDERS=1");
+  process.exit(0);
+}
 const res=await fetch(base+"/api/providers/free-onboarding",{method:"POST",headers:{"Content-Type":"application/json","Cookie":cookie},body:JSON.stringify({providerIds:ids,confirmed:true})});
 const body=await res.text();
 if(!res.ok) throw new Error("Free onboarding failed: "+res.status+" "+body.slice(0,800));
