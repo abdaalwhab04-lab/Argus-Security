@@ -29,19 +29,47 @@ jobs:
 
       - name: Persist small NEXORA runtime manifest only
         if: success()
+        shell: bash
         run: |
           set -euo pipefail
+          ROOTFS="$PWD/nexora/rootfs"
+          PERSIST_IMG="$PWD/nexora/persistent-workspace.ext4"
+          PERSIST_MOUNT="$ROOTFS/persist"
+          test -f "$PERSIST_IMG"
+          sudo mkdir -p "$PERSIST_MOUNT"
+          cleanup() {
+            if mountpoint -q "$PERSIST_MOUNT"; then
+              sudo umount "$PERSIST_MOUNT"
+            fi
+          }
+          trap cleanup EXIT
+          # The smoke script unmounts /persist on exit. Remount its image here
+          # before reading runtime state; otherwise chroot sees the empty mountpoint.
+          sudo mount -o loop "$PERSIST_IMG" "$PERSIST_MOUNT"
+          sudo mountpoint -q "$PERSIST_MOUNT"
+
+          VERSION="$(sudo chroot "$ROOTFS" /usr/bin/cat /persist/debian-workspace/software/omniroute/.nexora-omniroute-version)"
+          test -n "$VERSION"
+          sudo chroot "$ROOTFS" /usr/bin/test -f /persist/debian-workspace/source/omniroute/package.json
+          MODEL="$(sudo chroot "$ROOTFS" /usr/bin/cat /persist/debian-workspace/data/omniroute/nexora-aider-model)"
+          test -n "$MODEL"
+          FREE_IDS="$(sudo chroot "$ROOTFS" /usr/bin/cat /tmp/omniroute-free-ids.json)"
+          test -n "$FREE_IDS"
+
           {
-            echo "NEXORA_PERSISTENCE_MODE=rebuild-from-repo"
+            echo "NEXORA_PERSISTENCE_MODE=ephemeral-ci-image-rebuilt-from-repo"
             echo "NEXORA_ARCHIVE=nexora/debian/debian-12-generic-amd64.tar.xz"
             echo "NEXORA_ARCHIVE_SHA256=$(sha256sum nexora/debian/debian-12-generic-amd64.tar.xz | cut -d' ' -f1)"
-            echo "NEXORA_PERSISTENT_WORKSPACE_SIZE=$(stat -c%s nexora/persistent-workspace.ext4)"
-            echo "NEXORA_OMNIROUTE_VERSION=$(sudo chroot nexora/rootfs /usr/local/bin/node -p "require('/persist/debian-workspace/source/omniroute/package.json').version")"
-            echo "NEXORA_FREE_ONBOARDING_IDS=$(sudo chroot nexora/rootfs /usr/bin/cat /tmp/omniroute-free-ids.json)"
-            echo "NEXORA_FREE_CHAT_MODEL=$(sudo chroot nexora/rootfs /usr/bin/cat /tmp/nexora-aider-model)"
+            echo "NEXORA_PERSISTENT_WORKSPACE_SIZE=$(stat -c%s "$PERSIST_IMG")"
+            echo "NEXORA_OMNIROUTE_VERSION=$VERSION"
+            echo "NEXORA_FREE_ONBOARDING_IDS=$FREE_IDS"
+            echo "NEXORA_FREE_CHAT_MODEL=$MODEL"
             echo "NEXORA_PERSISTENT_INSTALL_OK=1"
+            echo "NEXORA_RUNTIME_MANIFEST_VALIDATED=1"
           } > nexora/nexora-runtime-manifest.env
-          rm -f nexora/persistent-workspace.ext4
+          cleanup
+          trap - EXIT
+          rm -f "$PERSIST_IMG"
           ls -lh nexora/nexora-runtime-manifest.env
 
       - name: Upload small NEXORA runtime manifest
