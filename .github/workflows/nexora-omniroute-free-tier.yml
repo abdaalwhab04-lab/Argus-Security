@@ -64,6 +64,8 @@ jobs:
       - name: Persist small NEXORA runtime manifest only
         if: success()
         shell: bash
+        env:
+          NEXORA_PERSISTENCE_KEY: ${{ secrets.NEXORA_PERSISTENCE_KEY }}
         run: |
           set -euo pipefail
           ROOTFS="$PWD/nexora/rootfs"
@@ -91,7 +93,7 @@ jobs:
           test -n "$FREE_IDS"
 
           {
-            echo "NEXORA_PERSISTENCE_MODE=ephemeral-ci-image-rebuilt-from-repo"
+            echo "NEXORA_PERSISTENCE_MODE=encrypted-github-actions-artifact"
             echo "NEXORA_ARCHIVE=nexora/debian/debian-12-generic-amd64.tar.xz"
             echo "NEXORA_ARCHIVE_SHA256=$(sha256sum nexora/debian/debian-12-generic-amd64.tar.xz | cut -d' ' -f1)"
             echo "NEXORA_PERSISTENT_WORKSPACE_SIZE=$(stat -c%s "$PERSIST_IMG")"
