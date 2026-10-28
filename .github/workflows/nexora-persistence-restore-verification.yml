@@ -63,29 +63,39 @@ jobs:
 
           sudo e2fsck -fn "$IMG"
           echo "NEXORA_RESTORE_FILESYSTEM_CHECK_OK=1"
-          MNT="$RESTORE_DIR/mnt"
-          mkdir -p "$MNT"
-          cleanup() { if mountpoint -q "$MNT"; then sudo umount "$MNT"; fi; }
-          trap cleanup EXIT
-          sudo mount -o loop,ro "$IMG" "$MNT"
-          sudo mountpoint -q "$MNT"
-          test -f "$MNT/debian-workspace/source/omniroute/package.json"
-          test -x "$MNT/debian-workspace/software/omniroute/node_modules/.bin/omniroute"
-          test -f "$MNT/debian-workspace/data/omniroute/server.env"
-          test -s "$MNT/debian-workspace/data/omniroute/nexora-aider-model"
-          MODEL="$(cat "$MNT/debian-workspace/data/omniroute/nexora-aider-model")"
-          test -n "$MODEL"
+
+          # Use debugfs for read-only inspection; hosted runners may disallow loop mounts.
+          stat_inode() {
+            local path="$1" output
+            output="$(sudo debugfs -R "stat $path" "$IMG" 2>&1 || true)"
+            printf '%s\n' "$output" | grep -Eq 'Inode: *[0-9]+.*Type: regular'
+          }
+          stat_inode "/debian-workspace/source/omniroute/package.json"
           echo "NEXORA_RESTORE_OMNIROUTE_SOURCE_OK=1"
+
+          BIN_PATH="/debian-workspace/software/omniroute/node_modules/.bin/omniroute"
+          BIN_STAT="$(sudo debugfs -R "stat $BIN_PATH" "$IMG" 2>&1 || true)"
+          printf '%s\n' "$BIN_STAT" | grep -Eq 'Inode: *[0-9]+.*Type: regular'
+          BIN_MODE="$(printf '%s\n' "$BIN_STAT" | sed -n 's/.*Mode: *\([0-7][0-7]*\).*/\1/p' | head -n 1)"
+          test -n "$BIN_MODE"
+          BIN_MODE_VALUE=$((8#$BIN_MODE))
+          test "$((BIN_MODE_VALUE & 0111))" -ne 0
           echo "NEXORA_RESTORE_OMNIROUTE_INSTALL_OK=1"
+
+          stat_inode "/debian-workspace/data/omniroute/server.env"
           echo "NEXORA_RESTORE_SERVER_ENV_PRESENT=1"
+          stat_inode "/debian-workspace/data/omniroute/nexora-aider-model"
+          MODEL_FILE="$RESTORE_DIR/nexora-aider-model"
+          sudo debugfs -R "cat /debian-workspace/data/omniroute/nexora-aider-model" "$IMG" 2>/dev/null > "$MODEL_FILE"
+          MODEL="$(tr -d '\r\n' < "$MODEL_FILE")"
+          test -n "$MODEL"
           echo "NEXORA_RESTORE_AIDER_MODEL=$MODEL"
           echo "NEXORA_PERSISTENT_WORKSPACE_RESTORE_VERIFIED=1"
-          cleanup
-          trap - EXIT
           {
             echo "NEXORA_PERSISTENT_WORKSPACE_RESTORE_VERIFIED=1"
             echo "NEXORA_RESTORE_SOURCE_RUN_ID=$RUN_ID"
             echo "NEXORA_RESTORED_IMAGE_BYTES=$(stat -c%s "$IMG")"
+            echo "NEXORA_RESTORE_OMNIROUTE_SOURCE_OK=1"
             echo "NEXORA_RESTORE_OMNIROUTE_INSTALL_OK=1"
             echo "NEXORA_RESTORE_SERVER_ENV_PRESENT=1"
             echo "NEXORA_RESTORE_AIDER_MODEL=$MODEL"
