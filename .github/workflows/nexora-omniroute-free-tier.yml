@@ -12,6 +12,7 @@ name: NEXORA OmniRoute Free Tier
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   nexora-free-tier:
@@ -23,6 +24,39 @@ jobs:
         with:
           ref: omniroute-v3.8.50-integration
           lfs: true
+
+      - name: Restore encrypted NEXORA persistent workspace
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NEXORA_PERSISTENCE_KEY: ${{ secrets.NEXORA_PERSISTENCE_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "${NEXORA_PERSISTENCE_KEY:-}" || { echo "NEXORA_PERSISTENCE_SECRET_MISSING=1"; exit 1; }
+          RESTORE_DIR="$RUNNER_TEMP/nexora-persistence-restore"
+          mkdir -p "$RESTORE_DIR"
+          FOUND=0
+          while IFS= read -r RUN_ID; do
+            [ -n "$RUN_ID" ] || continue
+            [ "$RUN_ID" != "$GITHUB_RUN_ID" ] || continue
+            rm -f "$RESTORE_DIR/persistent-workspace.ext4.enc"
+            if gh run download "$RUN_ID" --name nexora-persistent-workspace-encrypted --dir "$RESTORE_DIR" >/dev/null 2>&1 &&
+               [ -s "$RESTORE_DIR/persistent-workspace.ext4.enc" ]; then
+              echo "NEXORA_ENCRYPTED_PERSISTENCE_ARTIFACT_FOUND=1"
+              FOUND=1
+              break
+            fi
+          done < <(gh run list --workflow nexora-omniroute-free-tier.yml --branch omniroute-v3.8.50-integration --status success --limit 20 --json databaseId --jq '.[].databaseId')
+          if [ "$FOUND" = "1" ]; then
+            openssl enc -d -aes-256-cbc -pbkdf2 -pass env:NEXORA_PERSISTENCE_KEY \
+              -in "$RESTORE_DIR/persistent-workspace.ext4.enc" \
+              -out nexora/persistent-workspace.ext4
+            sudo e2fsck -fn nexora/persistent-workspace.ext4
+            echo "NEXORA_PERSISTENT_WORKSPACE_DECRYPTED=1"
+          else
+            echo "NEXORA_PERSISTENT_WORKSPACE_NO_PRIOR_ARTIFACT=1"
+            echo "NEXORA_PERSISTENT_WORKSPACE_WILL_INITIALIZE=1"
+          fi
 
       - name: Run NEXORA OmniRoute Free Tier and Aider smoke
         run: bash nexora/scripts/omniroute-free-tier-smoke.sh
@@ -69,8 +103,12 @@ jobs:
           } > nexora/nexora-runtime-manifest.env
           cleanup
           trap - EXIT
+          test -n "${NEXORA_PERSISTENCE_KEY:-}" || { echo "NEXORA_PERSISTENCE_SECRET_MISSING=1"; exit 1; }
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass env:NEXORA_PERSISTENCE_KEY \
+            -in "$PERSIST_IMG" -out "$PERSIST_IMG.enc"
+          test -s "$PERSIST_IMG.enc"
           rm -f "$PERSIST_IMG"
-          ls -lh nexora/nexora-runtime-manifest.env
+          ls -lh nexora/nexora-runtime-manifest.env "$PERSIST_IMG.enc"
 
       - name: Upload small NEXORA runtime manifest
         if: success()
@@ -80,6 +118,16 @@ jobs:
           path: nexora/nexora-runtime-manifest.env
           if-no-files-found: error
           retention-days: 30
+
+      - name: Upload encrypted NEXORA persistent workspace
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nexora-persistent-workspace-encrypted
+          path: nexora/persistent-workspace.ext4.enc
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 90
 
       - name: Show diagnostics on failure
         if: failure()
