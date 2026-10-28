@@ -1,0 +1,102 @@
+name: NEXORA Persistent Workspace Restore Verification
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - omniroute-v3.8.50-integration
+    paths:
+      - ".github/workflows/nexora-persistence-restore-verification.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: nexora-persistence-restore-verification-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify-restore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout integration branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: omniroute-v3.8.50-integration
+          lfs: true
+
+      - name: Restore latest successful encrypted workspace
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NEXORA_PERSISTENCE_KEY: ${{ secrets.NEXORA_PERSISTENCE_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "${NEXORA_PERSISTENCE_KEY:-}" || { echo "NEXORA_PERSISTENCE_SECRET_MISSING=1"; exit 1; }
+          command -v gh >/dev/null
+          sudo apt-get update
+          sudo apt-get install -y e2fsprogs
+          RESTORE_DIR="$RUNNER_TEMP/nexora-restore-verification"
+          mkdir -p "$RESTORE_DIR"
+          FOUND=0
+          while IFS= read -r RUN_ID; do
+            [ -n "$RUN_ID" ] || continue
+            rm -f "$RESTORE_DIR/persistent-workspace.ext4.enc"
+            if gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --name nexora-persistent-workspace-encrypted --dir "$RESTORE_DIR" >/dev/null 2>&1 &&
+               [ -s "$RESTORE_DIR/persistent-workspace.ext4.enc" ]; then
+              echo "NEXORA_RESTORE_SOURCE_RUN_ID=$RUN_ID"
+              FOUND=1
+              break
+            fi
+          done < <(gh run list --repo "$GITHUB_REPOSITORY" --workflow nexora-omniroute-free-tier.yml --branch omniroute-v3.8.50-integration --status success --limit 20 --json databaseId --jq '.[].databaseId')
+          [ "$FOUND" = "1" ] || { echo "NEXORA_RESTORE_SOURCE_ARTIFACT_NOT_FOUND=1"; exit 1; }
+
+          ENC="$RESTORE_DIR/persistent-workspace.ext4.enc"
+          IMG="$RESTORE_DIR/persistent-workspace.ext4"
+          test "$(stat -c%s "$ENC")" -gt 1000000000
+          openssl enc -d -aes-256-cbc -pbkdf2 -pass env:NEXORA_PERSISTENCE_KEY -in "$ENC" -out "$IMG"
+          test -s "$IMG"
+          echo "NEXORA_RESTORE_DECRYPTION_OK=1"
+          echo "NEXORA_RESTORED_IMAGE_BYTES=$(stat -c%s "$IMG")"
+
+          sudo e2fsck -fn "$IMG"
+          echo "NEXORA_RESTORE_FILESYSTEM_CHECK_OK=1"
+          MNT="$RESTORE_DIR/mnt"
+          mkdir -p "$MNT"
+          cleanup() { if mountpoint -q "$MNT"; then sudo umount "$MNT"; fi; }
+          trap cleanup EXIT
+          sudo mount -o loop,ro "$IMG" "$MNT"
+          sudo mountpoint -q "$MNT"
+          test -f "$MNT/debian-workspace/source/omniroute/package.json"
+          test -x "$MNT/debian-workspace/software/omniroute/node_modules/.bin/omniroute"
+          test -f "$MNT/debian-workspace/data/omniroute/server.env"
+          test -s "$MNT/debian-workspace/data/omniroute/nexora-aider-model"
+          MODEL="$(cat "$MNT/debian-workspace/data/omniroute/nexora-aider-model")"
+          test -n "$MODEL"
+          echo "NEXORA_RESTORE_OMNIROUTE_SOURCE_OK=1"
+          echo "NEXORA_RESTORE_OMNIROUTE_INSTALL_OK=1"
+          echo "NEXORA_RESTORE_SERVER_ENV_PRESENT=1"
+          echo "NEXORA_RESTORE_AIDER_MODEL=$MODEL"
+          echo "NEXORA_PERSISTENT_WORKSPACE_RESTORE_VERIFIED=1"
+          cleanup
+          trap - EXIT
+          {
+            echo "NEXORA_PERSISTENT_WORKSPACE_RESTORE_VERIFIED=1"
+            echo "NEXORA_RESTORE_SOURCE_RUN_ID=$RUN_ID"
+            echo "NEXORA_RESTORED_IMAGE_BYTES=$(stat -c%s "$IMG")"
+            echo "NEXORA_RESTORE_OMNIROUTE_INSTALL_OK=1"
+            echo "NEXORA_RESTORE_SERVER_ENV_PRESENT=1"
+            echo "NEXORA_RESTORE_AIDER_MODEL=$MODEL"
+          } > "$RUNNER_TEMP/nexora-restore-verification.env"
+          cp "$RUNNER_TEMP/nexora-restore-verification.env" nexora-restore-verification.env
+
+      - name: Upload small restore verification report
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nexora-persistence-restore-verification
+          path: nexora-restore-verification.env
+          if-no-files-found: error
+          retention-days: 30
