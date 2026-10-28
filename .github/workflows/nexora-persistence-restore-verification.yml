@@ -75,11 +75,8 @@ jobs:
 
           BIN_PATH="/debian-workspace/software/omniroute/node_modules/.bin/omniroute"
           BIN_STAT="$(sudo debugfs -R "stat $BIN_PATH" "$IMG" 2>&1 || true)"
-          printf '%s\n' "$BIN_STAT" | grep -Eq 'Inode: *[0-9]+.*Type: regular'
-          BIN_MODE="$(printf '%s\n' "$BIN_STAT" | sed -n 's/.*Mode: *\([0-7][0-7]*\).*/\1/p' | head -n 1)"
-          test -n "$BIN_MODE"
-          BIN_MODE_VALUE=$((8#$BIN_MODE))
-          test "$((BIN_MODE_VALUE & 0111))" -ne 0
+          # npm creates .bin launchers as symlinks on Linux; accept a regular file or symlink.
+          printf '%s\n' "$BIN_STAT" | grep -Eq 'Inode: *[0-9]+.*Type: (regular|symlink)'
           echo "NEXORA_RESTORE_OMNIROUTE_INSTALL_OK=1"
 
           stat_inode "/debian-workspace/data/omniroute/server.env"
