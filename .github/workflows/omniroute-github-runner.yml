@@ -143,9 +143,9 @@ jobs:
       - name: Verify home page responds
         shell: bash
         run: |
-          status=$(curl -sS -o "$RUNNER_TEMP/home.html" -w '%{http_code}' \
+          status=$(curl -sS -L -o "$RUNNER_TEMP/home.html" -w '%{http_code}' \
             http://127.0.0.1:20128/home)
-          echo "home_status=$status"
+          echo "home_final_status=$status"
           test "$status" = 200
           grep -Eiq 'OmniRoute|Next.js|html' "$RUNNER_TEMP/home.html"
 
