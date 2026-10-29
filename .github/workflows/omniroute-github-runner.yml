@@ -93,22 +93,18 @@ jobs:
           curl -fsS http://127.0.0.1:20128/api/health
           echo
 
-          echo '=== /v1/models ==='
-          curl -fsS http://127.0.0.1:20128/v1/models | tee "$RUNNER_TEMP/models.json"
-          echo
-
-          node - <<'NODE'
-          const fs = require('fs');
-          const models = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + '/models.json', 'utf8'));
-          if (!Array.isArray(models.data)) throw new Error('/v1/models did not return data[]');
-          console.log(`models=${models.data.length}`);
-          NODE
+          echo 'Health endpoint passed; OpenAI endpoint is tested after authenticated key creation.'
 
       - name: Create and verify temporary API key
         shell: bash
         run: |
           set -euo pipefail
-          response=$(curl -fsS -X POST http://127.0.0.1:20128/api/keys \
+          curl -fsS -c "$RUNNER_TEMP/omniroute-cookie" -X POST http://127.0.0.1:20128/api/auth/login \
+            -H 'Content-Type: application/json' \
+            --data "{\"password\":\"$INITIAL_PASSWORD\"}" > "$RUNNER_TEMP/login.json"
+          node -e "const x=require(process.env.RUNNER_TEMP + '/login.json'); if(x.success !== true) throw new Error('Management login failed')"
+
+          response=$(curl -fsS -b "$RUNNER_TEMP/omniroute-cookie" -X POST http://127.0.0.1:20128/api/keys \
             -H 'Content-Type: application/json' \
             --data '{"name":"github-runner-smoke","scopes":["chat"]}')
           printf '%s' "$response" > "$RUNNER_TEMP/key-response.json"
