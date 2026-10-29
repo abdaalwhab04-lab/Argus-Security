@@ -33,7 +33,6 @@ jobs:
       API_KEY_SECRET: ci-only-api-key-secret
       INITIAL_PASSWORD: ci-only-password
       STORAGE_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
-      DATA_DIR: ${{ runner.temp }}/omniroute-data
       DISABLE_SQLITE_AUTO_BACKUP: 'true'
       NEXT_TELEMETRY_DISABLED: '1'
       OMNIROUTE_USE_TURBOPACK: '0'
@@ -66,6 +65,7 @@ jobs:
 
       - name: Start OmniRoute
         run: |
+          export DATA_DIR="$RUNNER_TEMP/omniroute-data"
           mkdir -p "$DATA_DIR"
           nohup npm run start > "$RUNNER_TEMP/omniroute-server.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/omniroute.pid"
