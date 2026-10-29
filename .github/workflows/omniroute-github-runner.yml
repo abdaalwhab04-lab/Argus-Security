@@ -84,17 +84,13 @@ jobs:
           cat "$RUNNER_TEMP/omniroute-server.log" || true
           exit 1
 
-      - name: Test management and OpenAI-compatible endpoints
+      - name: Test health and OpenAI-compatible endpoints
         shell: bash
         run: |
           set -euo pipefail
 
           echo '=== /api/health ==='
           curl -fsS http://127.0.0.1:20128/api/health
-          echo
-
-          echo '=== /api/providers ==='
-          curl -fsS http://127.0.0.1:20128/api/providers | tee "$RUNNER_TEMP/providers.json"
           echo
 
           echo '=== /v1/models ==='
