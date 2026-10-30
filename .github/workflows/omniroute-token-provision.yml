@@ -132,6 +132,10 @@ jobs:
           import fs from "node:fs";
           const x = JSON.parse(fs.readFileSync("/tmp/omniroute-models.json","utf8"));
           const ids = (x.data || []).map(x => x.id);
+          const model = ids.find(id => String(id).toLowerCase().includes("aihorde") && !/image/i.test(String(id)));
+          if (!model) throw new Error("No AI Horde chat model is exposed by OmniRoute");
+          fs.writeFileSync("/tmp/aider-free-model", String(model) + "\n");
+          console.log("AIDER_OMNIROUTE_MODEL=" + model);
           const wanted = ["ovhcloud","aihorde","navy"];
           const seen = wanted.filter(p => ids.some(id => String(id).toLowerCase().includes(p)));
           console.log("OMNIROUTE_MODELS_VISIBLE=" + ids.length);
