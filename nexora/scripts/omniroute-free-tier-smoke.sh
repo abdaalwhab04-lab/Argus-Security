@@ -297,8 +297,8 @@ if result != "success":
                     collect(item,key)
         collect(payload)
         summary="; ".join(parts)
-        summary=re.sub(r"(?i)(bearer\\s+)[^\\s,;]+",r"\\1[REDACTED]",summary)
-        summary=re.sub(r"(?i)(api[_ -]?key|token|password)(\\s*[:=]\\s*)[^\\s,;]+",r"\\1\\2[REDACTED]",summary)
+        summary=re.sub(r"(?i)(bearer\s+)[^\s,;]+",r"\1[REDACTED]",summary)
+        summary=re.sub(r"(?i)(api[_ -]?key|token|password)(\s*[:=]\s*)[^\s,;]+",r"\1\2[REDACTED]",summary)
         if summary:
             entry["response_error"]=summary[:500]
     except Exception:
