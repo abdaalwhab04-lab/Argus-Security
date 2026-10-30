@@ -85,7 +85,8 @@ sudo chroot "$ROOTFS" /usr/local/bin/nexora-omniroute-env.sh
 sudo chroot "$ROOTFS" test -x /persist/debian-workspace/software/omniroute/node_modules/.bin/omniroute
 sudo chroot "$ROOTFS" test -f /persist/debian-workspace/data/omniroute/server.env
 
-sudo chroot "$ROOTFS" /usr/bin/bash -lc 'set -euo pipefail
+SWEEP_SCRIPT="$RUNNER_TEMP/nexora-free-tier-model-sweep.sh"
+cat > "$SWEEP_SCRIPT" <<'NEXORA_SWEEP_SCRIPT'
 set -a
 . /persist/debian-workspace/data/omniroute/server.env
 set +a
@@ -307,7 +308,9 @@ assert x["tested_count"]==x["candidate_count"], "Not every advertised candidate 
 PY
 echo "NEXORA_FREE_MODEL_SWEEP_COMPLETED=1"
 echo "NEXORA_OMNIROUTE_REAL_FREE_TIER_CHAT_OK=1"
-'
+NEXORA_SWEEP_SCRIPT
+sudo install -m 0755 "$SWEEP_SCRIPT" "$ROOTFS/tmp/nexora-free-tier-model-sweep.sh"
+sudo chroot "$ROOTFS" /usr/bin/bash /tmp/nexora-free-tier-model-sweep.sh
 echo NEXORA_OMNIROUTE_FREE_TIER_SMOKE_OK=1
 
 echo "=== Aider through NEXORA OmniRoute ==="
