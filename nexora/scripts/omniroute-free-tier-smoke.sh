@@ -171,15 +171,12 @@ const freeProviders=new Set([
   "uncloseai",
   "chipotle",
   "duckduckgo-web"
-];
+]);
 // Felo's current documented API requires an API key and usage credits.
 // Its legacy anonymous browser endpoint is returning HTTP 400, so it is
 // intentionally excluded from the Free Tier candidate sweep until a
 // genuinely free, supported endpoint is available.
 console.log("NEXORA_FELO_EXCLUDED_FROM_FREE_SWEEP=official_api_requires_key_and_usage_credits");
-
-// Keep the provider set limited to endpoints that can be tested as Free Tier.
-]);
 
 const providerOf=v=>String(
   v?.providerId ??
