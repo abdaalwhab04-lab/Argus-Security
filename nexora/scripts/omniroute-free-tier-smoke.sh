@@ -170,8 +170,15 @@ const freeProviders=new Set([
   "theoldllm",
   "uncloseai",
   "chipotle",
-  "felo-web",
   "duckduckgo-web"
+];
+// Felo's current documented API requires an API key and usage credits.
+// Its legacy anonymous browser endpoint is returning HTTP 400, so it is
+// intentionally excluded from the Free Tier candidate sweep until a
+// genuinely free, supported endpoint is available.
+console.log("NEXORA_FELO_EXCLUDED_FROM_FREE_SWEEP=official_api_requires_key_and_usage_credits");
+
+// Keep the provider set limited to endpoints that can be tested as Free Tier.
 ]);
 
 const providerOf=v=>String(
@@ -200,11 +207,10 @@ const candidates=data
 const providerPriority = id => {
   const prefix = String(id).split("/")[0].toLowerCase();
   if (["cfp", "cloudflare-playground"].includes(prefix)) return 0;
-  if (["felo", "felo-web"].includes(prefix)) return 1;
-  if (["uncloseai"].includes(prefix)) return 2;
-  if (["chipotle"].includes(prefix)) return 3;
-  if (["tllm", "theoldllm"].includes(prefix)) return 4;
-  if (["ddgw", "duckduckgo-web"].includes(prefix)) return 5;
+  if (["uncloseai"].includes(prefix)) return 1;
+  if (["chipotle"].includes(prefix)) return 2;
+  if (["tllm", "theoldllm"].includes(prefix)) return 3;
+  if (["ddgw", "duckduckgo-web"].includes(prefix)) return 4;
   if (["oc", "opencode"].includes(prefix)) return 99;
   return 50;
 };
