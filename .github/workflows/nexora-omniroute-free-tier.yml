@@ -42,6 +42,7 @@ jobs:
             rm -f "$RESTORE_DIR/persistent-workspace.ext4.enc"
             if gh run download "$RUN_ID" --name nexora-persistent-workspace-encrypted --dir "$RESTORE_DIR" >/dev/null 2>&1 &&
                [ -s "$RESTORE_DIR/persistent-workspace.ext4.enc" ]; then
+              echo "NEXORA_PERSISTENCE_SOURCE_RUN_ID=$RUN_ID"
               echo "NEXORA_ENCRYPTED_PERSISTENCE_ARTIFACT_FOUND=1"
               FOUND=1
               break
