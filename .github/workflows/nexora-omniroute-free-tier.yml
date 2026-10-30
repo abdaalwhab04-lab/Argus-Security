@@ -89,6 +89,13 @@ jobs:
           sudo chroot "$ROOTFS" /usr/bin/test -f /persist/debian-workspace/source/omniroute/package.json
           MODEL="$(sudo chroot "$ROOTFS" /usr/bin/cat /persist/debian-workspace/data/omniroute/nexora-aider-model)"
           test -n "$MODEL"
+          MODEL_REPORT="$PERSIST_MOUNT/debian-workspace/data/omniroute/free-tier-model-test-report.json"
+          test -s "$MODEL_REPORT"
+          sudo cp "$MODEL_REPORT" nexora/nexora-free-tier-model-test-report.json
+          MODEL_TESTED="$(python3 -c 'import json; print(json.load(open("nexora/nexora-free-tier-model-test-report.json"))["tested_count"])')"
+          MODEL_SUCCEEDED="$(python3 -c 'import json; print(json.load(open("nexora/nexora-free-tier-model-test-report.json"))["success_count"])')"
+          MODEL_FAILED="$(python3 -c 'import json; print(json.load(open("nexora/nexora-free-tier-model-test-report.json"))["failed_count"])')"
+          test "$MODEL_TESTED" -gt 0
           FREE_IDS="$(sudo chroot "$ROOTFS" /usr/bin/cat /tmp/omniroute-free-ids.json)"
           test -n "$FREE_IDS"
 
@@ -100,6 +107,9 @@ jobs:
             echo "NEXORA_OMNIROUTE_VERSION=$VERSION"
             echo "NEXORA_FREE_ONBOARDING_IDS=$FREE_IDS"
             echo "NEXORA_FREE_CHAT_MODEL=$MODEL"
+            echo "NEXORA_FREE_CHAT_MODELS_TESTED=$MODEL_TESTED"
+            echo "NEXORA_FREE_CHAT_MODELS_SUCCEEDED=$MODEL_SUCCEEDED"
+            echo "NEXORA_FREE_CHAT_MODELS_FAILED=$MODEL_FAILED"
             echo "NEXORA_PERSISTENT_INSTALL_OK=1"
             echo "NEXORA_RUNTIME_MANIFEST_VALIDATED=1"
           } > nexora/nexora-runtime-manifest.env
@@ -111,6 +121,15 @@ jobs:
           test -s "$PERSIST_IMG.enc"
           rm -f "$PERSIST_IMG"
           ls -lh nexora/nexora-runtime-manifest.env "$PERSIST_IMG.enc"
+
+      - name: Upload NEXORA Free Tier model test report
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nexora-free-tier-model-test-report
+          path: nexora/nexora-free-tier-model-test-report.json
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Upload small NEXORA runtime manifest
         if: success()
