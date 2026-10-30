@@ -141,7 +141,7 @@ jobs:
           }
           const aiderModel = ids.find(id => String(id).toLowerCase().includes("aihorde") && !/image/i.test(String(id)));
           if (!aiderModel) throw new Error("No AI Horde chat model is exposed by OmniRoute; cannot run the Free Tier chat/Aider smoke tests");
-          fs.writeFileSync("/tmp/aider-free-model", String(aiderModel) + "\\n");
+          fs.writeFileSync("/tmp/aider-free-model", String(aiderModel) + "\n");
           console.log("AIDER_OMNIROUTE_MODEL_SELECTED=" + aiderModel);
           NODE
 
