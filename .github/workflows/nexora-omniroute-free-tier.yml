@@ -70,8 +70,9 @@ jobs:
           set -euo pipefail
           ROOTFS="$PWD/nexora/rootfs"
           PERSIST_IMG="$PWD/nexora/persistent-workspace.ext4"
-          PERSIST_MOUNT="$ROOTFS/persist"
-          test -f "$PERSIST_IMG"
+          PERSIST_MOUNT="$RUNNER_TEMP/nexora-persistent-workspace-readonly"
+          echo "NEXORA_MANIFEST_STAGE=validate-image"
+          test -s "$PERSIST_IMG"
           sudo mkdir -p "$PERSIST_MOUNT"
           cleanup() {
             if mountpoint -q "$PERSIST_MOUNT"; then
@@ -79,24 +80,39 @@ jobs:
             fi
           }
           trap cleanup EXIT
-          # The smoke script unmounts /persist on exit. Remount its image here
-          # before reading runtime state; otherwise chroot sees the empty mountpoint.
-          sudo mount -o loop "$PERSIST_IMG" "$PERSIST_MOUNT"
+
+          # Read the ext4 workspace directly from a temporary host mount.
+          # This avoids relying on a chroot-visible mountpoint after the smoke
+          # script has unmounted /persist and compacted the image.
+          echo "NEXORA_MANIFEST_STAGE=mount-persistent-image"
+          sudo mount -o loop,ro "$PERSIST_IMG" "$PERSIST_MOUNT"
           sudo mountpoint -q "$PERSIST_MOUNT"
 
-          VERSION="$(sudo chroot "$ROOTFS" /usr/bin/cat /persist/debian-workspace/software/omniroute/.nexora-omniroute-version)"
+          echo "NEXORA_MANIFEST_STAGE=read-omniroute-version"
+          VERSION="$(sudo cat "$PERSIST_MOUNT/debian-workspace/software/omniroute/.nexora-omniroute-version")"
           test -n "$VERSION"
-          sudo chroot "$ROOTFS" /usr/bin/test -f /persist/debian-workspace/source/omniroute/package.json
-          MODEL="$(sudo chroot "$ROOTFS" /usr/bin/cat /persist/debian-workspace/data/omniroute/nexora-aider-model)"
+          sudo test -f "$PERSIST_MOUNT/debian-workspace/source/omniroute/package.json"
+
+          echo "NEXORA_MANIFEST_STAGE=read-selected-model"
+          MODEL="$(sudo cat "$PERSIST_MOUNT/debian-workspace/data/omniroute/nexora-aider-model")"
           test -n "$MODEL"
+
+          echo "NEXORA_MANIFEST_STAGE=copy-model-report"
           MODEL_REPORT="$PERSIST_MOUNT/debian-workspace/data/omniroute/free-tier-model-test-report.json"
-          test -s "$MODEL_REPORT"
+          sudo test -s "$MODEL_REPORT"
           sudo cp "$MODEL_REPORT" nexora/nexora-free-tier-model-test-report.json
+          sudo chmod 0644 nexora/nexora-free-tier-model-test-report.json
           MODEL_TESTED="$(python3 -c 'import json; print(json.load(open("nexora/nexora-free-tier-model-test-report.json"))["tested_count"])')"
           MODEL_SUCCEEDED="$(python3 -c 'import json; print(json.load(open("nexora/nexora-free-tier-model-test-report.json"))["success_count"])')"
           MODEL_FAILED="$(python3 -c 'import json; print(json.load(open("nexora/nexora-free-tier-model-test-report.json"))["failed_count"])')"
           test "$MODEL_TESTED" -gt 0
-          FREE_IDS="$(sudo chroot "$ROOTFS" /usr/bin/cat /tmp/omniroute-free-ids.json)"
+
+          echo "NEXORA_MANIFEST_STAGE=read-onboarding-state"
+          if [ -s "$ROOTFS/tmp/omniroute-free-ids.json" ]; then
+            FREE_IDS="$(sudo cat "$ROOTFS/tmp/omniroute-free-ids.json")"
+          else
+            FREE_IDS="[]"
+          fi
           test -n "$FREE_IDS"
 
           {
@@ -113,14 +129,20 @@ jobs:
             echo "NEXORA_PERSISTENT_INSTALL_OK=1"
             echo "NEXORA_RUNTIME_MANIFEST_VALIDATED=1"
           } > nexora/nexora-runtime-manifest.env
+          echo "NEXORA_RUNTIME_MANIFEST_VALIDATED=1"
+
+          echo "NEXORA_MANIFEST_STAGE=unmount-before-encryption"
           cleanup
           trap - EXIT
           test -n "${NEXORA_PERSISTENCE_KEY:-}" || { echo "NEXORA_PERSISTENCE_SECRET_MISSING=1"; exit 1; }
+
+          echo "NEXORA_MANIFEST_STAGE=encrypt-persistent-image"
           openssl enc -aes-256-cbc -pbkdf2 -salt -pass env:NEXORA_PERSISTENCE_KEY \
             -in "$PERSIST_IMG" -out "$PERSIST_IMG.enc"
           test -s "$PERSIST_IMG.enc"
           rm -f "$PERSIST_IMG"
           ls -lh nexora/nexora-runtime-manifest.env "$PERSIST_IMG.enc"
+          echo "NEXORA_PERSISTENT_IMAGE_ENCRYPTED=1"
 
       - name: Upload NEXORA Free Tier model test report
         if: success()
