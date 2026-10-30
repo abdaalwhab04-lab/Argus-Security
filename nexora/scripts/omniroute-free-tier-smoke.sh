@@ -312,7 +312,6 @@ sudo install -m 0755 "$SWEEP_SCRIPT" "$ROOTFS/tmp/nexora-free-tier-model-sweep.s
 sudo chroot "$ROOTFS" /usr/bin/bash /tmp/nexora-free-tier-model-sweep.sh
 echo "NEXORA_OMNIROUTE_REAL_FREE_TIER_CHAT_OK=1"
 echo NEXORA_OMNIROUTE_FREE_TIER_SMOKE_OK=1
-echo NEXORA_OMNIROUTE_FREE_TIER_SMOKE_OK=1
 
 echo "=== Aider through NEXORA OmniRoute ==="
 sudo chroot "$ROOTFS" /usr/bin/bash -lc 'set -uo pipefail
