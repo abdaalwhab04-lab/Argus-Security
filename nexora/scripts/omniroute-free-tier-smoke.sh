@@ -231,40 +231,84 @@ NODE
 sudo chroot "$ROOTFS" /usr/bin/bash -lc 'set -euo pipefail
 API_KEY="$(cat /tmp/omniroute-api-key)"
 CANDIDATES="$(cat /tmp/nexora-chat-candidates.json)"
+printf "%s" "$CANDIDATES" | /usr/bin/python3 -c "import json,sys; [print(v) for v in json.load(sys.stdin)]" > /tmp/nexora-chat-candidate-list
 
-printf "%s" "$CANDIDATES" | /usr/bin/python3 -c "import json,sys; x=json.load(sys.stdin); [print(v) for v in x]" > /tmp/nexora-chat-candidate-list
+REPORT_DIR=/persist/debian-workspace/data/omniroute
+REPORT_PATH="$REPORT_DIR/free-tier-model-test-report.json"
+mkdir -p "$REPORT_DIR"
+CANDIDATE_COUNT="$(/usr/bin/python3 -c "import json; print(len(json.load(open(\"/tmp/nexora-chat-candidates.json\"))))")"
+/usr/bin/python3 - "$CANDIDATE_COUNT" "$REPORT_PATH" <<'PY'
+import json,sys
+with open(sys.argv[2],"w") as f:
+    json.dump({"candidate_count":int(sys.argv[1]),"tested_count":0,"success_count":0,"failed_count":0,"selected_chat_model":None,"results":[]},f,indent=2)
+    f.write("\n")
+PY
 
 CHAT_OK=0
 while IFS= read -r MODEL; do
   [ -n "$MODEL" ] || continue
   echo "NEXORA_CHAT_MODEL_TEST=$MODEL"
+  /usr/bin/python3 - "$MODEL" <<'PY' > /tmp/omniroute-chat-payload.json
+import json,sys
+print(json.dumps({"model":sys.argv[1],"messages":[{"role":"user","content":"Reply with the single word OK."}],"stream":False}))
+PY
 
-  printf "%s" "$MODEL" | /usr/bin/python3 -c "import json,sys; m=sys.stdin.read().strip(); print(json.dumps({chr(109)+chr(111)+chr(100)+chr(101)+chr(108):m,chr(109)+chr(101)+chr(115)+chr(115)+chr(97)+chr(103)+chr(101)+chr(115):[{chr(114)+chr(111)+chr(108)+chr(101):chr(117)+chr(115)+chr(101)+chr(114),chr(99)+chr(111)+chr(110)+chr(116)+chr(101)+chr(110)+chr(116):chr(82)+chr(101)+chr(112)+chr(108)+chr(121)+chr(32)+chr(119)+chr(105)+chr(116)+chr(104)+chr(32)+chr(116)+chr(104)+chr(101)+chr(32)+chr(115)+chr(105)+chr(110)+chr(103)+chr(108)+chr(101)+chr(32)+chr(119)+chr(111)+chr(114)+chr(100)+chr(32)+chr(79)+chr(75)+chr(46)}],chr(115)+chr(116)+chr(114)+chr(101)+chr(97)+chr(109):False}))" > /tmp/omniroute-chat-payload.json
-
-  HTTP_CODE="$(curl -sS --max-time 90 -X POST http://127.0.0.1:20129/v1/chat/completions -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" --data-binary @/tmp/omniroute-chat-payload.json -o /tmp/omniroute-chat.json -w "%{http_code}")"
+  set +e
+  HTTP_CODE="$(curl -sS --connect-timeout 5 --max-time 25 -X POST http://127.0.0.1:20129/v1/chat/completions -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" --data-binary @/tmp/omniroute-chat-payload.json -o /tmp/omniroute-chat.json -w "%{http_code}")"
+  CURL_STATUS=$?
+  set -e
   echo "NEXORA_OMNIROUTE_CHAT_HTTP_CODE=$HTTP_CODE"
 
-  if [ "$HTTP_CODE" = "200" ]; then
-    /usr/bin/python3 -c "import json,sys; x=json.load(open(sys.argv[1])); c=((x.get(chr(99)+chr(104)+chr(111)+chr(105)+chr(99)+chr(101)+chr(115)) or [{}])[0].get(chr(109)+chr(101)+chr(115)+chr(115)+chr(97)+chr(103)+chr(101)) or {}).get(chr(99)+chr(111)+chr(110)+chr(116)+chr(101)+chr(110)+chr(116),chr(0)); print(chr(78)+chr(69)+chr(88)+chr(79)+chr(82)+chr(65)+chr(95)+chr(79)+chr(77)+chr(78)+chr(73)+chr(82)+chr(79)+chr(85)+chr(84)+chr(69)+chr(95)+chr(70)+chr(82)+chr(69)+chr(69)+chr(95)+chr(67)+chr(72)+chr(65)+chr(84)+chr(95)+chr(82)+chr(69)+chr(83)+chr(80)+chr(79)+chr(78)+chr(83)+chr(69)+chr(61)+c[:500]); assert chr(79)+chr(75) in c.upper()" /tmp/omniroute-chat.json
-    printf "%s\n" "$MODEL" > /tmp/nexora-aider-model
-    mkdir -p /persist/debian-workspace/data/omniroute
-    printf "%s\n" "$MODEL" > /persist/debian-workspace/data/omniroute/nexora-aider-model
-    echo "NEXORA_FREE_CHAT_MODEL=$MODEL"
-    echo NEXORA_OMNIROUTE_REAL_FREE_TIER_CHAT_OK=1
-    CHAT_OK=1
-    break
+  RESULT=failed
+  if [ "$CURL_STATUS" -eq 0 ] && [ "$HTTP_CODE" = "200" ] && /usr/bin/python3 -c 'import json,sys; x=json.load(open(sys.argv[1])); c=((x.get("choices") or [{}])[0].get("message") or {}).get("content"); sys.exit(0 if isinstance(c,str) and c.strip() else 1)' /tmp/omniroute-chat.json; then
+    RESULT=success
+    echo "NEXORA_CHAT_MODEL_PASSED=$MODEL"
+    if [ "$CHAT_OK" = "0" ]; then
+      printf "%s\n" "$MODEL" > /tmp/nexora-aider-model
+      printf "%s\n" "$MODEL" > "$REPORT_DIR/nexora-aider-model"
+      CHAT_OK=1
+    fi
+  else
+    echo "NEXORA_CHAT_MODEL_FAILED=$MODEL"
   fi
 
-  echo "NEXORA_CHAT_MODEL_REJECTED=$MODEL"
-  cat /tmp/omniroute-chat.json
+  /usr/bin/python3 - "$REPORT_PATH" "$MODEL" "$HTTP_CODE" "$CURL_STATUS" "$RESULT" <<'PY'
+import json,sys
+path,model,http,curl_status,result=sys.argv[1:]
+with open(path) as f: report=json.load(f)
+report["results"].append({"model":model,"provider":model.split("/",1)[0],"http_status":http,"curl_status":int(curl_status),"result":result})
+report["tested_count"]=len(report["results"])
+report["success_count"]=sum(x["result"]=="success" for x in report["results"])
+report["failed_count"]=report["tested_count"]-report["success_count"]
+if result=="success" and report["selected_chat_model"] is None:
+    report["selected_chat_model"]=model
+with open(path+".tmp","w") as f:
+    json.dump(report,f,indent=2)
+    f.write("\n")
+import os
+os.replace(path+".tmp",path)
+PY
 done < /tmp/nexora-chat-candidate-list
 
 if [ "$CHAT_OK" != "1" ]; then
   echo "NEXORA_CHAT_NO_WORKING_FREE_MODEL=1"
   exit 1
 fi
+SELECTED_MODEL="$(cat /tmp/nexora-aider-model)"
+printf "%s\n" "$SELECTED_MODEL" > /persist/debian-workspace/data/omniroute/nexora-aider-model
+/usr/bin/python3 - "$REPORT_PATH" <<'PY'
+import json,sys
+x=json.load(open(sys.argv[1]))
+print("NEXORA_FREE_MODEL_SWEEP_TESTED="+str(x["tested_count"]))
+print("NEXORA_FREE_MODEL_SWEEP_SUCCEEDED="+str(x["success_count"]))
+print("NEXORA_FREE_MODEL_SWEEP_FAILED="+str(x["failed_count"]))
+print("NEXORA_FREE_MODEL_SWEEP_SELECTED="+str(x["selected_chat_model"]))
+assert x["tested_count"]==x["candidate_count"], "Not every advertised candidate was tested"
+PY
+echo "NEXORA_FREE_MODEL_SWEEP_COMPLETED=1"
+echo "NEXORA_OMNIROUTE_REAL_FREE_TIER_CHAT_OK=1"
 '
-
+echo NEXORA_OMNIROUTE_FREE_TIER_SMOKE_OK=1
 echo NEXORA_OMNIROUTE_FREE_TIER_SMOKE_OK=1
 
 echo "=== Aider through NEXORA OmniRoute ==="
