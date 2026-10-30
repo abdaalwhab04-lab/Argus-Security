@@ -403,7 +403,13 @@ for MODEL in "${AIDER_CANDIDATES[@]}"; do
   if [ "$status" -eq 0 ] && \
     ! grep -Eq "litellm.BadRequestError|Error communicating with the model" /tmp/aider-nexora-smoke.log && \
     grep -Eiq "^[[:space:]]*NEXORA_AIDER_OK[.!]?[[:space:]]*$" /tmp/aider-nexora-smoke.log; then
+    # Persist the model that Aider itself successfully used. The direct
+    # chat-completion sweep may select a model that Aider/LiteLLM cannot use;
+    # keep the durable preference aligned with the last verified Aider model.
+    printf '%s\n' "$MODEL" > /persist/debian-workspace/data/omniroute/nexora-aider-model
+    sync
     echo "NEXORA_AIDER_SELECTED_MODEL=$MODEL"
+    echo "NEXORA_AIDER_MODEL_PERSISTED=1"
     AIDER_OK=1
     break
   fi
