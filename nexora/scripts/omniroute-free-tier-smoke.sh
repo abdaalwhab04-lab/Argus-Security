@@ -406,7 +406,7 @@ for MODEL in "${AIDER_CANDIDATES[@]}"; do
     # Persist the model that Aider itself successfully used. The direct
     # chat-completion sweep may select a model that Aider/LiteLLM cannot use;
     # keep the durable preference aligned with the last verified Aider model.
-    printf '%s\\n' "$MODEL" > /persist/debian-workspace/data/omniroute/nexora-aider-model
+    printf '%s\n' "$MODEL" > /persist/debian-workspace/data/omniroute/nexora-aider-model
     sync
     echo "NEXORA_AIDER_SELECTED_MODEL=$MODEL"
     echo "NEXORA_AIDER_MODEL_PERSISTED=1"
