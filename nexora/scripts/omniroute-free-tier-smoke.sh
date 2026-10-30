@@ -273,11 +273,37 @@ PY
     echo "NEXORA_CHAT_MODEL_FAILED=$MODEL"
   fi
 
-  /usr/bin/python3 - "$REPORT_PATH" "$MODEL" "$HTTP_CODE" "$CURL_STATUS" "$RESULT" <<'PY'
-import json,sys
-path,model,http,curl_status,result=sys.argv[1:]
+  /usr/bin/python3 - "$REPORT_PATH" "$MODEL" "$HTTP_CODE" "$CURL_STATUS" "$RESULT" /tmp/omniroute-chat.json <<'PY'
+import json,re,sys
+path,model,http,curl_status,result,body_path=sys.argv[1:]
 with open(path) as f: report=json.load(f)
-report["results"].append({"model":model,"provider":model.split("/",1)[0],"http_status":http,"curl_status":int(curl_status),"result":result})
+entry={"model":model,"provider":model.split("/",1)[0],"http_status":http,"curl_status":int(curl_status),"result":result}
+if result != "success":
+    try:
+        payload=json.load(open(body_path))
+        parts=[]
+        def collect(value,key=""):
+            if isinstance(value,dict):
+                for k,v in value.items():
+                    if str(k).lower() in {"error","message","detail","code","type","status"}:
+                        if isinstance(v,(str,int,float)):
+                            parts.append(f"{k}={v}")
+                        elif isinstance(v,dict):
+                            collect(v,str(k))
+                    elif isinstance(v,dict):
+                        collect(v,str(k))
+            elif isinstance(value,list):
+                for item in value[:3]:
+                    collect(item,key)
+        collect(payload)
+        summary="; ".join(parts)
+        summary=re.sub(r"(?i)(bearer\\s+)[^\\s,;]+",r"\\1[REDACTED]",summary)
+        summary=re.sub(r"(?i)(api[_ -]?key|token|password)(\\s*[:=]\\s*)[^\\s,;]+",r"\\1\\2[REDACTED]",summary)
+        if summary:
+            entry["response_error"]=summary[:500]
+    except Exception:
+        pass
+report["results"].append(entry)
 report["tested_count"]=len(report["results"])
 report["success_count"]=sum(x["result"]=="success" for x in report["results"])
 report["failed_count"]=report["tested_count"]-report["success_count"]
