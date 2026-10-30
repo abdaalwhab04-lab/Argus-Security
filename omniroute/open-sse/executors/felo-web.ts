@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { BaseExecutor, type ExecuteInput } from "./base.ts";
-import { sanitizeErrorMessage } from "../utils/error.ts";
+import { sanitizeErrorMessage, sanitizeUpstreamDetails } from "../utils/error.ts";
 
 /**
  * FeloWebExecutor — anonymous, free access to Felo (felo.ai), a chat/search-agent
@@ -300,7 +300,20 @@ export class FeloWebExecutor extends BaseExecutor {
 
     if (!threadResponse.ok) {
       const status = threadResponse.status >= 500 ? 502 : threadResponse.status;
-      return feloErrorResponse(status, `Felo thread creation failed with HTTP ${threadResponse.status}`);
+      const rawBody = await threadResponse.text().catch(() => "");
+      let upstreamDetails: unknown;
+      try {
+        const parsed = JSON.parse(rawBody);
+        upstreamDetails = sanitizeUpstreamDetails(parsed);
+      } catch {
+        // Do not echo arbitrary HTML or proxy pages into API errors.
+        upstreamDetails = undefined;
+      }
+      return feloErrorResponse(
+        status,
+        `Felo thread creation failed with HTTP ${threadResponse.status}`,
+        upstreamDetails
+      );
     }
 
     const threadJson = await threadResponse.json().catch(() => null);
@@ -312,8 +325,14 @@ export class FeloWebExecutor extends BaseExecutor {
   }
 }
 
-function feloErrorResponse(status: number, message: string): Response {
-  return new Response(JSON.stringify({ error: { message: sanitizeErrorMessage(message) } }), {
+function feloErrorResponse(status: number, message: string, upstreamDetails?: unknown): Response {
+  const body: Record<string, unknown> = {
+    error: { message: sanitizeErrorMessage(message) },
+  };
+  if (upstreamDetails && typeof upstreamDetails === "object" && !Array.isArray(upstreamDetails)) {
+    body.upstream_details = upstreamDetails;
+  }
+  return new Response(JSON.stringify(body), {
     status,
     headers: { "Content-Type": "application/json" },
   });
