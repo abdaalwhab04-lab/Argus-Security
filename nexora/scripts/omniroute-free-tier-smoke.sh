@@ -85,8 +85,7 @@ sudo chroot "$ROOTFS" /usr/local/bin/nexora-omniroute-env.sh
 sudo chroot "$ROOTFS" test -x /persist/debian-workspace/software/omniroute/node_modules/.bin/omniroute
 sudo chroot "$ROOTFS" test -f /persist/debian-workspace/data/omniroute/server.env
 
-SWEEP_SCRIPT="$RUNNER_TEMP/nexora-free-tier-model-sweep.sh"
-cat > "$SWEEP_SCRIPT" <<'NEXORA_SWEEP_SCRIPT'
+sudo chroot "$ROOTFS" /usr/bin/bash -lc 'set -euo pipefail
 set -a
 . /persist/debian-workspace/data/omniroute/server.env
 set +a
@@ -229,7 +228,8 @@ if(!candidates.length) {
 }
 NODE
 
-sudo chroot "$ROOTFS" /usr/bin/bash -lc 'set -euo pipefail
+SWEEP_SCRIPT="$RUNNER_TEMP/nexora-free-tier-model-sweep.sh"
+cat > "$SWEEP_SCRIPT" <<'NEXORA_SWEEP_SCRIPT'
 API_KEY="$(cat /tmp/omniroute-api-key)"
 CANDIDATES="$(cat /tmp/nexora-chat-candidates.json)"
 printf "%s" "$CANDIDATES" | /usr/bin/python3 -c "import json,sys; [print(v) for v in json.load(sys.stdin)]" > /tmp/nexora-chat-candidate-list
@@ -307,10 +307,11 @@ print("NEXORA_FREE_MODEL_SWEEP_SELECTED="+str(x["selected_chat_model"]))
 assert x["tested_count"]==x["candidate_count"], "Not every advertised candidate was tested"
 PY
 echo "NEXORA_FREE_MODEL_SWEEP_COMPLETED=1"
-echo "NEXORA_OMNIROUTE_REAL_FREE_TIER_CHAT_OK=1"
 NEXORA_SWEEP_SCRIPT
 sudo install -m 0755 "$SWEEP_SCRIPT" "$ROOTFS/tmp/nexora-free-tier-model-sweep.sh"
 sudo chroot "$ROOTFS" /usr/bin/bash /tmp/nexora-free-tier-model-sweep.sh
+echo "NEXORA_OMNIROUTE_REAL_FREE_TIER_CHAT_OK=1"
+echo NEXORA_OMNIROUTE_FREE_TIER_SMOKE_OK=1
 echo NEXORA_OMNIROUTE_FREE_TIER_SMOKE_OK=1
 
 echo "=== Aider through NEXORA OmniRoute ==="
